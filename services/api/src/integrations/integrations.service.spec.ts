@@ -9,7 +9,7 @@ describe('IntegrationsService', () => {
     id: 'integration-1',
     slug: 'whatsapp-validator',
     name: 'WhatsApp Validator',
-    description: 'Peer-verify a member\'s WhatsApp number.',
+    description: "Peer-verify a member's WhatsApp number.",
     category: 'Verification',
     iconKey: 'MessageCircle',
     enabled: true,
@@ -53,16 +53,16 @@ describe('IntegrationsService', () => {
       expect(prisma.integration.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
-            OR: expect.arrayContaining([
-              { name: { contains: 'whatsapp', mode: 'insensitive' } },
-            ]),
+            OR: expect.arrayContaining([{ name: { contains: 'whatsapp', mode: 'insensitive' } }]),
           }),
         }),
       );
     });
 
     it('marks subscribed integrations', async () => {
-      prisma.integrationSubscription.findMany.mockResolvedValue([{ integrationId: integration.id }]);
+      prisma.integrationSubscription.findMany.mockResolvedValue([
+        { integrationId: integration.id },
+      ]);
       const [result] = await service.list(userId, {});
       expect(result.subscribed).toBe(true);
     });
@@ -81,9 +81,12 @@ describe('IntegrationsService', () => {
 
     it('is idempotent on a duplicate subscription', async () => {
       prisma.integrationSubscription.create.mockRejectedValue(
-        Object.assign(new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: 'x' }), {
-          code: 'P2002',
-        }),
+        Object.assign(
+          new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: 'x' }),
+          {
+            code: 'P2002',
+          },
+        ),
       );
       const result = await service.subscribe(userId, integration.id);
       expect(result.subscribed).toBe(true);

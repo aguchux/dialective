@@ -59,7 +59,11 @@ export class ReportsController {
     @Query() query: SubscriberAnalyticsQueryDto,
     @Res() res: Response,
   ) {
-    const report = await this.subscriberAnalytics.build(subscriber.organizationId, query.from, query.to);
+    const report = await this.subscriberAnalytics.build(
+      subscriber.organizationId,
+      query.from,
+      query.to,
+    );
     respondJsonOrCsv(res, 'subscriber-analytics-report.csv', query.format, report);
   }
 
@@ -68,7 +72,11 @@ export class ReportsController {
     @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,
     @Query() query: SubscriberAnalyticsTimeSeriesQueryDto,
   ) {
-    return this.subscriberAnalytics.buildTimeSeries(subscriber.organizationId, query.from, query.to);
+    return this.subscriberAnalytics.buildTimeSeries(
+      subscriber.organizationId,
+      query.from,
+      query.to,
+    );
   }
 
   @Get('validation-contributions')

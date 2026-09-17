@@ -8,7 +8,12 @@ function setup() {
     deckLicenseAcceptance: { findUnique: jest.fn(), upsert: jest.fn() },
     streamDeckItem: { findMany: jest.fn(), findUnique: jest.fn(), create: jest.fn() },
     isvcCurrent: { findMany: jest.fn().mockResolvedValue([]) },
-    validationQueueItem: { findUnique: jest.fn(), create: jest.fn(), findMany: jest.fn(), delete: jest.fn() },
+    validationQueueItem: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      findMany: jest.fn(),
+      delete: jest.fn(),
+    },
   };
   const catalogue = { isEligible: jest.fn().mockResolvedValue(true) };
   const decks = { create: jest.fn(), get: jest.fn() };
@@ -30,14 +35,18 @@ describe('PublicDecksService', () => {
       const { prisma, service } = setup();
       prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-OTHER' });
 
-      await expect(service.setVisibility('org-1', 'deck-1', 'user-1', 'PUBLIC' as any)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(
+        service.setVisibility('org-1', 'deck-1', 'user-1', 'PUBLIC' as any),
+      ).rejects.toThrow(NotFoundException);
     });
 
     it('updates visibility for an owned deck', async () => {
       const { prisma, service } = setup();
-      prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1', visibility: 'PRIVATE' });
+      prisma.streamDeck.findUnique.mockResolvedValue({
+        id: 'deck-1',
+        organizationId: 'org-1',
+        visibility: 'PRIVATE',
+      });
       prisma.streamDeck.update.mockResolvedValue({ id: 'deck-1', visibility: 'PUBLIC' });
 
       await service.setVisibility('org-1', 'deck-1', 'user-1', 'PUBLIC' as any);
@@ -50,7 +59,11 @@ describe('PublicDecksService', () => {
 
     it('logs a DECK_VISIBILITY_CHANGED activity event only when visibility actually changes', async () => {
       const { prisma, orgActivity, service } = setup();
-      prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1', visibility: 'PRIVATE' });
+      prisma.streamDeck.findUnique.mockResolvedValue({
+        id: 'deck-1',
+        organizationId: 'org-1',
+        visibility: 'PRIVATE',
+      });
       prisma.streamDeck.update.mockResolvedValue({ id: 'deck-1', visibility: 'PUBLIC' });
 
       await service.setVisibility('org-1', 'deck-1', 'user-1', 'PUBLIC' as any);
@@ -59,13 +72,21 @@ describe('PublicDecksService', () => {
         'org-1',
         'DECK_VISIBILITY_CHANGED',
         'user-1',
-        expect.objectContaining({ deckId: 'deck-1', previousVisibility: 'PRIVATE', newVisibility: 'PUBLIC' }),
+        expect.objectContaining({
+          deckId: 'deck-1',
+          previousVisibility: 'PRIVATE',
+          newVisibility: 'PUBLIC',
+        }),
       );
     });
 
     it('does not log an activity event when visibility is set to its current value', async () => {
       const { prisma, orgActivity, service } = setup();
-      prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1', visibility: 'PRIVATE' });
+      prisma.streamDeck.findUnique.mockResolvedValue({
+        id: 'deck-1',
+        organizationId: 'org-1',
+        visibility: 'PRIVATE',
+      });
       prisma.streamDeck.update.mockResolvedValue({ id: 'deck-1', visibility: 'PRIVATE' });
 
       await service.setVisibility('org-1', 'deck-1', 'user-1', 'PRIVATE' as any);
@@ -75,7 +96,7 @@ describe('PublicDecksService', () => {
   });
 
   describe('listPublic', () => {
-    it('excludes the caller organization\'s own decks', async () => {
+    it("excludes the caller organization's own decks", async () => {
       const { prisma, service } = setup();
       prisma.streamDeck.findMany.mockResolvedValue([]);
 
@@ -118,7 +139,10 @@ describe('PublicDecksService', () => {
       prisma.isvcCurrent.findMany.mockImplementation(({ where }: any) => {
         if (where.recordingId.in.includes('rec-2')) {
           return Promise.resolve([
-            { recordingId: 'rec-2', aggregation: { confidence: 'VERY_HIGH', organizationCount: 5 } },
+            {
+              recordingId: 'rec-2',
+              aggregation: { confidence: 'VERY_HIGH', organizationCount: 5 },
+            },
           ]);
         }
         return Promise.resolve([]);
@@ -191,7 +215,9 @@ describe('PublicDecksService', () => {
         visibility: 'PUBLIC',
       });
 
-      await expect(service.acceptLicense('org-1', 'user-1', 'deck-1')).rejects.toThrow(BadRequestException);
+      await expect(service.acceptLicense('org-1', 'user-1', 'deck-1')).rejects.toThrow(
+        BadRequestException,
+      );
     });
 
     it('404s on a private deck', async () => {
@@ -202,7 +228,9 @@ describe('PublicDecksService', () => {
         visibility: 'PRIVATE',
       });
 
-      await expect(service.acceptLicense('org-1', 'user-1', 'deck-1')).rejects.toThrow(NotFoundException);
+      await expect(service.acceptLicense('org-1', 'user-1', 'deck-1')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('records acceptance for a public deck with a license', async () => {
@@ -250,7 +278,10 @@ describe('PublicDecksService', () => {
         visibility: 'PUBLIC',
       });
       prisma.deckLicense.findUnique.mockResolvedValue(null);
-      prisma.streamDeckItem.findMany.mockResolvedValue([{ recordingId: 'rec-1' }, { recordingId: 'rec-2' }]);
+      prisma.streamDeckItem.findMany.mockResolvedValue([
+        { recordingId: 'rec-1' },
+        { recordingId: 'rec-2' },
+      ]);
       prisma.streamDeckItem.findUnique.mockResolvedValue(null);
       catalogue.isEligible.mockResolvedValue(true);
       decks.create.mockResolvedValue({ id: 'new-deck-1' });
@@ -260,7 +291,10 @@ describe('PublicDecksService', () => {
 
       expect(decks.create).toHaveBeenCalledWith('org-1', 'user-1', { name: 'My copy' });
       expect(prisma.streamDeckItem.create).toHaveBeenCalledTimes(2);
-      expect(versioning.writeNewVersionIfMaterial).toHaveBeenCalledWith('new-deck-1', 'copied_from_public_deck');
+      expect(versioning.writeNewVersionIfMaterial).toHaveBeenCalledWith(
+        'new-deck-1',
+        'copied_from_public_deck',
+      );
       expect(result).toEqual({ id: 'new-deck-1', name: 'My copy' });
     });
 
@@ -292,8 +326,13 @@ describe('PublicDecksService', () => {
         visibility: 'PUBLIC',
       });
       prisma.deckLicense.findUnique.mockResolvedValue(null);
-      prisma.streamDeckItem.findMany.mockResolvedValue([{ recordingId: 'rec-1' }, { recordingId: 'rec-2' }]);
-      prisma.validationQueueItem.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'existing' });
+      prisma.streamDeckItem.findMany.mockResolvedValue([
+        { recordingId: 'rec-1' },
+        { recordingId: 'rec-2' },
+      ]);
+      prisma.validationQueueItem.findUnique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'existing' });
       catalogue.isEligible.mockResolvedValue(true);
 
       const result = await service.importToValidationQueue('org-1', 'user-1', 'deck-1');
@@ -306,9 +345,14 @@ describe('PublicDecksService', () => {
   describe('removeFromValidationQueue', () => {
     it('404s when the item belongs to a different organization', async () => {
       const { prisma, service } = setup();
-      prisma.validationQueueItem.findUnique.mockResolvedValue({ id: 'item-1', organizationId: 'org-OTHER' });
+      prisma.validationQueueItem.findUnique.mockResolvedValue({
+        id: 'item-1',
+        organizationId: 'org-OTHER',
+      });
 
-      await expect(service.removeFromValidationQueue('org-1', 'item-1')).rejects.toThrow(NotFoundException);
+      await expect(service.removeFromValidationQueue('org-1', 'item-1')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

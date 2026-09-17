@@ -50,7 +50,9 @@ def test_resilient_connection_reconnects_on_cursor_interface_error():
     second_conn = MagicMock(name="second_conn")
     with patch("db.psycopg2.connect", side_effect=[first_conn, second_conn]):
         conn = ResilientConnection()
-        first_conn.cursor.side_effect = psycopg2.InterfaceError("connection already closed")
+        first_conn.cursor.side_effect = psycopg2.InterfaceError(
+            "connection already closed"
+        )
 
         result = conn.cursor()
 
@@ -65,7 +67,9 @@ def test_resilient_connection_reconnects_on_commit_operational_error():
     second_conn = MagicMock(name="second_conn")
     with patch("db.psycopg2.connect", side_effect=[first_conn, second_conn]):
         conn = ResilientConnection()
-        first_conn.commit.side_effect = psycopg2.OperationalError("server closed the connection")
+        first_conn.commit.side_effect = psycopg2.OperationalError(
+            "server closed the connection"
+        )
 
         conn.commit()
 
@@ -102,7 +106,7 @@ def _mock_conn(rowcount: int = 1):
 # PENDING until the stuck-timeout sweep refunded it instead of ever paying
 # out -- the root cause of "rewards not tracked" for this task type.
 def test_write_scores_domain_conversation_recording_sets_status_scored():
-    assert 'status = \'SCORED\'' in UPDATE_DOMAIN_CONVERSATION_RECORDING_SCORES_SQL
+    assert "status = 'SCORED'" in UPDATE_DOMAIN_CONVERSATION_RECORDING_SCORES_SQL
     assert '"scoredAt" = now()' in UPDATE_DOMAIN_CONVERSATION_RECORDING_SCORES_SQL
 
 

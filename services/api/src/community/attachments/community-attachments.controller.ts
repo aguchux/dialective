@@ -12,7 +12,10 @@ export class CommunityAttachmentsController {
 
   @Post('upload-url')
   @Throttle({ default: { limit: 30, ttl: 60 * 60 * 1000 } })
-  createUploadUrl(@Req() req: AuthenticatedRequest, @Body() dto: CreateCommunityAttachmentUploadUrlDto) {
+  createUploadUrl(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: CreateCommunityAttachmentUploadUrlDto,
+  ) {
     return this.attachments.createUploadUrl(req.user.sub, dto);
   }
 }

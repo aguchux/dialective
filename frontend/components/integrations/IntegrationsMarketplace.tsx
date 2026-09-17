@@ -32,10 +32,12 @@ const SORT_OPTIONS: { id: SortBy; label: string }[] = [
   { id: 'createdAt', label: 'Newest' },
 ];
 
-const ICONS: Record<string, React.ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>> =
-  {
-    MessageCircle,
-  };
+const ICONS: Record<
+  string,
+  React.ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>
+> = {
+  MessageCircle,
+};
 
 /**
  * "P2P & Integrations" marketplace -- the search/sort card grid a member
@@ -47,14 +49,17 @@ const ICONS: Record<string, React.ComponentType<{ className?: string; 'aria-hidd
  */
 export function IntegrationsMarketplace() {
   const pathname = usePathname();
-  const basePath = pathname?.startsWith('/distributor') ? '/distributor/integrations' : '/dashboard/integrations';
+  const basePath = pathname?.startsWith('/distributor')
+    ? '/distributor/integrations'
+    : '/dashboard/integrations';
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<SortBy>('sortOrder');
   const debouncedSearch = useDebouncedValue(search, 300);
   const { data: integrations = [], isFetching } = useListIntegrationsQuery({
     search: debouncedSearch || undefined,
     sortBy,
-    sortDir: sortBy === 'name' || sortBy === 'category' ? 'asc' : sortBy === 'createdAt' ? 'desc' : 'asc',
+    sortDir:
+      sortBy === 'name' || sortBy === 'category' ? 'asc' : sortBy === 'createdAt' ? 'desc' : 'asc',
   });
   const [subscribe, { isLoading: subscribing }] = useSubscribeToIntegrationMutation();
   const [error, setError] = useState('');
@@ -125,8 +130,7 @@ export function IntegrationsMarketplace() {
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {integrations.map((integration) => {
           const Icon = (integration.iconKey && ICONS[integration.iconKey]) || Plug;
-          const pendingCount =
-            integration.slug === 'whatsapp-validator' ? whatsAppPendingCount : 0;
+          const pendingCount = integration.slug === 'whatsapp-validator' ? whatsAppPendingCount : 0;
           return (
             <div className={`${cardClass} grid gap-3 p-4`} key={integration.id}>
               <div className="flex items-start justify-between gap-3">

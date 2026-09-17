@@ -23,9 +23,9 @@ KIT_KEY=                  # Kit key from Circle Developer Console
 ## Using App Kit
 
 ```ts
-import { AppKit } from "@circle-fin/app-kit";
-import { createCircleWalletsAdapter } from "@circle-fin/adapter-circle-wallets";
-import { inspect } from "util";
+import { AppKit } from '@circle-fin/app-kit';
+import { createCircleWalletsAdapter } from '@circle-fin/adapter-circle-wallets';
+import { inspect } from 'util';
 
 const kit = new AppKit();
 
@@ -34,10 +34,10 @@ const swapTokens = async (): Promise<void> => {
   const entitySecret = process.env.CIRCLE_ENTITY_SECRET;
   const walletAddress = process.env.WALLET_ADDRESS;
   if (!apiKey || !entitySecret) {
-    throw new Error("CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET env vars must be set");
+    throw new Error('CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET env vars must be set');
   }
   if (!walletAddress) {
-    throw new Error("WALLET_ADDRESS env var must be set");
+    throw new Error('WALLET_ADDRESS env var must be set');
   }
 
   try {
@@ -49,20 +49,20 @@ const swapTokens = async (): Promise<void> => {
     const result = await kit.swap({
       from: {
         adapter,
-        chain: "Ethereum",
+        chain: 'Ethereum',
         address: walletAddress,
       },
-      tokenIn: "USDT",
-      tokenOut: "USDC",
-      amountIn: "1.00",
+      tokenIn: 'USDT',
+      tokenOut: 'USDC',
+      amountIn: '1.00',
       config: {
         kitKey: process.env.KIT_KEY as string,
       },
     });
 
-    console.log("RESULT", inspect(result, false, null, true));
+    console.log('RESULT', inspect(result, false, null, true));
   } catch (err) {
-    console.error("ERROR", err instanceof Error ? err.message : "Unknown error");
+    console.error('ERROR', err instanceof Error ? err.message : 'Unknown error');
   }
 };
 
@@ -72,9 +72,9 @@ void swapTokens();
 ## Using Swap Kit
 
 ```ts
-import { SwapKit } from "@circle-fin/swap-kit";
-import { createCircleWalletsAdapter } from "@circle-fin/adapter-circle-wallets";
-import { inspect } from "util";
+import { SwapKit } from '@circle-fin/swap-kit';
+import { createCircleWalletsAdapter } from '@circle-fin/adapter-circle-wallets';
+import { inspect } from 'util';
 
 const kit = new SwapKit();
 
@@ -83,10 +83,10 @@ const swapTokens = async (): Promise<void> => {
   const entitySecret = process.env.CIRCLE_ENTITY_SECRET;
   const walletAddress = process.env.WALLET_ADDRESS;
   if (!apiKey || !entitySecret) {
-    throw new Error("CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET env vars must be set");
+    throw new Error('CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET env vars must be set');
   }
   if (!walletAddress) {
-    throw new Error("WALLET_ADDRESS env var must be set");
+    throw new Error('WALLET_ADDRESS env var must be set');
   }
 
   try {
@@ -98,20 +98,20 @@ const swapTokens = async (): Promise<void> => {
     const result = await kit.swap({
       from: {
         adapter,
-        chain: "Ethereum",
+        chain: 'Ethereum',
         address: walletAddress,
       },
-      tokenIn: "USDT",
-      tokenOut: "USDC",
-      amountIn: "1.00",
+      tokenIn: 'USDT',
+      tokenOut: 'USDC',
+      amountIn: '1.00',
       config: {
         kitKey: process.env.KIT_KEY as string,
       },
     });
 
-    console.log("RESULT", inspect(result, false, null, true));
+    console.log('RESULT', inspect(result, false, null, true));
   } catch (err) {
-    console.error("ERROR", err instanceof Error ? err.message : "Unknown error");
+    console.error('ERROR', err instanceof Error ? err.message : 'Unknown error');
   }
 };
 

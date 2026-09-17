@@ -1,4 +1,13 @@
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Length, MaxLength, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Length,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { PayoutAccountType } from '@dialectiva/db';
 
 export class ListPaymentMethodsDto {

@@ -29,8 +29,14 @@ describe('DatasetQualityReportService.build', () => {
     const { prisma, catalogue, service } = setup();
     catalogue.matchingRecordingIdsForRule.mockResolvedValue(['rec-1', 'rec-2', 'rec-3']);
     prisma.isvcCurrent.findMany.mockResolvedValue([
-      { recordingId: 'rec-1', aggregation: { isvs: 96, agreement: 90, confidence: 'VERY_HIGH', organizationCount: 4 } },
-      { recordingId: 'rec-2', aggregation: { isvs: 80, agreement: 70, confidence: 'HIGH', organizationCount: 2 } },
+      {
+        recordingId: 'rec-1',
+        aggregation: { isvs: 96, agreement: 90, confidence: 'VERY_HIGH', organizationCount: 4 },
+      },
+      {
+        recordingId: 'rec-2',
+        aggregation: { isvs: 80, agreement: 70, confidence: 'HIGH', organizationCount: 2 },
+      },
       // rec-3 has no current ISVC yet
     ]);
 

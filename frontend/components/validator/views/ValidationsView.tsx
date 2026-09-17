@@ -30,8 +30,7 @@ export function ValidationsView() {
         <div>
           <h2 className="text-lg font-black">Ready to review recordings?</h2>
           <p className="mt-1 text-sm text-muted">
-            Start a task to browse the recording pool, play audio, and add recordings to your
-            decks.
+            Start a task to browse the recording pool, play audio, and add recordings to your decks.
           </p>
         </div>
         <button

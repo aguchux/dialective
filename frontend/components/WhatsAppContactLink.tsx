@@ -1,7 +1,11 @@
 import { Phone } from 'lucide-react';
 
 /** Name is always shown paired with a phone number, never alone -- together they let either side confirm they're talking to the right person instead of trusting a bare phone number a scammer could also produce. */
-export function formatContact(firstName: string | null, lastName: string | null, phoneNumber: string): string {
+export function formatContact(
+  firstName: string | null,
+  lastName: string | null,
+  phoneNumber: string,
+): string {
   const name = [firstName, lastName].filter(Boolean).join(' ');
   return name ? `${name} · ${phoneNumber}` : phoneNumber;
 }

@@ -63,6 +63,9 @@ describe('SubscriberRolesGuard', () => {
 
     // ReportsController decorates the class, not each handler -- if this only
     // checked the handler, that controller would be unguarded.
-    expect(spy).toHaveBeenCalledWith(SUBSCRIBER_ROLES_KEY, [expect.any(Function), expect.any(Function)]);
+    expect(spy).toHaveBeenCalledWith(SUBSCRIBER_ROLES_KEY, [
+      expect.any(Function),
+      expect.any(Function),
+    ]);
   });
 });

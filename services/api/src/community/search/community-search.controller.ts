@@ -1,5 +1,8 @@
 import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
-import { OptionalJwtAuthGuard, OptionallyAuthenticatedRequest } from '../../auth/strategies/optional-jwt-auth.guard';
+import {
+  OptionalJwtAuthGuard,
+  OptionallyAuthenticatedRequest,
+} from '../../auth/strategies/optional-jwt-auth.guard';
 import { CommunitySearchService } from './community-search.service';
 
 // Content is public and shareable -- see CommunityPostsController's list().

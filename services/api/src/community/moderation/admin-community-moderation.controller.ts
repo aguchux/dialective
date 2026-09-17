@@ -12,7 +12,11 @@ export class AdminCommunityModerationController {
   constructor(private readonly moderation: CommunityModerationService) {}
 
   @Post('posts/:id/hide')
-  hidePost(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body('reason') reason?: string) {
+  hidePost(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body('reason') reason?: string,
+  ) {
     return this.moderation.hidePost(req.user.sub, id, reason);
   }
 
@@ -22,7 +26,11 @@ export class AdminCommunityModerationController {
   }
 
   @Post('posts/:id/delete')
-  deletePost(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body('reason') reason?: string) {
+  deletePost(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body('reason') reason?: string,
+  ) {
     return this.moderation.deletePost(req.user.sub, id, reason);
   }
 
@@ -47,7 +55,11 @@ export class AdminCommunityModerationController {
   }
 
   @Post('replies/:id/delete')
-  deleteReply(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body('reason') reason?: string) {
+  deleteReply(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body('reason') reason?: string,
+  ) {
     return this.moderation.deleteReply(req.user.sub, id, reason);
   }
 

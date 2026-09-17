@@ -28,7 +28,10 @@ describe('SubscriberOrgsService.getOrganization', () => {
     const { service, prisma } = setup();
     prisma.subscriberOrganization.findUniqueOrThrow.mockResolvedValue({
       id: 'org-1',
-      subscription: { id: 'sub-1', plan: { key: 'enterprise', monthlyByteQuota: BigInt(1_000_000_000) } },
+      subscription: {
+        id: 'sub-1',
+        plan: { key: 'enterprise', monthlyByteQuota: BigInt(1_000_000_000) },
+      },
     });
 
     const result = await service.getOrganization('org-1');
@@ -38,7 +41,10 @@ describe('SubscriberOrgsService.getOrganization', () => {
 
   it('passes through unchanged when there is no subscription', async () => {
     const { service, prisma } = setup();
-    prisma.subscriberOrganization.findUniqueOrThrow.mockResolvedValue({ id: 'org-1', subscription: null });
+    prisma.subscriberOrganization.findUniqueOrThrow.mockResolvedValue({
+      id: 'org-1',
+      subscription: null,
+    });
 
     const result = await service.getOrganization('org-1');
 
@@ -191,7 +197,9 @@ describe('SubscriberOrgsService.removeMember', () => {
     });
     prisma.subscriberMembership.count.mockResolvedValue(0);
 
-    await expect(service.removeMember('org-1', 'm-1', 'user-1')).rejects.toThrow(ForbiddenException);
+    await expect(service.removeMember('org-1', 'm-1', 'user-1')).rejects.toThrow(
+      ForbiddenException,
+    );
   });
 
   it('deletes the membership and records a MEMBER_REMOVED activity event', async () => {
@@ -239,7 +247,9 @@ describe('SubscriberOrgsService.removeMember', () => {
     prisma.subscriberMembership.findFirst.mockResolvedValue({ role: SubscriberOrgRole.ADMIN });
     prisma.subscriberMembership.count.mockResolvedValue(1);
 
-    await expect(service.removeMember('org-1', 'm-1', 'actor-1')).rejects.toThrow(ForbiddenException);
+    await expect(service.removeMember('org-1', 'm-1', 'actor-1')).rejects.toThrow(
+      ForbiddenException,
+    );
     expect(prisma.subscriberMembership.delete).not.toHaveBeenCalled();
   });
 });
@@ -262,8 +272,22 @@ describe('SubscriberOrgsService.listActivity', () => {
   it('resolves actor names for events with a non-null actorUserId', async () => {
     const { service, prisma } = setup();
     prisma.orgActivityEvent.findMany.mockResolvedValue([
-      { id: 'e-1', organizationId: 'org-1', eventType: 'MEMBER_ROLE_CHANGED', actorUserId: 'actor-1', metadata: {}, createdAt: new Date() },
-      { id: 'e-2', organizationId: 'org-1', eventType: 'SUBSCRIPTION_PLAN_CHANGED', actorUserId: null, metadata: {}, createdAt: new Date() },
+      {
+        id: 'e-1',
+        organizationId: 'org-1',
+        eventType: 'MEMBER_ROLE_CHANGED',
+        actorUserId: 'actor-1',
+        metadata: {},
+        createdAt: new Date(),
+      },
+      {
+        id: 'e-2',
+        organizationId: 'org-1',
+        eventType: 'SUBSCRIPTION_PLAN_CHANGED',
+        actorUserId: null,
+        metadata: {},
+        createdAt: new Date(),
+      },
     ]);
     prisma.subscriberUser.findMany.mockResolvedValue([
       { id: 'actor-1', firstName: 'Ada', lastName: 'Nwosu', email: 'ada@example.com' },

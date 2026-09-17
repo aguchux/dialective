@@ -35,11 +35,7 @@ export function TopPromoBanner() {
 
   const image = (
     // eslint-disable-next-line @next/next/no-img-element
-    <img
-      alt={data.topBannerAltText ?? ''}
-      className="block w-full"
-      src={data.topBannerImageUrl}
-    />
+    <img alt={data.topBannerAltText ?? ''} className="block w-full" src={data.topBannerImageUrl} />
   );
 
   return (

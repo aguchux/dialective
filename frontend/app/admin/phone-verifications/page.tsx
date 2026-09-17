@@ -294,7 +294,9 @@ function RequestRow({
           <StatusBadge status={row.status} />
         </td>
         <td className="px-4 py-3">{row.feeTokenAmount} DL</td>
-        <td className="px-4 py-3">{row.claimedAt ? formatDateTime(row.claimedAt) : 'Not claimed'}</td>
+        <td className="px-4 py-3">
+          {row.claimedAt ? formatDateTime(row.claimedAt) : 'Not claimed'}
+        </td>
         <td className="px-4 py-3">{formatDateTime(row.createdAt)}</td>
         <td className="px-4 py-3">
           {canAct ? (
@@ -460,7 +462,12 @@ function VerifyDialog({
                 className="min-h-11 rounded-lg border border-line bg-white px-3 text-center text-lg font-black uppercase tracking-[0.3em] text-ink outline-none focus:border-accent"
                 maxLength={6}
                 onChange={(event) =>
-                  setCode(event.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6))
+                  setCode(
+                    event.target.value
+                      .replace(/[^A-Za-z0-9]/g, '')
+                      .toUpperCase()
+                      .slice(0, 6),
+                  )
                 }
                 value={code}
               />

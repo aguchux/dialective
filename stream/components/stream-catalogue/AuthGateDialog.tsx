@@ -153,7 +153,10 @@ export function AuthGateDialog({
         {step === 'credentials' ? (
           <form className="grid gap-2.5" onSubmit={submitCredentials}>
             <div>
-              <label className="mb-1 block text-[11px] font-semibold text-catalogue-muted" htmlFor="auth-gate-email">
+              <label
+                className="mb-1 block text-[11px] font-semibold text-catalogue-muted"
+                htmlFor="auth-gate-email"
+              >
                 Work email
               </label>
               <div className="relative">
@@ -236,7 +239,9 @@ export function AuthGateDialog({
 
             <div aria-hidden="true" className="my-0.5 flex items-center gap-2.5">
               <span className="h-px flex-1 bg-catalogue-line" />
-              <span className="shrink-0 text-[10px] font-medium lowercase text-catalogue-dim">or</span>
+              <span className="shrink-0 text-[10px] font-medium lowercase text-catalogue-dim">
+                or
+              </span>
               <span className="h-px flex-1 bg-catalogue-line" />
             </div>
 
@@ -332,7 +337,10 @@ function GoogleIcon() {
         d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.99.66-2.25 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.85A11 11 0 0 0 12 23Z"
         fill="#34A853"
       />
-      <path d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.05H2.18a11 11 0 0 0 0 9.9l3.66-2.85Z" fill="#FBBC05" />
+      <path
+        d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.05H2.18a11 11 0 0 0 0 9.9l3.66-2.85Z"
+        fill="#FBBC05"
+      />
       <path
         d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1a11 11 0 0 0-9.82 6.05l3.66 2.85C6.71 7.3 9.14 5.38 12 5.38Z"
         fill="#EA4335"

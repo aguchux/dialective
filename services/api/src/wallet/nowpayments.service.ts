@@ -175,7 +175,9 @@ export class NowPaymentsService implements PayoutProvider {
     );
     const raw = await readNowPaymentsJson(res);
     if (!res.ok) {
-      this.logger.error(`NOWPayments payout min-amount failed: ${res.status} ${JSON.stringify(raw)}`);
+      this.logger.error(
+        `NOWPayments payout min-amount failed: ${res.status} ${JSON.stringify(raw)}`,
+      );
       throw new NowPaymentsApiError(
         'The payout provider could not report its minimum withdrawal amount.',
         `NOWPayments payout-withdrawal/min-amount ${res.status}: ${JSON.stringify(raw)}`,
@@ -253,7 +255,8 @@ export class NowPaymentsService implements PayoutProvider {
     // id -- confirmed with NOWPayments support 2026-09-10 after
     // /payout/{withdrawalId}/verify returned 404 "batch withdrawal not
     // found" on a real stuck payout. Keep both ids around.
-    const batchId = typeof raw.id === 'string' || typeof raw.id === 'number' ? String(raw.id) : null;
+    const batchId =
+      typeof raw.id === 'string' || typeof raw.id === 'number' ? String(raw.id) : null;
 
     return { payoutId: payout.id, batchId, status: payout.status, raw };
   }
@@ -319,14 +322,17 @@ export class NowPaymentsService implements PayoutProvider {
    */
   async cancelPayout(payoutId: string): Promise<PayoutStatusResult> {
     const token = await this.getPayoutAuthToken();
-    const res = await fetch(`${NOWPAYMENTS_API_BASE}/payout/${encodeURIComponent(payoutId)}/cancel`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
+    const res = await fetch(
+      `${NOWPAYMENTS_API_BASE}/payout/${encodeURIComponent(payoutId)}/cancel`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'x-api-key': this.apiKey,
+        },
       },
-    });
+    );
     const raw = await readNowPaymentsJson(res);
     if (!res.ok) {
       this.logger.error(`NOWPayments cancelPayout failed: ${res.status} ${JSON.stringify(raw)}`);

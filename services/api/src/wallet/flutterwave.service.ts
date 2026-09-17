@@ -346,7 +346,9 @@ export class FlutterwaveService implements PayoutProvider {
     }
     const data = raw.data;
     if (!Array.isArray(data)) {
-      this.logger.error(`Flutterwave listBalances returned an unexpected shape: ${JSON.stringify(raw)}`);
+      this.logger.error(
+        `Flutterwave listBalances returned an unexpected shape: ${JSON.stringify(raw)}`,
+      );
       throw new BadGatewayException('The payment provider returned an invalid balances response.');
     }
     return data.map((entry) => {

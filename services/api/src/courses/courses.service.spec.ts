@@ -156,7 +156,9 @@ describe('CoursesService', () => {
       id: 'c1',
       title: 'Intro',
       completionRewardTokens: null as any,
-      slides: { slides: [{ text: 'a' }, { text: 'b' }, { text: 'c' }, { text: 'd' }, { text: 'e' }] },
+      slides: {
+        slides: [{ text: 'a' }, { text: 'b' }, { text: 'c' }, { text: 'd' }, { text: 'e' }],
+      },
     };
 
     it('rejects a lastSlideIndex that jumps ahead of the next unseen slide, instead of silently clamping to the end', async () => {
@@ -341,7 +343,10 @@ describe('CoursesService', () => {
     });
 
     it('still emails completion with no reward when the course has none', async () => {
-      prisma.course.findFirst.mockResolvedValue({ ...fiveSlideCourse, completionRewardTokens: null });
+      prisma.course.findFirst.mockResolvedValue({
+        ...fiveSlideCourse,
+        completionRewardTokens: null,
+      });
       prisma.courseProgress.findUnique.mockResolvedValue({
         completedAt: null,
         maxSlideIndexReached: 3,

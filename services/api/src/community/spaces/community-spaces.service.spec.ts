@@ -164,7 +164,10 @@ describe('CommunitySpacesService admin', () => {
       const { service, prisma } = setup();
       prisma.communitySpace.findMany
         .mockResolvedValueOnce([{ id: 'a' }, { id: 'b' }])
-        .mockResolvedValueOnce([{ id: 'b', sortOrder: 0 }, { id: 'a', sortOrder: 1 }]);
+        .mockResolvedValueOnce([
+          { id: 'b', sortOrder: 0 },
+          { id: 'a', sortOrder: 1 },
+        ]);
       prisma.communitySpace.update.mockResolvedValue({});
 
       const result = await service.reorderForAdmin(['b', 'a']);
@@ -178,7 +181,10 @@ describe('CommunitySpacesService admin', () => {
         data: { sortOrder: 1 },
       });
       expect(prisma.$transaction).toHaveBeenCalled();
-      expect(result).toEqual([{ id: 'b', sortOrder: 0 }, { id: 'a', sortOrder: 1 }]);
+      expect(result).toEqual([
+        { id: 'b', sortOrder: 0 },
+        { id: 'a', sortOrder: 1 },
+      ]);
     });
   });
 });

@@ -61,7 +61,11 @@ describe('SettlementService resolveTimedOutScoring', () => {
 
   it('moves a timed-out word recording to SCORED without crediting payout or settling it', async () => {
     const prisma = buildPrismaMock();
-    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(
+      prisma as never,
+      { deleteObject: jest.fn().mockResolvedValue(undefined) } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
 
     // @ts-expect-error -- private method under test
     const result = await service.resolveTimedOutScoring();
@@ -98,7 +102,11 @@ describe('SettlementService resolveTimedOutScoring', () => {
       minScoreRange: { toNumber: () => 10 },
       maxScoreRange: { toNumber: () => 30 },
     });
-    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(
+      prisma as never,
+      { deleteObject: jest.fn().mockResolvedValue(undefined) } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
 
     // @ts-expect-error -- private method under test
     const result = await service.resolveTimedOutScoring();
@@ -142,9 +150,11 @@ describe('SettlementService refundStuckWordRecordings', () => {
       ledgerEntry: {
         // Type-aware: a TASK_LOCK exists but no TASK_REFUND, i.e. the stake
         // is still held -- isStakeStillLocked() -> true.
-        findFirst: jest.fn().mockImplementation(({ where }: any) =>
-          Promise.resolve(where?.type === 'TASK_REFUND' ? null : { id: 'lock-1' }),
-        ),
+        findFirst: jest
+          .fn()
+          .mockImplementation(({ where }: any) =>
+            Promise.resolve(where?.type === 'TASK_REFUND' ? null : { id: 'lock-1' }),
+          ),
         create: jest.fn().mockResolvedValue({}),
       },
       wallet: {
@@ -163,9 +173,13 @@ describe('SettlementService refundStuckWordRecordings', () => {
 
   it('claims the row as EXPIRED (not just refundedAt) so it reaches a terminal state', async () => {
     const prisma = buildPrismaMock();
-    const service = new SettlementService(prisma as never, {
-      deleteObject: jest.fn().mockResolvedValue(undefined),
-    } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(
+      prisma as never,
+      {
+        deleteObject: jest.fn().mockResolvedValue(undefined),
+      } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
 
     // @ts-expect-error -- private method under test
     const refundedCount = await service.refundStuckWordRecordings();
@@ -179,7 +193,10 @@ describe('SettlementService refundStuckWordRecordings', () => {
     // check and this write can't push the balance negative.
     expect(prisma.wallet.updateMany).toHaveBeenCalledWith({
       where: { id: 'wallet-1', lockedBalance: { gte: expect.anything() } },
-      data: { lockedBalance: { decrement: expect.anything() }, balance: { increment: expect.anything() } },
+      data: {
+        lockedBalance: { decrement: expect.anything() },
+        balance: { increment: expect.anything() },
+      },
     });
   });
 
@@ -196,9 +213,13 @@ describe('SettlementService refundStuckWordRecordings', () => {
       // Both a lock AND a refund exist: the stake is already back.
       Promise.resolve({ id: where?.type === 'TASK_REFUND' ? 'refund-1' : 'lock-1' }),
     );
-    const service = new SettlementService(prisma as never, {
-      deleteObject: jest.fn().mockResolvedValue(undefined),
-    } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(
+      prisma as never,
+      {
+        deleteObject: jest.fn().mockResolvedValue(undefined),
+      } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
 
     // @ts-expect-error -- private method under test
     await service.refundStuckWordRecordings();
@@ -209,9 +230,13 @@ describe('SettlementService refundStuckWordRecordings', () => {
   it('skips a row another concurrent run already claimed', async () => {
     const prisma = buildPrismaMock();
     prisma.wordRecording.updateMany.mockResolvedValue({ count: 0 });
-    const service = new SettlementService(prisma as never, {
-      deleteObject: jest.fn().mockResolvedValue(undefined),
-    } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(
+      prisma as never,
+      {
+        deleteObject: jest.fn().mockResolvedValue(undefined),
+      } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
 
     // @ts-expect-error -- private method under test
     const refundedCount = await service.refundStuckWordRecordings();
@@ -233,9 +258,13 @@ describe('SettlementService refundStuckWordRecordings', () => {
       minScoreRange: { toNumber: () => 10 },
       maxScoreRange: { toNumber: () => 30 },
     });
-    const service = new SettlementService(prisma as never, {
-      deleteObject: jest.fn().mockResolvedValue(undefined),
-    } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(
+      prisma as never,
+      {
+        deleteObject: jest.fn().mockResolvedValue(undefined),
+      } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
 
     // @ts-expect-error -- private method under test
     const resolvedCount = await service.refundStuckWordRecordings();
@@ -297,7 +326,11 @@ describe('SettlementService settlement state', () => {
 
   it('marks a settled word recording as SETTLED with its payout timestamp', async () => {
     const prisma = buildPrismaMock();
-    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(
+      prisma as never,
+      { deleteObject: jest.fn().mockResolvedValue(undefined) } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
 
     // mintingPaused: true -- this test only covers the legacy Wallet credit
     // path, not Tokenomics minting (see the "mints into Tokenomics" tests
@@ -327,7 +360,11 @@ describe('SettlementService settlement state', () => {
     prisma.ledgerEntry.findFirst.mockImplementation(({ where }: any) =>
       Promise.resolve(where?.type === 'TASK_REFUND' ? null : { id: 'lock-1' }),
     );
-    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(
+      prisma as never,
+      { deleteObject: jest.fn().mockResolvedValue(undefined) } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
 
     // @ts-expect-error -- private method under test
     await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true);
@@ -344,7 +381,11 @@ describe('SettlementService settlement state', () => {
 
   it('mints into the Tokenomics ledger alongside the legacy payout when minting is not paused', async () => {
     const prisma = buildPrismaMock();
-    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(
+      prisma as never,
+      { deleteObject: jest.fn().mockResolvedValue(undefined) } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
     (mintTrainingPayoutOps as jest.Mock).mockClear();
 
     // @ts-expect-error -- private method under test
@@ -375,7 +416,11 @@ describe('SettlementService settlement state', () => {
         asrMatchScore: null,
       },
     ]);
-    const service = new SettlementService(prisma as never, { deleteObject: jest.fn() } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(
+      prisma as never,
+      { deleteObject: jest.fn() } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
 
     // @ts-expect-error -- private method under test
     await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true);
@@ -387,7 +432,11 @@ describe('SettlementService settlement state', () => {
 
   it('skips minting into the Tokenomics ledger when minting is paused, but still pays the trainer', async () => {
     const prisma = buildPrismaMock();
-    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(
+      prisma as never,
+      { deleteObject: jest.fn().mockResolvedValue(undefined) } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
     (mintTrainingPayoutOps as jest.Mock).mockClear();
 
     // @ts-expect-error -- private method under test
@@ -414,7 +463,11 @@ describe('SettlementService settlement state', () => {
         asrMatchScore: null,
       },
     ]);
-    const service = new SettlementService(prisma as never, { deleteObject: jest.fn().mockResolvedValue(undefined) } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(
+      prisma as never,
+      { deleteObject: jest.fn().mockResolvedValue(undefined) } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
 
     // @ts-expect-error -- private method under test
     await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true);
@@ -444,9 +497,11 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
       ledgerEntry: {
         // Type-aware: a TASK_LOCK exists but no TASK_REFUND, i.e. the stake
         // is still held -- isStakeStillLocked() -> true.
-        findFirst: jest.fn().mockImplementation(({ where }: any) =>
-          Promise.resolve(where?.type === 'TASK_REFUND' ? null : { id: 'lock-1' }),
-        ),
+        findFirst: jest
+          .fn()
+          .mockImplementation(({ where }: any) =>
+            Promise.resolve(where?.type === 'TASK_REFUND' ? null : { id: 'lock-1' }),
+          ),
         create: jest.fn().mockResolvedValue({}),
       },
       wallet: {
@@ -476,7 +531,11 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
       ],
     });
     const deleteObject = jest.fn().mockResolvedValue(undefined);
-    const service = new SettlementService(prisma as never, { deleteObject } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(
+      prisma as never,
+      { deleteObject } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
 
     // @ts-expect-error -- private method under test
     const count = await service.refundRejectedWordRecordings();
@@ -515,7 +574,11 @@ describe('SettlementService rejected-record refund + immediate audio delete', ()
     });
     prisma.wordRecording.updateMany.mockResolvedValue({ count: 0 }); // another run already claimed it
     const deleteObject = jest.fn().mockResolvedValue(undefined);
-    const service = new SettlementService(prisma as never, { deleteObject } as never, { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never);
+    const service = new SettlementService(
+      prisma as never,
+      { deleteObject } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
 
     // @ts-expect-error -- private method under test
     const count = await service.refundRejectedWordRecordings();
@@ -540,15 +603,17 @@ describe('SettlementService.settleDuplicateSourceWithoutReward', () => {
     const mock: any = {
       wordRecording: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       ledgerEntry: {
-        findFirst: jest.fn().mockImplementation(({ where }: any) =>
-          Promise.resolve(
-            where?.type === 'TASK_REFUND'
-              ? alreadyRefunded
-                ? { id: 'refund-1' }
-                : null
-              : { id: 'lock-1' },
+        findFirst: jest
+          .fn()
+          .mockImplementation(({ where }: any) =>
+            Promise.resolve(
+              where?.type === 'TASK_REFUND'
+                ? alreadyRefunded
+                  ? { id: 'refund-1' }
+                  : null
+                : { id: 'lock-1' },
+            ),
           ),
-        ),
         create: jest.fn().mockResolvedValue({}),
       },
       wallet: {
@@ -565,9 +630,13 @@ describe('SettlementService.settleDuplicateSourceWithoutReward', () => {
   const recording = { id: 'rec-dup', userId: 'user-1', tokensSpent: { toNumber: () => 0.1 } };
 
   function makeService(prisma: any) {
-    return new SettlementService(prisma as never, { deleteObject: jest.fn() } as never, {
-      notifyReferralPayoutBonus: jest.fn(),
-    } as never);
+    return new SettlementService(
+      prisma as never,
+      { deleteObject: jest.fn() } as never,
+      {
+        notifyReferralPayoutBonus: jest.fn(),
+      } as never,
+    );
   }
 
   it('returns the stake once when it is still held', async () => {

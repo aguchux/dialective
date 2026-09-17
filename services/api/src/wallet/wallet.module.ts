@@ -15,7 +15,14 @@ import { TrainerReportService } from './trainer-report.service';
 import { TokenomicsModule } from '../tokenomics/tokenomics.module';
 
 @Module({
-  imports: [SettingsModule, OtpModule, MailModule, SmsModule, TokenomicsModule, ApiAccessTokensModule],
+  imports: [
+    SettingsModule,
+    OtpModule,
+    MailModule,
+    SmsModule,
+    TokenomicsModule,
+    ApiAccessTokensModule,
+  ],
   controllers: [WalletController, PayoutAccountsController],
   providers: [
     NowPaymentsService,

@@ -164,65 +164,75 @@ export class TrainerReportService {
       select: { id: true, balance: true, lockedBalance: true },
     });
 
-    const [ledgerTotals, ledgerDaily, wordRecordings, lifetimeEarningsAgg, otherCreditsAgg, withdrawnAgg] =
-      await Promise.all([
-        wallet
-          ? this.prisma.ledgerEntry.groupBy({
-              by: ['type'],
-              where: {
-                walletId: wallet.id,
-                type: { in: EARNING_ENTRY_TYPES },
-                createdAt: createdAtRange,
-              },
-              _sum: { amount: true },
-            })
-          : Promise.resolve([]),
-        wallet
-          ? this.prisma.ledgerEntry.findMany({
-              where: { walletId: wallet.id, type: { in: EARNING_ENTRY_TYPES }, createdAt: createdAtRange },
-              select: { amount: true, createdAt: true },
-            })
-          : Promise.resolve([]),
-        this.prisma.wordRecording.findMany({
-          where: { userId, createdAt: createdAtRange },
-          select: { score: true, compositeScore: true, createdAt: true },
-        }),
-        // Lifetime (no date filter) -- "total tokens since join" sums every
-        // genuine earning the wallet has ever received, not just earnings
-        // within the selected report range. Scoped to
-        // LIFETIME_CREDIT_ENTRY_TYPES rather than amount > 0 -- the latter
-        // also matched TASK_REFUND/WITHDRAWAL_REVERSED/etc, which return the
-        // trainer's own prior debit rather than crediting new value, and
-        // inflated this total well past what the trainer actually earned.
-        wallet
-          ? this.prisma.ledgerEntry.aggregate({
-              where: { walletId: wallet.id, type: { in: LIFETIME_CREDIT_ENTRY_TYPES } },
-              _sum: { amount: true },
-            })
-          : Promise.resolve({ _sum: { amount: null } }),
-        // Lifetime (no date filter), same rationale as lifetimeEarningsAgg
-        // above but for EXTERNAL_TOPUP_ENTRY_TYPES -- real balance-adding
-        // value from an external actor, kept separate from "earned."
-        wallet
-          ? this.prisma.ledgerEntry.aggregate({
-              where: { walletId: wallet.id, type: { in: EXTERNAL_TOPUP_ENTRY_TYPES } },
-              _sum: { amount: true },
-            })
-          : Promise.resolve({ _sum: { amount: null } }),
-        // WITHDRAWAL_REVERSED is a signed reversal of a prior WITHDRAWAL
-        // (see LedgerEntryType's schema doc comment) -- summing both types
-        // together nets a reversed withdrawal back out automatically,
-        // rather than needing a separate subtraction step.
-        wallet
-          ? this.prisma.ledgerEntry.aggregate({
-              where: {
-                walletId: wallet.id,
-                type: { in: [LedgerEntryType.WITHDRAWAL, LedgerEntryType.WITHDRAWAL_REVERSED] },
-              },
-              _sum: { amount: true },
-            })
-          : Promise.resolve({ _sum: { amount: null } }),
-      ]);
+    const [
+      ledgerTotals,
+      ledgerDaily,
+      wordRecordings,
+      lifetimeEarningsAgg,
+      otherCreditsAgg,
+      withdrawnAgg,
+    ] = await Promise.all([
+      wallet
+        ? this.prisma.ledgerEntry.groupBy({
+            by: ['type'],
+            where: {
+              walletId: wallet.id,
+              type: { in: EARNING_ENTRY_TYPES },
+              createdAt: createdAtRange,
+            },
+            _sum: { amount: true },
+          })
+        : Promise.resolve([]),
+      wallet
+        ? this.prisma.ledgerEntry.findMany({
+            where: {
+              walletId: wallet.id,
+              type: { in: EARNING_ENTRY_TYPES },
+              createdAt: createdAtRange,
+            },
+            select: { amount: true, createdAt: true },
+          })
+        : Promise.resolve([]),
+      this.prisma.wordRecording.findMany({
+        where: { userId, createdAt: createdAtRange },
+        select: { score: true, compositeScore: true, createdAt: true },
+      }),
+      // Lifetime (no date filter) -- "total tokens since join" sums every
+      // genuine earning the wallet has ever received, not just earnings
+      // within the selected report range. Scoped to
+      // LIFETIME_CREDIT_ENTRY_TYPES rather than amount > 0 -- the latter
+      // also matched TASK_REFUND/WITHDRAWAL_REVERSED/etc, which return the
+      // trainer's own prior debit rather than crediting new value, and
+      // inflated this total well past what the trainer actually earned.
+      wallet
+        ? this.prisma.ledgerEntry.aggregate({
+            where: { walletId: wallet.id, type: { in: LIFETIME_CREDIT_ENTRY_TYPES } },
+            _sum: { amount: true },
+          })
+        : Promise.resolve({ _sum: { amount: null } }),
+      // Lifetime (no date filter), same rationale as lifetimeEarningsAgg
+      // above but for EXTERNAL_TOPUP_ENTRY_TYPES -- real balance-adding
+      // value from an external actor, kept separate from "earned."
+      wallet
+        ? this.prisma.ledgerEntry.aggregate({
+            where: { walletId: wallet.id, type: { in: EXTERNAL_TOPUP_ENTRY_TYPES } },
+            _sum: { amount: true },
+          })
+        : Promise.resolve({ _sum: { amount: null } }),
+      // WITHDRAWAL_REVERSED is a signed reversal of a prior WITHDRAWAL
+      // (see LedgerEntryType's schema doc comment) -- summing both types
+      // together nets a reversed withdrawal back out automatically,
+      // rather than needing a separate subtraction step.
+      wallet
+        ? this.prisma.ledgerEntry.aggregate({
+            where: {
+              walletId: wallet.id,
+              type: { in: [LedgerEntryType.WITHDRAWAL, LedgerEntryType.WITHDRAWAL_REVERSED] },
+            },
+            _sum: { amount: true },
+          })
+        : Promise.resolve({ _sum: { amount: null } }),
+    ]);
 
     const earningsAmount = (types: LedgerEntryType[]) =>
       ledgerTotals
@@ -350,9 +360,7 @@ export class TrainerReportService {
     const scored = wordRecordings.filter((row) => row.score !== null);
     const avgScore =
       scored.length > 0
-        ? (
-            scored.reduce((total, row) => total + Number(row.score), 0) / scored.length
-          ).toFixed(2)
+        ? (scored.reduce((total, row) => total + Number(row.score), 0) / scored.length).toFixed(2)
         : null;
 
     return {
@@ -399,7 +407,9 @@ export class TrainerReportService {
     recordings: { createdAt: Date }[],
   ): { date: string; recordings: number; earningsTokens: string }[] {
     const buckets = new Map<string, { recordings: number; earningsTokens: number }>();
-    const startDay = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()));
+    const startDay = new Date(
+      Date.UTC(from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate()),
+    );
     const endDay = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()));
     for (
       let day = new Date(startDay);

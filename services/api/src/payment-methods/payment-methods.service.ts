@@ -131,7 +131,9 @@ function serialize(
     type: row.type,
     name: row.name,
     description: row.description,
-    logoUrl: row.logoKey ? storage.getPublicObjectUrl(PAYMENT_METHOD_LOGO_BUCKET, row.logoKey) : null,
+    logoUrl: row.logoKey
+      ? storage.getPublicObjectUrl(PAYMENT_METHOD_LOGO_BUCKET, row.logoKey)
+      : null,
     bankCode: row.bankCode,
     enabled: row.enabled,
     sortOrder: row.sortOrder,

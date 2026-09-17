@@ -260,7 +260,9 @@ describe('WordGeneratorService run() backfill-before-generation ordering', () =>
     prisma.word.count.mockResolvedValue(100); // word cap reached
     prisma.sentence.count.mockResolvedValue(0); // sentence cap has full headroom
     prisma.word.findMany.mockResolvedValue([]);
-    (service as any).chain.generate = jest.fn().mockResolvedValue({ items: ['hi there'], provider: 'openai' });
+    (service as any).chain.generate = jest
+      .fn()
+      .mockResolvedValue({ items: ['hi there'], provider: 'openai' });
 
     await service.run();
 

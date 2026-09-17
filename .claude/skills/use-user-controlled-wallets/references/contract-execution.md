@@ -23,9 +23,9 @@ const response = await circleClient.createContractExecutionTransaction({
   userToken,
   walletId,
   contractAddress,
-  abiFunctionSignature: "transfer(address,uint256)",
-  abiParameters: ["0xRecipientAddress", "1000000"],
-  fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+  abiFunctionSignature: 'transfer(address,uint256)',
+  abiParameters: ['0xRecipientAddress', '1000000'],
+  fee: { type: 'level', config: { feeLevel: 'MEDIUM' } },
 });
 // response.data: { challengeId }
 ```
@@ -39,8 +39,8 @@ const response = await circleClient.createContractExecutionTransaction({
   userToken,
   walletId,
   contractAddress,
-  callData: "0xa9059cbb000000000000000000000000...",
-  fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+  callData: '0xa9059cbb000000000000000000000000...',
+  fee: { type: 'level', config: { feeLevel: 'MEDIUM' } },
 });
 // response.data: { challengeId }
 ```
@@ -54,10 +54,10 @@ const response = await circleClient.createContractExecutionTransaction({
   userToken,
   walletId,
   contractAddress,
-  abiFunctionSignature: "deposit()",
+  abiFunctionSignature: 'deposit()',
   abiParameters: [],
-  amount: "0.1",
-  fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+  amount: '0.1',
+  fee: { type: 'level', config: { feeLevel: 'MEDIUM' } },
 });
 // response.data: { challengeId }
 ```
@@ -67,8 +67,8 @@ const response = await circleClient.createContractExecutionTransaction({
 ```ts
 const response = await circleClient.estimateContractExecutionFee({
   contractAddress,
-  abiFunctionSignature: "transfer(address,uint256)",
-  abiParameters: ["0xRecipientAddress", "1000000"],
+  abiFunctionSignature: 'transfer(address,uint256)',
+  abiParameters: ['0xRecipientAddress', '1000000'],
   walletId,
 });
 // response.data: { low, medium, high } -- each tier includes gasLimit, gasPrice, maxFee, priorityFee, baseFee, networkFee
@@ -83,7 +83,7 @@ sdk.setAuthentication({ userToken, encryptionKey });
 
 sdk.execute(challengeId, (error, result) => {
   if (error) {
-    console.error("Contract execution failed:", error);
+    console.error('Contract execution failed:', error);
     return;
   }
   // After authorization, the transaction progresses through the standard lifecycle.

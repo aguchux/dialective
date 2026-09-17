@@ -40,10 +40,14 @@ describe('MailerSendWhatsAppProvider', () => {
   it('throws with the status and body text on a non-2xx response', async () => {
     global.fetch = jest
       .fn()
-      .mockResolvedValue({ ok: false, status: 422, text: async () => 'template not approved' }) as never;
+      .mockResolvedValue({
+        ok: false,
+        status: 422,
+        text: async () => 'template not approved',
+      }) as never;
 
-    await expect(new MailerSendWhatsAppProvider().send('+15559876543', '123456', config)).rejects.toThrow(
-      'MailerSend WhatsApp request failed: 422 template not approved',
-    );
+    await expect(
+      new MailerSendWhatsAppProvider().send('+15559876543', '123456', config),
+    ).rejects.toThrow('MailerSend WhatsApp request failed: 422 template not approved');
   });
 });

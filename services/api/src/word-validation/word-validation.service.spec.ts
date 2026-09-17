@@ -134,7 +134,7 @@ describe('WordValidationService', () => {
       expect(optionIds).toEqual(['word-a', 'word-b', 'word-c', 'word-correct'].sort());
     });
 
-    it('excludes the trainer\'s own recordings and already-validated ones via the where clause', async () => {
+    it("excludes the trainer's own recordings and already-validated ones via the where clause", async () => {
       await service.nextItem(trainer.id, session.id);
       expect(prisma.wordRecording.count).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -190,7 +190,10 @@ describe('WordValidationService', () => {
     it('surfaces a friendly conflict when the unique constraint is violated', async () => {
       prisma.wordValidation.create.mockRejectedValue({ code: 'P2002' });
       await expect(
-        service.submit(trainer.id, { recordingId: 'recording-1', selectedWordId: 'word-correct' } as any),
+        service.submit(trainer.id, {
+          recordingId: 'recording-1',
+          selectedWordId: 'word-correct',
+        } as any),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -200,7 +203,10 @@ describe('WordValidationService', () => {
         misplacedDialectAt: new Date(),
       });
       await expect(
-        service.submit(trainer.id, { recordingId: 'recording-1', selectedWordId: 'word-correct' } as any),
+        service.submit(trainer.id, {
+          recordingId: 'recording-1',
+          selectedWordId: 'word-correct',
+        } as any),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -402,7 +408,12 @@ describe('WordValidationService', () => {
       it('pays the reward once enough time has elapsed since the token was issued', async () => {
         const past = Math.floor(Date.now() / 1000) - 10;
         const token = jwt.sign(
-          { sub: trainer.id, recordingId: 'recording-1', typ: 'word-validation-presentment', iat: past },
+          {
+            sub: trainer.id,
+            recordingId: 'recording-1',
+            typ: 'word-validation-presentment',
+            iat: past,
+          },
           process.env.JWT_ACCESS_SECRET as string,
         );
         const result = await service.submit(trainer.id, {
@@ -433,7 +444,12 @@ describe('WordValidationService', () => {
       it('does NOT gate on correctness -- a wrong-but-timely answer still gets rewarded (flagging a bad recording is the job, not abuse)', async () => {
         const past = Math.floor(Date.now() / 1000) - 10;
         const token = jwt.sign(
-          { sub: trainer.id, recordingId: 'recording-1', typ: 'word-validation-presentment', iat: past },
+          {
+            sub: trainer.id,
+            recordingId: 'recording-1',
+            typ: 'word-validation-presentment',
+            iat: past,
+          },
           process.env.JWT_ACCESS_SECRET as string,
         );
         const result = await service.submit(trainer.id, {
@@ -494,7 +510,10 @@ describe('WordValidationService', () => {
     });
 
     it('rejects resolving a recording that is not in the queue', async () => {
-      prisma.wordRecording.findUnique.mockResolvedValue({ ...misplacedRecording, misplacedDialectAt: null });
+      prisma.wordRecording.findUnique.mockResolvedValue({
+        ...misplacedRecording,
+        misplacedDialectAt: null,
+      });
       await expect(
         service.resolveMisplacedDialectRecording('recording-1', { action: 'DELETE' } as any),
       ).rejects.toThrow(ConflictException);

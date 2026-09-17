@@ -14,7 +14,12 @@ import { SmartDeckEvaluatorService } from './smart-deck-evaluator.service';
 @Module({
   imports: [CatalogueModule, BillingModule, RedisStreamsModule, WebhooksModule, OrgActivityModule],
   controllers: [StreamDecksController, PublicDecksController],
-  providers: [StreamDecksService, PublicDecksService, StreamDeckVersioningService, SmartDeckEvaluatorService],
+  providers: [
+    StreamDecksService,
+    PublicDecksService,
+    StreamDeckVersioningService,
+    SmartDeckEvaluatorService,
+  ],
   exports: [StreamDecksService, StreamDeckVersioningService],
 })
 export class StreamDecksModule {}

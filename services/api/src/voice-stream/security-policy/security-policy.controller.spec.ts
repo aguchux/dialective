@@ -86,7 +86,9 @@ describe('SecurityPolicyController (HTTP layer)', () => {
   });
 
   it('rejects POST with 403 when the plan lacks enterpriseSecurityPoliciesEnabled', async () => {
-    prisma.subscription.findUnique.mockResolvedValue({ plan: { enterpriseSecurityPoliciesEnabled: false } });
+    prisma.subscription.findUnique.mockResolvedValue({
+      plan: { enterpriseSecurityPoliciesEnabled: false },
+    });
 
     const res = await request(app.getHttpServer())
       .post('/voice-stream/security-policy')
@@ -98,7 +100,9 @@ describe('SecurityPolicyController (HTTP layer)', () => {
   });
 
   it('allows POST when the plan has enterpriseSecurityPoliciesEnabled', async () => {
-    prisma.subscription.findUnique.mockResolvedValue({ plan: { enterpriseSecurityPoliciesEnabled: true } });
+    prisma.subscription.findUnique.mockResolvedValue({
+      plan: { enterpriseSecurityPoliciesEnabled: true },
+    });
 
     const res = await request(app.getHttpServer())
       .post('/voice-stream/security-policy')
@@ -110,7 +114,9 @@ describe('SecurityPolicyController (HTTP layer)', () => {
   });
 
   it('rejects DELETE with 403 when the plan lacks enterpriseSecurityPoliciesEnabled -- same protection as POST (finding #5)', async () => {
-    prisma.subscription.findUnique.mockResolvedValue({ plan: { enterpriseSecurityPoliciesEnabled: false } });
+    prisma.subscription.findUnique.mockResolvedValue({
+      plan: { enterpriseSecurityPoliciesEnabled: false },
+    });
 
     const res = await request(app.getHttpServer())
       .delete('/voice-stream/security-policy')
@@ -121,7 +127,9 @@ describe('SecurityPolicyController (HTTP layer)', () => {
   });
 
   it('allows DELETE when the plan has enterpriseSecurityPoliciesEnabled', async () => {
-    prisma.subscription.findUnique.mockResolvedValue({ plan: { enterpriseSecurityPoliciesEnabled: true } });
+    prisma.subscription.findUnique.mockResolvedValue({
+      plan: { enterpriseSecurityPoliciesEnabled: true },
+    });
 
     const res = await request(app.getHttpServer())
       .delete('/voice-stream/security-policy')

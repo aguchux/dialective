@@ -54,7 +54,11 @@ describe('SsoService.handleAssertion', () => {
   it('repeat login: updates lastLoginAt, issues tokens for the linked user, does not create a new SubscriberUser', async () => {
     const { service, prisma, subscriberAuth, orgActivity } = setup();
     const linkedUser = { id: 'user-1', email: assertion.email, firstName: 'Jane', lastName: 'Doe' };
-    prisma.ssoIdentity.findUnique.mockResolvedValue({ id: 'identity-1', userId: 'user-1', user: linkedUser });
+    prisma.ssoIdentity.findUnique.mockResolvedValue({
+      id: 'identity-1',
+      userId: 'user-1',
+      user: linkedUser,
+    });
 
     const result = await service.handleAssertion(config, assertion);
 

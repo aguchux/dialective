@@ -23,7 +23,8 @@ export class SubscriptionPlansController {
     return this.plans.upsert({
       ...dto,
       key,
-      monthlyByteQuota: dto.monthlyByteQuota != null ? BigInt(dto.monthlyByteQuota) : dto.monthlyByteQuota,
+      monthlyByteQuota:
+        dto.monthlyByteQuota != null ? BigInt(dto.monthlyByteQuota) : dto.monthlyByteQuota,
     });
   }
 

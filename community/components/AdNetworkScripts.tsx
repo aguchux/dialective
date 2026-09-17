@@ -50,8 +50,7 @@ export function AdNetworkScripts() {
   const { data: settings } = useGetPublicAdSettingsQuery();
   const excluded = isExcludedRoute(pathname);
 
-  const adsterraActive =
-    !excluded && !!settings?.adsterra.enabled && !!settings.adsterra.scriptUrl;
+  const adsterraActive = !excluded && !!settings?.adsterra.enabled && !!settings.adsterra.scriptUrl;
   const monetagActive = !excluded && !!settings?.monetag.enabled && !!settings.monetag.scriptUrl;
 
   useEffect(() => {

@@ -1,4 +1,8 @@
-import { computeValidatorPayoutBreakdown, Prisma, type ValidatorPayoutSettings } from '@dialectiva/db';
+import {
+  computeValidatorPayoutBreakdown,
+  Prisma,
+  type ValidatorPayoutSettings,
+} from '@dialectiva/db';
 
 const { Decimal } = Prisma;
 
@@ -226,12 +230,18 @@ describe('computeValidatorPayoutBreakdown', () => {
     );
 
     expect(breakdown.lines).toHaveLength(1);
-    expect(breakdown.lines[0]).toMatchObject({ userId: 'original-owner-1', amount: expect.any(Decimal) });
+    expect(breakdown.lines[0]).toMatchObject({
+      userId: 'original-owner-1',
+      amount: expect.any(Decimal),
+    });
     expect(breakdown.lines[0].amount.toString()).toBe('20');
   });
 
   it('zero rate disables all crediting -- base is 0 and no lines are produced, even with approvals/reassignment present', () => {
-    const zeroRateSettings: ValidatorPayoutSettings = { ...settings, validationRewardPerRecording: 0 };
+    const zeroRateSettings: ValidatorPayoutSettings = {
+      ...settings,
+      validationRewardPerRecording: 0,
+    };
     const breakdown = computeValidatorPayoutBreakdown(
       deck({
         ownerUserId: 'new-owner-1',

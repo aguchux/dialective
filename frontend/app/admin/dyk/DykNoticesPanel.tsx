@@ -13,7 +13,9 @@ import {
   useUploadDykMutation,
 } from '@/store/dyk-api';
 
-const conditionLabel: Record<string, string> = Object.fromEntries(DYK_CONDITIONS.map((c) => [c.key, c.label]));
+const conditionLabel: Record<string, string> = Object.fromEntries(
+  DYK_CONDITIONS.map((c) => [c.key, c.label]),
+);
 const blank: DykDraft = {
   content: '',
   imageKey: '',
@@ -24,7 +26,8 @@ const blank: DykDraft = {
   active: true,
   sortOrder: 0,
 };
-const input = 'w-full rounded-lg border border-line bg-white p-2.5 text-ink outline-none transition-colors focus:border-accent';
+const input =
+  'w-full rounded-lg border border-line bg-white p-2.5 text-ink outline-none transition-colors focus:border-accent';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-accent px-4 font-extrabold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 const secondaryButtonClass =
@@ -44,7 +47,10 @@ export function DykNoticesPanel() {
   if (notices.isError) {
     return (
       <div role="alert">
-        Unable to load notices. <button className={secondaryButtonClass} onClick={() => notices.refetch()}>Retry</button>
+        Unable to load notices.{' '}
+        <button className={secondaryButtonClass} onClick={() => notices.refetch()}>
+          Retry
+        </button>
       </div>
     );
   }
@@ -54,10 +60,18 @@ export function DykNoticesPanel() {
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-xl font-bold">Notices</h2>
         <button className={primaryButtonClass} onClick={() => setEditing('new')} type="button">
-          <Plus className="size-4" aria-hidden="true" />Add notice
+          <Plus className="size-4" aria-hidden="true" />
+          Add notice
         </button>
       </div>
-      {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{error}</p>}
+      {error && (
+        <p
+          role="alert"
+          className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950"
+        >
+          {error}
+        </p>
+      )}
       <div className="overflow-x-auto rounded-lg border border-line bg-white">
         <table className="w-full text-left text-sm">
           <thead>
@@ -73,13 +87,20 @@ export function DykNoticesPanel() {
             {notices.data?.map((n) => (
               <tr key={n.id} className="border-b border-line last:border-0">
                 <td className="min-w-48 max-w-xs p-3">
-                  <img src={n.imageUrl} alt="" className="mb-2 aspect-[3/2] w-24 rounded-md object-cover" />
+                  <img
+                    src={n.imageUrl}
+                    alt=""
+                    className="mb-2 aspect-[3/2] w-24 rounded-md object-cover"
+                  />
                   <p className="line-clamp-3 break-words">{n.content}</p>
                 </td>
                 <td className="p-3">
                   <div className="flex flex-wrap gap-1">
                     {n.stopConditions.map((c) => (
-                      <span key={c} className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-bold text-accent-dark">
+                      <span
+                        key={c}
+                        className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-bold text-accent-dark"
+                      >
                         {conditionLabel[c] ?? c}
                       </span>
                     ))}
@@ -87,16 +108,30 @@ export function DykNoticesPanel() {
                 </td>
                 <td className="p-3">{n.sortOrder}</td>
                 <td className="p-3">
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${n.active ? 'bg-emerald-100 text-emerald-800' : 'bg-surface-muted text-muted'}`}>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-bold ${n.active ? 'bg-emerald-100 text-emerald-800' : 'bg-surface-muted text-muted'}`}
+                  >
                     {n.active ? 'Active' : 'Hidden'}
                   </span>
                 </td>
                 <td className="p-3">
                   <div className="flex gap-2">
-                    <button title="Edit notice" aria-label="Edit notice" className={secondaryButtonClass} onClick={() => setEditing(n)} type="button">
+                    <button
+                      title="Edit notice"
+                      aria-label="Edit notice"
+                      className={secondaryButtonClass}
+                      onClick={() => setEditing(n)}
+                      type="button"
+                    >
                       <Pencil className="size-4" aria-hidden="true" />
                     </button>
-                    <button title="Delete notice" aria-label="Delete notice" className={secondaryButtonClass} onClick={() => setDeletingId(n.id)} type="button">
+                    <button
+                      title="Delete notice"
+                      aria-label="Delete notice"
+                      className={secondaryButtonClass}
+                      onClick={() => setDeletingId(n.id)}
+                      type="button"
+                    >
                       <Trash2 className="size-4 text-red-600" aria-hidden="true" />
                     </button>
                   </div>
@@ -105,17 +140,39 @@ export function DykNoticesPanel() {
             ))}
             {!notices.data?.length && (
               <tr>
-                <td colSpan={5} className="p-6 text-center text-muted">No notices yet.</td>
+                <td colSpan={5} className="p-6 text-center text-muted">
+                  No notices yet.
+                </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-      {editing && <NoticeEditor notice={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />}
-      <Dialog open={!!deletingId} onOpenChange={(o) => { if (!o && !deleting.isLoading) setDeletingId(null); }}>
-        <DialogContent title="Delete notice?" description="This removes the notice and its display history.">
+      {editing && (
+        <NoticeEditor
+          notice={editing === 'new' ? null : editing}
+          onClose={() => setEditing(null)}
+        />
+      )}
+      <Dialog
+        open={!!deletingId}
+        onOpenChange={(o) => {
+          if (!o && !deleting.isLoading) setDeletingId(null);
+        }}
+      >
+        <DialogContent
+          title="Delete notice?"
+          description="This removes the notice and its display history."
+        >
           <div className="flex justify-end gap-3">
-            <button className={secondaryButtonClass} disabled={deleting.isLoading} onClick={() => setDeletingId(null)} type="button">Cancel</button>
+            <button
+              className={secondaryButtonClass}
+              disabled={deleting.isLoading}
+              onClick={() => setDeletingId(null)}
+              type="button"
+            >
+              Cancel
+            </button>
             <button
               className={dangerButtonClass}
               disabled={deleting.isLoading}
@@ -130,7 +187,8 @@ export function DykNoticesPanel() {
                 }
               }}
             >
-              {deleting.isLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}Delete
+              {deleting.isLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+              Delete
             </button>
           </div>
         </DialogContent>
@@ -180,7 +238,8 @@ function PhotoDropzone({
             onClick={() => inputRef.current?.click()}
             className="absolute bottom-2 right-2 inline-flex items-center gap-1.5 rounded-md bg-black/60 px-2.5 py-1.5 text-xs font-bold text-white transition-colors hover:bg-black/80 disabled:opacity-60"
           >
-            <ImagePlus className="size-3.5" aria-hidden="true" />Replace
+            <ImagePlus className="size-3.5" aria-hidden="true" />
+            Replace
           </button>
         </div>
       ) : (
@@ -188,7 +247,10 @@ function PhotoDropzone({
           type="button"
           disabled={busy}
           onClick={() => inputRef.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
           onDragLeave={() => setDragging(false)}
           onDrop={(e) => {
             e.preventDefault();
@@ -196,12 +258,16 @@ function PhotoDropzone({
             handleFiles(e.dataTransfer.files);
           }}
           className={`flex aspect-[3/2] w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors ${
-            dragging ? 'border-accent bg-accent-soft' : 'border-line bg-surface-muted hover:border-accent hover:bg-accent-soft/50'
+            dragging
+              ? 'border-accent bg-accent-soft'
+              : 'border-line bg-surface-muted hover:border-accent hover:bg-accent-soft/50'
           } disabled:cursor-not-allowed disabled:opacity-60`}
         >
           <UploadCloud className="size-8 text-muted" aria-hidden="true" />
           <span className="text-sm font-bold text-ink">Drag a photo here or click to browse</span>
-          <span className="text-xs text-muted">3:2 aspect ratio works best -- JPG, PNG or WebP, up to 8 MB</span>
+          <span className="text-xs text-muted">
+            3:2 aspect ratio works best -- JPG, PNG or WebP, up to 8 MB
+          </span>
         </button>
       )}
       <input
@@ -252,7 +318,12 @@ function NoticeEditor({ notice, onClose }: { notice: DykNotice | null; onClose: 
   }
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o && !busy) onClose(); }}>
+    <Dialog
+      open
+      onOpenChange={(o) => {
+        if (!o && !busy) onClose();
+      }}
+    >
       <DialogContent title={notice ? 'Edit notice' : 'Create notice'} description="Do you know?">
         <form
           className="max-h-[70dvh] space-y-5 overflow-y-auto pr-1"
@@ -261,8 +332,12 @@ function NoticeEditor({ notice, onClose }: { notice: DykNotice | null; onClose: 
             setBusy(true);
             setError('');
             try {
-              if (draft.stopConditions.length === 0) throw new Error('Choose at least one stop condition.');
-              let body = { ...draft, targetId: draft.stopConditions.includes('COURSE') ? draft.targetId : undefined };
+              if (draft.stopConditions.length === 0)
+                throw new Error('Choose at least one stop condition.');
+              let body = {
+                ...draft,
+                targetId: draft.stopConditions.includes('COURSE') ? draft.targetId : undefined,
+              };
               if (file) {
                 const signed = await upload(file.type).unwrap();
                 const response = await fetch(signed.uploadUrl, {
@@ -278,7 +353,11 @@ function NoticeEditor({ notice, onClose }: { notice: DykNotice | null; onClose: 
               onClose();
             } catch (err) {
               const message = err as { data?: { message?: unknown }; message?: string };
-              setError(typeof message.data?.message === 'string' ? message.data.message : (message.message ?? 'Unable to save notice. Please retry.'));
+              setError(
+                typeof message.data?.message === 'string'
+                  ? message.data.message
+                  : (message.message ?? 'Unable to save notice. Please retry.'),
+              );
             } finally {
               setBusy(false);
             }
@@ -288,7 +367,10 @@ function NoticeEditor({ notice, onClose }: { notice: DykNotice | null; onClose: 
             preview={preview}
             busy={busy}
             onFile={(selected) => {
-              if (!['image/jpeg', 'image/png', 'image/webp'].includes(selected.type) || selected.size > 8 * 1024 * 1024) {
+              if (
+                !['image/jpeg', 'image/png', 'image/webp'].includes(selected.type) ||
+                selected.size > 8 * 1024 * 1024
+              ) {
                 setError('Choose a JPG, PNG or WebP photo up to 8 MB.');
                 return;
               }
@@ -309,21 +391,43 @@ function NoticeEditor({ notice, onClose }: { notice: DykNotice | null; onClose: 
               <img src={preview} alt="" className="h-full w-full object-cover" />
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/60 to-transparent p-4 pt-10 text-white">
                 <p className="text-lg font-black">Do you know?</p>
-                <p className="line-clamp-3 break-words text-sm">{draft.content || 'Your notice content will appear here.'}</p>
+                <p className="line-clamp-3 break-words text-sm">
+                  {draft.content || 'Your notice content will appear here.'}
+                </p>
               </div>
             </div>
           )}
           <label className="block space-y-1.5">
             <span className="text-sm font-bold">Content</span>
-            <textarea required maxLength={220} rows={3} className={input} value={draft.content} onChange={(e) => setDraft({ ...draft, content: e.target.value })} />
+            <textarea
+              required
+              maxLength={220}
+              rows={3}
+              className={input}
+              value={draft.content}
+              onChange={(e) => setDraft({ ...draft, content: e.target.value })}
+            />
           </label>
           <label className="block space-y-1.5">
             <span className="text-sm font-bold">Action button destination</span>
-            <input required maxLength={500} className={input} value={draft.href} onChange={(e) => setDraft({ ...draft, href: e.target.value })} />
+            <input
+              required
+              maxLength={500}
+              className={input}
+              value={draft.href}
+              onChange={(e) => setDraft({ ...draft, href: e.target.value })}
+            />
           </label>
           <label className="block space-y-1.5">
             <span className="text-sm font-bold">Action button text</span>
-            <input required maxLength={40} placeholder="Try it Now" className={input} value={draft.ctaLabel} onChange={(e) => setDraft({ ...draft, ctaLabel: e.target.value })} />
+            <input
+              required
+              maxLength={40}
+              placeholder="Try it Now"
+              className={input}
+              value={draft.ctaLabel}
+              onChange={(e) => setDraft({ ...draft, ctaLabel: e.target.value })}
+            />
           </label>
           <fieldset className="space-y-1.5">
             <legend className="text-sm font-bold">Stop showing when (any one applies)</legend>
@@ -343,22 +447,54 @@ function NoticeEditor({ notice, onClose }: { notice: DykNotice | null; onClose: 
           {draft.stopConditions.includes('COURSE') && (
             <label className="block space-y-1.5">
               <span className="text-sm font-bold">Course ID</span>
-              <input required className={input} value={draft.targetId ?? ''} onChange={(e) => setDraft({ ...draft, targetId: e.target.value })} />
+              <input
+                required
+                className={input}
+                value={draft.targetId ?? ''}
+                onChange={(e) => setDraft({ ...draft, targetId: e.target.value })}
+              />
             </label>
           )}
           <label className="block space-y-1.5">
             <span className="text-sm font-bold">Display order</span>
-            <input required type="number" min={0} max={10000} className={input} value={draft.sortOrder} onChange={(e) => setDraft({ ...draft, sortOrder: Number(e.target.value) })} />
+            <input
+              required
+              type="number"
+              min={0}
+              max={10000}
+              className={input}
+              value={draft.sortOrder}
+              onChange={(e) => setDraft({ ...draft, sortOrder: Number(e.target.value) })}
+            />
           </label>
           <label className="flex items-center gap-2 text-sm font-bold">
-            <input type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} />
+            <input
+              type="checkbox"
+              checked={draft.active}
+              onChange={(e) => setDraft({ ...draft, active: e.target.checked })}
+            />
             Active
           </label>
-          {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">{error}</p>}
+          {error && (
+            <p
+              role="alert"
+              className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950"
+            >
+              {error}
+            </p>
+          )}
           <div className="flex justify-end gap-3">
-            <button type="button" className={secondaryButtonClass} disabled={busy} onClick={onClose}>Cancel</button>
+            <button
+              type="button"
+              className={secondaryButtonClass}
+              disabled={busy}
+              onClick={onClose}
+            >
+              Cancel
+            </button>
             <button disabled={busy} className={primaryButtonClass} type="submit">
-              {busy && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}{busy ? 'Saving...' : 'Save notice'}
+              {busy && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+              {busy ? 'Saving...' : 'Save notice'}
             </button>
           </div>
         </form>

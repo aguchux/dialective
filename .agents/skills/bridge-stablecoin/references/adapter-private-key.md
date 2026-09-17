@@ -25,16 +25,16 @@ SOLANA_PRIVATE_KEY=       # Solana wallet private key (base58)
 ### Using App Kit
 
 ```ts
-import { AppKit } from "@circle-fin/app-kit";
-import { createViemAdapterFromPrivateKey } from "@circle-fin/adapter-viem-v2";
-import { inspect } from "util";
+import { AppKit } from '@circle-fin/app-kit';
+import { createViemAdapterFromPrivateKey } from '@circle-fin/adapter-viem-v2';
+import { inspect } from 'util';
 
 const kit = new AppKit();
 
 const bridgeUSDC = async (): Promise<void> => {
   const privateKey = process.env.PRIVATE_KEY;
-  if (!privateKey || !privateKey.startsWith("0x")) {
-    throw new Error("PRIVATE_KEY env var must be set and 0x-prefixed");
+  if (!privateKey || !privateKey.startsWith('0x')) {
+    throw new Error('PRIVATE_KEY env var must be set and 0x-prefixed');
   }
 
   try {
@@ -43,14 +43,14 @@ const bridgeUSDC = async (): Promise<void> => {
     });
 
     const result = await kit.bridge({
-      from: { adapter, chain: "Arc_Testnet" },
-      to: { adapter, chain: "Base_Sepolia" },
-      amount: "1.00",
+      from: { adapter, chain: 'Arc_Testnet' },
+      to: { adapter, chain: 'Base_Sepolia' },
+      amount: '1.00',
     });
 
-    console.log("RESULT", inspect(result, false, null, true));
+    console.log('RESULT', inspect(result, false, null, true));
   } catch (err) {
-    console.error("ERROR", err instanceof Error ? err.message : "Unknown error");
+    console.error('ERROR', err instanceof Error ? err.message : 'Unknown error');
   }
 };
 
@@ -60,16 +60,16 @@ void bridgeUSDC();
 ### Using Bridge Kit
 
 ```ts
-import { BridgeKit } from "@circle-fin/bridge-kit";
-import { createViemAdapterFromPrivateKey } from "@circle-fin/adapter-viem-v2";
-import { inspect } from "util";
+import { BridgeKit } from '@circle-fin/bridge-kit';
+import { createViemAdapterFromPrivateKey } from '@circle-fin/adapter-viem-v2';
+import { inspect } from 'util';
 
 const kit = new BridgeKit();
 
 const bridgeUSDC = async (): Promise<void> => {
   const privateKey = process.env.PRIVATE_KEY;
-  if (!privateKey || !privateKey.startsWith("0x")) {
-    throw new Error("PRIVATE_KEY env var must be set and 0x-prefixed");
+  if (!privateKey || !privateKey.startsWith('0x')) {
+    throw new Error('PRIVATE_KEY env var must be set and 0x-prefixed');
   }
 
   try {
@@ -78,14 +78,14 @@ const bridgeUSDC = async (): Promise<void> => {
     });
 
     const result = await kit.bridge({
-      from: { adapter, chain: "Arc_Testnet" },
-      to: { adapter, chain: "Base_Sepolia" },
-      amount: "1.00",
+      from: { adapter, chain: 'Arc_Testnet' },
+      to: { adapter, chain: 'Base_Sepolia' },
+      amount: '1.00',
     });
 
-    console.log("RESULT", inspect(result, false, null, true));
+    console.log('RESULT', inspect(result, false, null, true));
   } catch (err) {
-    console.error("ERROR", err instanceof Error ? err.message : "Unknown error");
+    console.error('ERROR', err instanceof Error ? err.message : 'Unknown error');
   }
 };
 
@@ -97,22 +97,22 @@ void bridgeUSDC();
 ### Using App Kit
 
 ```ts
-import { AppKit } from "@circle-fin/app-kit";
-import { createViemAdapterFromPrivateKey } from "@circle-fin/adapter-viem-v2";
-import { createSolanaKitAdapterFromPrivateKey } from "@circle-fin/adapter-solana-kit";
-import { inspect } from "util";
+import { AppKit } from '@circle-fin/app-kit';
+import { createViemAdapterFromPrivateKey } from '@circle-fin/adapter-viem-v2';
+import { createSolanaKitAdapterFromPrivateKey } from '@circle-fin/adapter-solana-kit';
+import { inspect } from 'util';
 
 const kit = new AppKit();
 
 const bridgeUSDC = async (): Promise<void> => {
   const evmPrivateKey = process.env.EVM_PRIVATE_KEY;
-  if (!evmPrivateKey || !evmPrivateKey.startsWith("0x")) {
-    throw new Error("EVM_PRIVATE_KEY env var must be set and 0x-prefixed");
+  if (!evmPrivateKey || !evmPrivateKey.startsWith('0x')) {
+    throw new Error('EVM_PRIVATE_KEY env var must be set and 0x-prefixed');
   }
 
   const solanaPrivateKey = process.env.SOLANA_PRIVATE_KEY;
   if (!solanaPrivateKey || !/^[1-9A-HJ-NP-Za-km-z]+$/.test(solanaPrivateKey)) {
-    throw new Error("SOLANA_PRIVATE_KEY env var must be set to a base58-encoded private key");
+    throw new Error('SOLANA_PRIVATE_KEY env var must be set to a base58-encoded private key');
   }
 
   try {
@@ -125,14 +125,14 @@ const bridgeUSDC = async (): Promise<void> => {
     });
 
     const result = await kit.bridge({
-      from: { adapter: evmAdapter, chain: "Ethereum_Sepolia" },
-      to: { adapter: solanaAdapter, chain: "Solana_Devnet" },
-      amount: "1.00",
+      from: { adapter: evmAdapter, chain: 'Ethereum_Sepolia' },
+      to: { adapter: solanaAdapter, chain: 'Solana_Devnet' },
+      amount: '1.00',
     });
 
-    console.log("RESULT", inspect(result, false, null, true));
+    console.log('RESULT', inspect(result, false, null, true));
   } catch (err) {
-    console.error("ERROR", err instanceof Error ? err.message : "Unknown error");
+    console.error('ERROR', err instanceof Error ? err.message : 'Unknown error');
   }
 };
 
@@ -142,22 +142,22 @@ void bridgeUSDC();
 ### Using Bridge Kit
 
 ```ts
-import { BridgeKit } from "@circle-fin/bridge-kit";
-import { createViemAdapterFromPrivateKey } from "@circle-fin/adapter-viem-v2";
-import { createSolanaKitAdapterFromPrivateKey } from "@circle-fin/adapter-solana-kit";
-import { inspect } from "util";
+import { BridgeKit } from '@circle-fin/bridge-kit';
+import { createViemAdapterFromPrivateKey } from '@circle-fin/adapter-viem-v2';
+import { createSolanaKitAdapterFromPrivateKey } from '@circle-fin/adapter-solana-kit';
+import { inspect } from 'util';
 
 const kit = new BridgeKit();
 
 const bridgeUSDC = async (): Promise<void> => {
   const evmPrivateKey = process.env.EVM_PRIVATE_KEY;
-  if (!evmPrivateKey || !evmPrivateKey.startsWith("0x")) {
-    throw new Error("EVM_PRIVATE_KEY env var must be set and 0x-prefixed");
+  if (!evmPrivateKey || !evmPrivateKey.startsWith('0x')) {
+    throw new Error('EVM_PRIVATE_KEY env var must be set and 0x-prefixed');
   }
 
   const solanaPrivateKey = process.env.SOLANA_PRIVATE_KEY;
   if (!solanaPrivateKey || !/^[1-9A-HJ-NP-Za-km-z]+$/.test(solanaPrivateKey)) {
-    throw new Error("SOLANA_PRIVATE_KEY env var must be set to a base58-encoded private key");
+    throw new Error('SOLANA_PRIVATE_KEY env var must be set to a base58-encoded private key');
   }
 
   try {
@@ -170,14 +170,14 @@ const bridgeUSDC = async (): Promise<void> => {
     });
 
     const result = await kit.bridge({
-      from: { adapter: evmAdapter, chain: "Ethereum_Sepolia" },
-      to: { adapter: solanaAdapter, chain: "Solana_Devnet" },
-      amount: "1.00",
+      from: { adapter: evmAdapter, chain: 'Ethereum_Sepolia' },
+      to: { adapter: solanaAdapter, chain: 'Solana_Devnet' },
+      amount: '1.00',
     });
 
-    console.log("RESULT", inspect(result, false, null, true));
+    console.log('RESULT', inspect(result, false, null, true));
   } catch (err) {
-    console.error("ERROR", err instanceof Error ? err.message : "Unknown error");
+    console.error('ERROR', err instanceof Error ? err.message : 'Unknown error');
   }
 };
 

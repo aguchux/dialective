@@ -950,12 +950,7 @@ export interface AdminIntegration {
 }
 
 export type WhatsAppValidationRequestStatus =
-  | 'PENDING'
-  | 'CLAIMED'
-  | 'VERIFIED'
-  | 'REJECTED'
-  | 'EXPIRED'
-  | 'CANCELLED';
+  'PENDING' | 'CLAIMED' | 'VERIFIED' | 'REJECTED' | 'EXPIRED' | 'CANCELLED';
 
 export interface WhatsAppValidationRequestResult {
   requestId: string;
@@ -3113,7 +3108,11 @@ export const dialectivaApi = createApi({
     }),
     listIntegrations: builder.query<
       Integration[],
-      { search?: string; sortBy?: 'name' | 'category' | 'createdAt' | 'sortOrder'; sortDir?: 'asc' | 'desc' } | void
+      {
+        search?: string;
+        sortBy?: 'name' | 'category' | 'createdAt' | 'sortOrder';
+        sortDir?: 'asc' | 'desc';
+      } | void
     >({
       query: (params) => ({ url: '/integrations', params: params ?? undefined }),
       providesTags: ['Integrations'],
@@ -3130,7 +3129,10 @@ export const dialectivaApi = createApi({
       query: (id) => ({ url: `/integrations/${id}/subscribe`, method: 'DELETE' }),
       invalidatesTags: ['Integrations'],
     }),
-    requestWhatsAppValidation: builder.mutation<WhatsAppValidationRequestResult, { phoneNumber: string }>({
+    requestWhatsAppValidation: builder.mutation<
+      WhatsAppValidationRequestResult,
+      { phoneNumber: string }
+    >({
       query: (body) => ({ url: '/whatsapp-validator/requests', method: 'POST', body }),
       invalidatesTags: ['WhatsAppValidator', 'Profile'],
     }),
@@ -4834,7 +4836,10 @@ export const dialectivaApi = createApi({
         sortOrder?: 'asc' | 'desc';
       } | void
     >({
-      query: (params) => ({ url: '/admin/whatsapp-validator/requests', params: params ?? undefined }),
+      query: (params) => ({
+        url: '/admin/whatsapp-validator/requests',
+        params: params ?? undefined,
+      }),
       providesTags: ['WhatsAppValidator'],
     }),
     verifyAdminWhatsAppValidation: builder.mutation<
@@ -4849,7 +4854,10 @@ export const dialectivaApi = createApi({
       invalidatesTags: ['WhatsAppValidator'],
     }),
     forceVerifyAdminWhatsAppValidation: builder.mutation<AdminWhatsAppValidationRow, string>({
-      query: (id) => ({ url: `/admin/whatsapp-validator/requests/${id}/force-verify`, method: 'POST' }),
+      query: (id) => ({
+        url: `/admin/whatsapp-validator/requests/${id}/force-verify`,
+        method: 'POST',
+      }),
       invalidatesTags: ['WhatsAppValidator'],
     }),
     rejectAdminWhatsAppValidation: builder.mutation<AdminWhatsAppValidationRow, string>({
@@ -5343,7 +5351,11 @@ export const dialectivaApi = createApi({
       { uploadUrl: string; key: string; bucket: string },
       { contentType: string }
     >({
-      query: (body) => ({ url: '/admin/platform-settings/top-banner/upload-url', method: 'POST', body }),
+      query: (body) => ({
+        url: '/admin/platform-settings/top-banner/upload-url',
+        method: 'POST',
+        body,
+      }),
     }),
     getApiAccessTokens: builder.query<ApiAccessTokenSummary[], void>({
       query: () => '/admin/api-access-tokens',

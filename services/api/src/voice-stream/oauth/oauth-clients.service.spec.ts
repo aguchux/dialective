@@ -49,7 +49,10 @@ describe('OAuthClientsService.create', () => {
     prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'other-org' });
 
     await expect(
-      service.create('org-1', 'user-1', { deckId: 'deck-1', scopes: [StreamKeyScope.MANIFEST_READ] }),
+      service.create('org-1', 'user-1', {
+        deckId: 'deck-1',
+        scopes: [StreamKeyScope.MANIFEST_READ],
+      }),
     ).rejects.toThrow(NotFoundException);
   });
 });
@@ -57,7 +60,10 @@ describe('OAuthClientsService.create', () => {
 describe('OAuthClientsService.revoke', () => {
   it('rejects a client belonging to another organization', async () => {
     const { service, prisma } = setup();
-    prisma.oAuthClient.findUnique.mockResolvedValue({ id: 'client-1', organizationId: 'other-org' });
+    prisma.oAuthClient.findUnique.mockResolvedValue({
+      id: 'client-1',
+      organizationId: 'other-org',
+    });
 
     await expect(service.revoke('org-1', 'client-1', 'user-1')).rejects.toThrow(NotFoundException);
   });

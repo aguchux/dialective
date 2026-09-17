@@ -16,7 +16,15 @@ import {
   useSetStreamDeckVisibilityMutation,
   useUpdateStreamDeckRuleMutation,
 } from '@/store/api';
-import { Card, ErrorText, FieldLabel, PageHeading, PrimaryButton, SecondaryButton, TextInput } from '@/components/ui';
+import {
+  Card,
+  ErrorText,
+  FieldLabel,
+  PageHeading,
+  PrimaryButton,
+  SecondaryButton,
+  TextInput,
+} from '@/components/ui';
 
 const CONFIDENCE_OPTIONS: IsvcConfidence[] = ['EMERGING', 'ESTABLISHED', 'HIGH', 'VERY_HIGH'];
 
@@ -90,11 +98,23 @@ function RuleEditor({ deckId, rule }: { deckId: string; rule: StreamDeckRule | n
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <FieldLabel>Min DL Canonical Score</FieldLabel>
-            <TextInput max={100} min={0} onChange={(e) => setMinScore(e.target.value)} type="number" value={minScore} />
+            <TextInput
+              max={100}
+              min={0}
+              onChange={(e) => setMinScore(e.target.value)}
+              type="number"
+              value={minScore}
+            />
           </div>
           <div>
             <FieldLabel>Min ISVS</FieldLabel>
-            <TextInput max={100} min={0} onChange={(e) => setMinIsvs(e.target.value)} type="number" value={minIsvs} />
+            <TextInput
+              max={100}
+              min={0}
+              onChange={(e) => setMinIsvs(e.target.value)}
+              type="number"
+              value={minIsvs}
+            />
           </div>
           <div>
             <FieldLabel>Min ISVC confidence</FieldLabel>
@@ -149,7 +169,9 @@ function SharingCard({ deck }: { deck: StreamDeck }) {
   const [removeLicense] = useRemoveStreamDeckLicenseMutation();
   const [editingLicense, setEditingLicense] = useState(false);
   const [termsSummary, setTermsSummary] = useState(deck.license?.termsSummary ?? '');
-  const [attributionRequired, setAttributionRequired] = useState(deck.license?.attributionRequired ?? false);
+  const [attributionRequired, setAttributionRequired] = useState(
+    deck.license?.attributionRequired ?? false,
+  );
   const [redistributionAllowed, setRedistributionAllowed] = useState(
     deck.license?.redistributionAllowed ?? false,
   );
@@ -170,7 +192,12 @@ function SharingCard({ deck }: { deck: StreamDeck }) {
     e.preventDefault();
     setError(null);
     try {
-      await setLicense({ id: deck.id, termsSummary, attributionRequired, redistributionAllowed }).unwrap();
+      await setLicense({
+        id: deck.id,
+        termsSummary,
+        attributionRequired,
+        redistributionAllowed,
+      }).unwrap();
       setEditingLicense(false);
     } catch (err: any) {
       setError(err?.data?.message ?? 'Unable to save this license.');
@@ -195,7 +222,11 @@ function SharingCard({ deck }: { deck: StreamDeck }) {
             </p>
           </div>
         </div>
-        <SecondaryButton disabled={togglingVisibility} onClick={() => void toggleVisibility()} type="button">
+        <SecondaryButton
+          disabled={togglingVisibility}
+          onClick={() => void toggleVisibility()}
+          type="button"
+        >
           {isPublic ? 'Make private' : 'Make public'}
         </SecondaryButton>
       </div>
@@ -205,11 +236,18 @@ function SharingCard({ deck }: { deck: StreamDeck }) {
           {!editingLicense && deck.license && (
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-muted">License terms</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-muted">
+                  License terms
+                </p>
                 <p className="mt-1 text-sm text-ink">{deck.license.termsSummary}</p>
                 <p className="mt-1 text-xs text-muted">
-                  {deck.license.attributionRequired ? 'Attribution required' : 'No attribution required'} ·{' '}
-                  {deck.license.redistributionAllowed ? 'Redistribution allowed' : 'Redistribution not allowed'}
+                  {deck.license.attributionRequired
+                    ? 'Attribution required'
+                    : 'No attribution required'}{' '}
+                  ·{' '}
+                  {deck.license.redistributionAllowed
+                    ? 'Redistribution allowed'
+                    : 'Redistribution not allowed'}
                 </p>
               </div>
               <div className="flex shrink-0 gap-2">
@@ -295,7 +333,9 @@ function VersionHistory({ deckId }: { deckId: string }) {
             <div className="flex items-center justify-between gap-3 p-4" key={v.version}>
               <div>
                 <p className="font-bold text-ink">v{v.version}</p>
-                <p className="text-xs text-muted">{REASON_LABELS[v.createdReason] ?? v.createdReason}</p>
+                <p className="text-xs text-muted">
+                  {REASON_LABELS[v.createdReason] ?? v.createdReason}
+                </p>
               </div>
               <div className="text-right">
                 <p className="text-sm text-ink">{v.itemCount} recordings</p>

@@ -159,7 +159,9 @@ describe('FlutterwaveService', () => {
       process.env.FLUTTERWAVE_SECRET_KEY = 'FLWSECK_TEST-example';
       jest
         .spyOn(global, 'fetch')
-        .mockResolvedValue(new Response(JSON.stringify({ message: 'invalid key' }), { status: 401 }));
+        .mockResolvedValue(
+          new Response(JSON.stringify({ message: 'invalid key' }), { status: 401 }),
+        );
 
       await expect(service.listBalances()).rejects.toThrow(
         'The payment provider could not return account balances.',

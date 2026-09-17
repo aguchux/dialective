@@ -28,7 +28,12 @@ export class AccessLogExportService {
     const where = {
       organizationId,
       ...(filters.from || filters.to
-        ? { createdAt: { ...(filters.from ? { gte: filters.from } : {}), ...(filters.to ? { lte: filters.to } : {}) } }
+        ? {
+            createdAt: {
+              ...(filters.from ? { gte: filters.from } : {}),
+              ...(filters.to ? { lte: filters.to } : {}),
+            },
+          }
         : {}),
       ...(filters.entitlementDecision ? { entitlementDecision: filters.entitlementDecision } : {}),
       ...(filters.requestType ? { requestType: filters.requestType } : {}),

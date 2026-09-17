@@ -150,12 +150,19 @@ export default function AdminCommunitySpacesPage() {
               </table>
             </div>
           ) : (
-            <p className="p-5 text-muted">No spaces yet. Create the first one to let members post.</p>
+            <p className="p-5 text-muted">
+              No spaces yet. Create the first one to let members post.
+            </p>
           )}
         </section>
       </div>
 
-      {editing && <SpaceFormDialog onClose={() => setEditing(null)} space={editing === 'new' ? null : editing} />}
+      {editing && (
+        <SpaceFormDialog
+          onClose={() => setEditing(null)}
+          space={editing === 'new' ? null : editing}
+        />
+      )}
     </AdminShell>
   );
 }

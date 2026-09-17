@@ -79,8 +79,8 @@ export function TrainingTasksSettingsPanel() {
             <div>
               <p className="font-black">Content sources</p>
               <p className="mt-1 text-sm leading-relaxed text-muted">
-                Controls what trainers are shown when they open a training session. All three can
-                be turned off at once -- when Word and Sentence training are both off, trainers are
+                Controls what trainers are shown when they open a training session. All three can be
+                turned off at once -- when Word and Sentence training are both off, trainers are
                 shown reverse-validation (Dialect-to-English) exclusively instead of an error, as
                 long as it stays on. Only when all three are off does a trainer see a "nothing
                 available" screen.
@@ -101,9 +101,9 @@ export function TrainingTasksSettingsPanel() {
               <span>
                 <span className="block font-bold">Enable single words</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  Trainers are shown single English words from the Word bank to translate and
-                  record in their dialect (English &rarr; Dialect). Turn this off to stop
-                  single-word assignments entirely.
+                  Trainers are shown single English words from the Word bank to translate and record
+                  in their dialect (English &rarr; Dialect). Turn this off to stop single-word
+                  assignments entirely.
                 </span>
               </span>
             </label>
@@ -157,7 +157,6 @@ export function TrainingTasksSettingsPanel() {
                 available&quot; screen with no way to train until at least one is turned back on.
               </p>
             )}
-
           </div>
 
           <div className="grid gap-2 rounded-lg border border-line bg-surface p-4">
@@ -252,7 +251,9 @@ export function TrainingTasksSettingsPanel() {
               </span>
             </label>
 
-            <label htmlFor="submission-rate-limit-per-hour">Max submissions per trainer per hour</label>
+            <label htmlFor="submission-rate-limit-per-hour">
+              Max submissions per trainer per hour
+            </label>
             <input
               className={`${inputClass} max-w-40`}
               id="submission-rate-limit-per-hour"

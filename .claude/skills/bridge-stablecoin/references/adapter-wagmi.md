@@ -19,14 +19,9 @@ npm install @circle-fin/bridge-kit @circle-fin/adapter-viem-v2
 Use built-in chains from `viem/chains` when available. For custom chains, use `defineChain`:
 
 ```ts
-import { arcTestnet, sepolia, baseSepolia, arbitrumSepolia } from "viem/chains";
+import { arcTestnet, sepolia, baseSepolia, arbitrumSepolia } from 'viem/chains';
 
-export const supportedChains = [
-  arcTestnet,
-  sepolia,
-  baseSepolia,
-  arbitrumSepolia,
-] as const;
+export const supportedChains = [arcTestnet, sepolia, baseSepolia, arbitrumSepolia] as const;
 ```
 
 ## Using App Kit
@@ -34,10 +29,10 @@ export const supportedChains = [
 Get the provider from the connector and switch to the source chain before bridging:
 
 ```tsx
-import { useAccount, useChainId, useSwitchChain } from "wagmi";
-import { createViemAdapterFromProvider } from "@circle-fin/adapter-viem-v2";
-import { AppKit } from "@circle-fin/app-kit";
-import type { EIP1193Provider } from "viem";
+import { useAccount, useChainId, useSwitchChain } from 'wagmi';
+import { createViemAdapterFromProvider } from '@circle-fin/adapter-viem-v2';
+import { AppKit } from '@circle-fin/app-kit';
+import type { EIP1193Provider } from 'viem';
 
 const appKit = new AppKit();
 
@@ -61,7 +56,7 @@ function BridgeComponent() {
     const result = await appKit.bridge({
       from: { adapter, chain: sourceChain },
       to: { adapter, chain: destinationChain },
-      amount: "1.00",
+      amount: '1.00',
     });
   };
 }
@@ -70,10 +65,10 @@ function BridgeComponent() {
 ## Using Bridge Kit
 
 ```tsx
-import { useAccount, useChainId, useSwitchChain } from "wagmi";
-import { createViemAdapterFromProvider } from "@circle-fin/adapter-viem-v2";
-import { BridgeKit } from "@circle-fin/bridge-kit";
-import type { EIP1193Provider } from "viem";
+import { useAccount, useChainId, useSwitchChain } from 'wagmi';
+import { createViemAdapterFromProvider } from '@circle-fin/adapter-viem-v2';
+import { BridgeKit } from '@circle-fin/bridge-kit';
+import type { EIP1193Provider } from 'viem';
 
 const bridgeKit = new BridgeKit();
 
@@ -97,7 +92,7 @@ function BridgeComponent() {
     const result = await bridgeKit.bridge({
       from: { adapter, chain: sourceChain },
       to: { adapter, chain: destinationChain },
-      amount: "1.00",
+      amount: '1.00',
     });
   };
 }

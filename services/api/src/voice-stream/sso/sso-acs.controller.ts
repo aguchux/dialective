@@ -50,9 +50,7 @@ export class SsoAcsController {
    * ready for whenever a dashboard exists to consume it.
    */
   @Get(':organizationId/login')
-  async login(
-    @Param('organizationId') organizationId: string,
-  ): Promise<{ redirectUrl: string }> {
+  async login(@Param('organizationId') organizationId: string): Promise<{ redirectUrl: string }> {
     const config = await this.getActiveConfig(organizationId);
     const redirectUrl = await this.sso.getLoginRedirectUrl(config);
     return { redirectUrl };

@@ -6,7 +6,12 @@ import { Lock } from 'lucide-react';
 import { useGetSecurityPolicyQuery, useUpsertSecurityPolicyMutation } from '@/store/api';
 import type { SubscriberOrgRole } from '@/lib/api-client';
 import { Skeleton } from '../primitives';
-import { SettingsCard, SettingsErrorText, SettingsPrimaryButton, SettingsSuccessText } from './SettingsCard';
+import {
+  SettingsCard,
+  SettingsErrorText,
+  SettingsPrimaryButton,
+  SettingsSuccessText,
+} from './SettingsCard';
 
 const CAN_MANAGE: SubscriberOrgRole[] = ['OWNER', 'ADMIN'];
 

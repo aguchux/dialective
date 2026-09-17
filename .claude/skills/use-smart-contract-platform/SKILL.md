@@ -1,6 +1,6 @@
 ---
 name: use-smart-contract-platform
-description: "Deploy, import, interact with, and monitor smart contracts using Circle Smart Contract Platform APIs. Supports bytecode deployment, template contracts (ERC-20/721/1155/Airdrop), ABI-based read/write calls, and webhook event monitoring. Keywords: contract deployment, smart contract, ABI interactions, template contracts, event monitoring, contract webhooks, bytecode, ERC-1155, ERC-20, ERC-721."
+description: 'Deploy, import, interact with, and monitor smart contracts using Circle Smart Contract Platform APIs. Supports bytecode deployment, template contracts (ERC-20/721/1155/Airdrop), ABI-based read/write calls, and webhook event monitoring. Keywords: contract deployment, smart contract, ABI interactions, template contracts, event monitoring, contract webhooks, bytecode, ERC-1155, ERC-20, ERC-721.'
 ---
 
 ## Overview
@@ -25,8 +25,8 @@ ENTITY_SECRET=         # Registered entity secret for Developer-Controlled Walle
 ### SDK Initialization
 
 ```typescript
-import { initiateSmartContractPlatformClient } from "@circle-fin/smart-contract-platform";
-import { initiateDeveloperControlledWalletsClient } from "@circle-fin/developer-controlled-wallets";
+import { initiateSmartContractPlatformClient } from '@circle-fin/smart-contract-platform';
+import { initiateDeveloperControlledWalletsClient } from '@circle-fin/developer-controlled-wallets';
 
 const scpClient = initiateSmartContractPlatformClient({
   apiKey: process.env.CIRCLE_API_KEY!,
@@ -43,26 +43,26 @@ const walletsClient = initiateDeveloperControlledWalletsClient({
 
 ### Supported Blockchains
 
-| Chain | Mainnet | Testnet |
-|-------|---------|---------|
-| Arbitrum | `ARB` | `ARB-SEPOLIA` |
-| Arc | -- | `ARC-TESTNET` |
-| Avalanche | `AVAX` | `AVAX-FUJI` |
-| Base | `BASE` | `BASE-SEPOLIA` |
-| Ethereum | `ETH` | `ETH-SEPOLIA` |
-| Monad | `MONAD` | `MONAD-TESTNET` |
-| OP Mainnet | `OP` | `OP-SEPOLIA` |
-| Polygon PoS | `MATIC` | `MATIC-AMOY` |
-| Unichain | `UNI` | `UNI-SEPOLIA` |
+| Chain       | Mainnet | Testnet         |
+| ----------- | ------- | --------------- |
+| Arbitrum    | `ARB`   | `ARB-SEPOLIA`   |
+| Arc         | --      | `ARC-TESTNET`   |
+| Avalanche   | `AVAX`  | `AVAX-FUJI`     |
+| Base        | `BASE`  | `BASE-SEPOLIA`  |
+| Ethereum    | `ETH`   | `ETH-SEPOLIA`   |
+| Monad       | `MONAD` | `MONAD-TESTNET` |
+| OP Mainnet  | `OP`    | `OP-SEPOLIA`    |
+| Polygon PoS | `MATIC` | `MATIC-AMOY`    |
+| Unichain    | `UNI`   | `UNI-SEPOLIA`   |
 
 ### Contract Templates
 
-| Template | Standard | Template ID | Use Case |
-|----------|----------|-------------|----------|
-| Token | ERC-20 | `a1b74add-23e0-4712-88d1-6b3009e85a86` | Fungible tokens, loyalty points |
-| NFT | ERC-721 | `76b83278-50e2-4006-8b63-5b1a2a814533` | Digital collectibles, gaming assets |
-| Multi-Token | ERC-1155 | `aea21da6-0aa2-4971-9a1a-5098842b1248` | Mixed fungible/non-fungible tokens |
-| Airdrop | N/A | `13e322f2-18dc-4f57-8eed-4bddfc50f85e` | Bulk token distribution |
+| Template    | Standard | Template ID                            | Use Case                            |
+| ----------- | -------- | -------------------------------------- | ----------------------------------- |
+| Token       | ERC-20   | `a1b74add-23e0-4712-88d1-6b3009e85a86` | Fungible tokens, loyalty points     |
+| NFT         | ERC-721  | `76b83278-50e2-4006-8b63-5b1a2a814533` | Digital collectibles, gaming assets |
+| Multi-Token | ERC-1155 | `aea21da6-0aa2-4971-9a1a-5098842b1248` | Mixed fungible/non-fungible tokens  |
+| Airdrop     | N/A      | `13e322f2-18dc-4f57-8eed-4bddfc50f85e` | Bulk token distribution             |
 
 ### Key API Response Fields
 
@@ -76,6 +76,7 @@ const walletsClient = initiateDeveloperControlledWalletsClient({
 ### Dual-Client Architecture
 
 SCP workflows pair two SDK clients:
+
 - **Smart Contract Platform SDK** handles contract deployment, imports, read queries, and event monitoring
 - **Developer-Controlled Wallets SDK** handles write transactions and provides deployment wallets
 
@@ -111,12 +112,14 @@ Write operations (contract deployments, executions) follow the same asynchronous
 **Happy path:** `INITIATED` -> `CLEARED` -> `QUEUED` -> `SENT` -> `CONFIRMED` -> `COMPLETE`
 
 **Terminal states:**
+
 - `COMPLETE` -- Transaction succeeded and is finalized on-chain.
 - `FAILED` -- Transaction reverted or encountered an unrecoverable error.
 - `DENIED` -- Transaction was rejected by risk screening.
 - `CANCELLED` -- Transaction was cancelled before on-chain submission.
 
 **Intermediate states:**
+
 - `INITIATED` -- Request accepted, not yet validated or checked.
 - `WAITING` -- In queue for validation and compliance checks.
 - `QUEUED` -- Queued for submission to the blockchain.
@@ -131,19 +134,19 @@ For debugging failed transactions, see [Transaction States and Errors](https://d
 
 ### Error Handling
 
-| Error Code | Meaning | Action |
-|------------|---------|--------|
-| 175001 | Contract not found | Verify the contract ID exists; if imported, check it wasn't archived |
-| 175003 | Constructor parameter mismatch | Check parameter count and types exactly match the contract ABI definition |
-| 175004 | Duplicate contract | Call `listContracts({ blockchain })`, match by `contractAddress` (case-insensitive), use the existing `contractId` |
-| 175009 | Deployment still pending | Continue polling `getContract()` for `deploymentStatus`; deployment is async and may take several blocks |
-| 175201 | Template not found | Verify the template ID from the Contract Templates table in Quick Reference |
-| 175301 | Event subscription not found | Verify the event monitor ID; ensure the contract was imported before creating the monitor |
-| 175302 | Duplicate event subscription | Query existing subscriptions and reuse; do not fail the flow |
-| 175303 | Invalid event signature | Use exact format `EventName(type1,type2,...)` with no spaces; parameter order must match ABI |
-| 175402 | Blockchain not supported or deprecated | Check the Supported Blockchains table; SCP is not available on Solana, Aptos, or NEAR |
-| 175404 | TEST_API key on mainnet or LIVE_API key on testnet | Match the API key prefix (`TEST_API_KEY:` or `LIVE_API_KEY:`) to the target network |
-| 177015 | Missing bytecode for contract deployment | Provide compiled bytecode with `0x` prefix; compile with `evmVersion: "paris"` to avoid PUSH0 |
+| Error Code | Meaning                                            | Action                                                                                                             |
+| ---------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 175001     | Contract not found                                 | Verify the contract ID exists; if imported, check it wasn't archived                                               |
+| 175003     | Constructor parameter mismatch                     | Check parameter count and types exactly match the contract ABI definition                                          |
+| 175004     | Duplicate contract                                 | Call `listContracts({ blockchain })`, match by `contractAddress` (case-insensitive), use the existing `contractId` |
+| 175009     | Deployment still pending                           | Continue polling `getContract()` for `deploymentStatus`; deployment is async and may take several blocks           |
+| 175201     | Template not found                                 | Verify the template ID from the Contract Templates table in Quick Reference                                        |
+| 175301     | Event subscription not found                       | Verify the event monitor ID; ensure the contract was imported before creating the monitor                          |
+| 175302     | Duplicate event subscription                       | Query existing subscriptions and reuse; do not fail the flow                                                       |
+| 175303     | Invalid event signature                            | Use exact format `EventName(type1,type2,...)` with no spaces; parameter order must match ABI                       |
+| 175402     | Blockchain not supported or deprecated             | Check the Supported Blockchains table; SCP is not available on Solana, Aptos, or NEAR                              |
+| 175404     | TEST_API key on mainnet or LIVE_API key on testnet | Match the API key prefix (`TEST_API_KEY:` or `LIVE_API_KEY:`) to the target network                                |
+| 177015     | Missing bytecode for contract deployment           | Provide compiled bytecode with `0x` prefix; compile with `evmVersion: "paris"` to avoid PUSH0                      |
 
 On deployment failure, check `deploymentErrorReason` and `deploymentErrorDetails` from `getContract()`.
 

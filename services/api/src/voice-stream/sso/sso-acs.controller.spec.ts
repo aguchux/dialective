@@ -17,7 +17,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 describe('SsoAcsController (HTTP layer)', () => {
   let app: INestApplication;
   let prisma: { ssoIdpConfig: { findUnique: jest.Mock } };
-  let sso: { generateMetadata: jest.Mock; getLoginRedirectUrl: jest.Mock; handleAcsPost: jest.Mock };
+  let sso: {
+    generateMetadata: jest.Mock;
+    getLoginRedirectUrl: jest.Mock;
+    handleAcsPost: jest.Mock;
+  };
 
   beforeEach(async () => {
     prisma = { ssoIdpConfig: { findUnique: jest.fn() } };
@@ -64,7 +68,11 @@ describe('SsoAcsController (HTTP layer)', () => {
   });
 
   it('returns 404 when the org has an SsoIdpConfig but it is deactivated', async () => {
-    prisma.ssoIdpConfig.findUnique.mockResolvedValue({ id: 'idp-1', organizationId: 'org-1', active: false });
+    prisma.ssoIdpConfig.findUnique.mockResolvedValue({
+      id: 'idp-1',
+      organizationId: 'org-1',
+      active: false,
+    });
 
     const res = await request(app.getHttpServer())
       .post('/voice-stream/sso/acs?org=org-1')
@@ -74,7 +82,11 @@ describe('SsoAcsController (HTTP layer)', () => {
   });
 
   it('returns 401 when SsoService.handleAcsPost rejects an invalid SAML response', async () => {
-    prisma.ssoIdpConfig.findUnique.mockResolvedValue({ id: 'idp-1', organizationId: 'org-1', active: true });
+    prisma.ssoIdpConfig.findUnique.mockResolvedValue({
+      id: 'idp-1',
+      organizationId: 'org-1',
+      active: true,
+    });
     sso.handleAcsPost.mockRejectedValue(new Error('Invalid SAML response'));
 
     const res = await request(app.getHttpServer())

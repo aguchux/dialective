@@ -161,11 +161,7 @@ export function AiAssistantWidget() {
                         : 'rounded-lg bg-surface-muted px-3 py-2 text-ink'
                     }
                   >
-                    {isUser ? (
-                      item.content
-                    ) : (
-                      <AssistantMessageContent content={item.content} />
-                    )}
+                    {isUser ? item.content : <AssistantMessageContent content={item.content} />}
                   </div>
                   <span className="px-1 text-xs text-muted">{formatTime(item.createdAt)}</span>
                 </div>

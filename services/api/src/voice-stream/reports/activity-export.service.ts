@@ -21,7 +21,12 @@ export class ActivityExportService {
         organizationId,
         ...(filters.eventType ? { eventType: filters.eventType } : {}),
         ...(filters.from || filters.to
-          ? { createdAt: { ...(filters.from ? { gte: filters.from } : {}), ...(filters.to ? { lte: filters.to } : {}) } }
+          ? {
+              createdAt: {
+                ...(filters.from ? { gte: filters.from } : {}),
+                ...(filters.to ? { lte: filters.to } : {}),
+              },
+            }
           : {}),
       },
       orderBy: { createdAt: 'desc' },

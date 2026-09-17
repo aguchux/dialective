@@ -1,6 +1,6 @@
 ---
 name: use-developer-controlled-wallets
-description: "Create and manage Circle developer-controlled wallets where the application retains full custody of wallet keys on behalf of end-users. Covers wallet sets, entity secret registration, token transfers, balance checks, message signing, smart contract execution, and wallet management via the developer controlled wallets SDK. Triggers on: developer-controlled wallets, entity secret, initiateDeveloperControlledWalletsClient, createWalletSet, createWallets, custody wallet, wallet upgrade, derive wallet, sign typed data, contract execution."
+description: 'Create and manage Circle developer-controlled wallets where the application retains full custody of wallet keys on behalf of end-users. Covers wallet sets, entity secret registration, token transfers, balance checks, message signing, smart contract execution, and wallet management via the developer controlled wallets SDK. Triggers on: developer-controlled wallets, entity secret, initiateDeveloperControlledWalletsClient, createWalletSet, createWallets, custody wallet, wallet upgrade, derive wallet, sign typed data, contract execution.'
 ---
 
 ## Overview
@@ -61,12 +61,14 @@ All on-chain operations (transfers, contract executions, wallet upgrades) follow
 **Happy path:** `INITIATED` -> `CLEARED` -> `QUEUED` -> `SENT` -> `CONFIRMED` -> `COMPLETE`
 
 **Terminal states:**
+
 - `COMPLETE` -- Transaction succeeded and is finalized on-chain.
 - `FAILED` -- Transaction reverted or encountered an unrecoverable error.
 - `DENIED` -- Transaction was rejected by risk screening.
 - `CANCELLED` -- Transaction was cancelled before on-chain submission.
 
 **Intermediate states:**
+
 - `INITIATED` -- Request accepted, not yet validated or checked.
 - `WAITING` -- In queue for validation and compliance checks.
 - `QUEUED` -- Queued for submission to the blockchain.

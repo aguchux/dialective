@@ -1,11 +1,18 @@
-import { averageLandmarkDisplacement, checkPoseCompliance, landmarkBoundingBoxArea } from './face-match.service';
+import {
+  averageLandmarkDisplacement,
+  checkPoseCompliance,
+  landmarkBoundingBoxArea,
+} from './face-match.service';
 
 function fixtureLandmarks(noseX: number) {
   return {
     getLeftEye: () => [{ x: 60, y: 40 }],
     getRightEye: () => [{ x: 100, y: 40 }],
     // yawRatio only reads the last point of getNose() (the nose tip).
-    getNose: () => [{ x: 0, y: 0 }, { x: noseX, y: 55 }],
+    getNose: () => [
+      { x: 0, y: 0 },
+      { x: noseX, y: 55 },
+    ],
   };
 }
 
@@ -31,13 +38,26 @@ describe('landmarkBoundingBoxArea', () => {
 
 describe('averageLandmarkDisplacement', () => {
   it('returns 0 when all points are identical between frames', () => {
-    const points = [{ x: 1, y: 1 }, { x: 2, y: 2 }];
+    const points = [
+      { x: 1, y: 1 },
+      { x: 2, y: 2 },
+    ];
     expect(averageLandmarkDisplacement({ positions: points }, { positions: points })).toBe(0);
   });
 
   it('averages the per-point euclidean displacement across frames', () => {
-    const a = { positions: [{ x: 0, y: 0 }, { x: 0, y: 0 }] };
-    const b = { positions: [{ x: 3, y: 4 }, { x: 0, y: 0 }] };
+    const a = {
+      positions: [
+        { x: 0, y: 0 },
+        { x: 0, y: 0 },
+      ],
+    };
+    const b = {
+      positions: [
+        { x: 3, y: 4 },
+        { x: 0, y: 0 },
+      ],
+    };
     // point 0 moved distance 5 (3-4-5 triangle), point 1 moved 0 -- average 2.5
     expect(averageLandmarkDisplacement(a, b)).toBe(2.5);
   });

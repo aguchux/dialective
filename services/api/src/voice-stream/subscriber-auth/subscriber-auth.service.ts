@@ -8,7 +8,13 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
-import { ActivityEventType, OtpPurpose, SubscriberOrgRole, SubscriberUser, WebhookEventType } from '@dialectiva/db';
+import {
+  ActivityEventType,
+  OtpPurpose,
+  SubscriberOrgRole,
+  SubscriberUser,
+  WebhookEventType,
+} from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MailService } from '../../mail/mail.service';
 import { generateOpaqueToken, hashToken } from '../../auth/token.util';
@@ -375,10 +381,15 @@ export class SubscriberAuthService {
       token,
     });
 
-    void this.orgActivity.record(organizationId, ActivityEventType.MEMBER_INVITED, invitedByUserId, {
-      email,
-      role,
-    });
+    void this.orgActivity.record(
+      organizationId,
+      ActivityEventType.MEMBER_INVITED,
+      invitedByUserId,
+      {
+        email,
+        role,
+      },
+    );
   }
 
   /**
@@ -435,10 +446,15 @@ export class SubscriberAuthService {
       token,
     });
 
-    void this.orgActivity.record(organizationId, ActivityEventType.MEMBER_INVITED, params.invitedByUserId, {
-      email: params.inviteeEmail,
-      role: SubscriberOrgRole.OWNER,
-    });
+    void this.orgActivity.record(
+      organizationId,
+      ActivityEventType.MEMBER_INVITED,
+      params.invitedByUserId,
+      {
+        email: params.inviteeEmail,
+        role: SubscriberOrgRole.OWNER,
+      },
+    );
 
     return { organizationId };
   }

@@ -48,7 +48,10 @@ describe('LlmFallbackChain.describeImage', () => {
     const anthropic = makeProvider('anthropic', { imageCapable: true });
     const chain = new LlmFallbackChain({ openai, deepseek: makeProvider('deepseek'), anthropic });
 
-    const result = await chain.describeImage('b64', 'image/jpeg', 'prompt', ['openai', 'anthropic']);
+    const result = await chain.describeImage('b64', 'image/jpeg', 'prompt', [
+      'openai',
+      'anthropic',
+    ]);
 
     expect(result.provider).toBe('anthropic');
   });

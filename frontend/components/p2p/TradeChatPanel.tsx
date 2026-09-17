@@ -18,7 +18,11 @@ import {
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 
-function tradePartyName(party: { firstName: string | null; lastName: string | null; email: string }): string {
+function tradePartyName(party: {
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+}): string {
   return [party.firstName, party.lastName].filter(Boolean).join(' ') || party.email;
 }
 
@@ -54,7 +58,10 @@ export function TradeChatPanel({
   const isOpen = !['RELEASED', 'CANCELLED', 'EXPIRED'].includes(trade.status);
 
   useEffect(() => {
-    transcriptRef.current?.scrollTo({ top: transcriptRef.current.scrollHeight, behavior: 'smooth' });
+    transcriptRef.current?.scrollTo({
+      top: transcriptRef.current.scrollHeight,
+      behavior: 'smooth',
+    });
   }, [messages.length]);
 
   async function submit(event: FormEvent) {
@@ -136,7 +143,10 @@ export function TradeChatPanel({
           </div>
         )}
 
-        <div className="flex-1 space-y-3 overflow-y-auto p-4 text-sm leading-relaxed" ref={transcriptRef}>
+        <div
+          className="flex-1 space-y-3 overflow-y-auto p-4 text-sm leading-relaxed"
+          ref={transcriptRef}
+        >
           {isLoading && <p className="text-muted">Loading conversation…</p>}
           {!isLoading && messages.length === 0 && (
             <p className="text-muted">
@@ -163,7 +173,9 @@ export function TradeChatPanel({
                     <p className="mb-0.5 text-xs font-black uppercase tracking-wide">Admin</p>
                   )}
                   {message.body && <p>{message.body}</p>}
-                  {message.hasAttachment && <AttachmentPreview tradeId={trade.id} messageId={message.id} />}
+                  {message.hasAttachment && (
+                    <AttachmentPreview tradeId={trade.id} messageId={message.id} />
+                  )}
                 </div>
                 <span className="px-1 text-xs text-muted">
                   {message.sender.firstName ?? message.sender.email} ·{' '}

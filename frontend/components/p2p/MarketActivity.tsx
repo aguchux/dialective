@@ -100,7 +100,10 @@ export function MarketActivity() {
       )}
       {tab === 'TRADES' && (
         <section>
-          <SectionTitle title="My trades" subtitle="Pay, release, cancel safely, or raise disputes." />
+          <SectionTitle
+            title="My trades"
+            subtitle="Pay, release, cancel safely, or raise disputes."
+          />
           <div className="grid gap-3">
             {trades.length === 0 && <EmptyPanel icon={Clock3} title="No trades yet" unframed />}
             {trades.map((trade) => (

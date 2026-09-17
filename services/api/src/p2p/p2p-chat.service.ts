@@ -1,4 +1,10 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Prisma, Role } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
@@ -66,8 +72,9 @@ export class P2PChatService {
     // a state that already includes the message being created right now.
     const isAdminsFirstMessageInThisThread =
       isFromAdmin &&
-      (await this.prisma.p2PTradeMessage.count({ where: { tradeId: trade.id, isFromAdmin: true } })) ===
-        0;
+      (await this.prisma.p2PTradeMessage.count({
+        where: { tradeId: trade.id, isFromAdmin: true },
+      })) === 0;
     const message = await this.prisma.p2PTradeMessage.create({
       data: {
         tradeId: trade.id,
@@ -103,7 +110,9 @@ export class P2PChatService {
       ]);
       await Promise.all([
         buyer ? this.mail.sendP2PAdminJoinedDisputeEmail(buyer.email, tradeId) : Promise.resolve(),
-        seller ? this.mail.sendP2PAdminJoinedDisputeEmail(seller.email, tradeId) : Promise.resolve(),
+        seller
+          ? this.mail.sendP2PAdminJoinedDisputeEmail(seller.email, tradeId)
+          : Promise.resolve(),
       ]);
     } catch (err) {
       this.logger.warn(
@@ -118,7 +127,12 @@ export class P2PChatService {
    * out via a short-lived presigned GET to a verified trade participant or
    * admin (see attachmentDownloadUrl), never a stable public URL.
    */
-  async createUploadUrl(userId: string, userRole: Role, tradeId: string, dto: CreateP2PChatUploadUrlDto) {
+  async createUploadUrl(
+    userId: string,
+    userRole: Role,
+    tradeId: string,
+    dto: CreateP2PChatUploadUrlDto,
+  ) {
     await this.requireAccess(userId, userRole, tradeId);
     const extension = EXTENSION_BY_CONTENT_TYPE[dto.contentType];
     const key = `${tradeId}/${randomUUID()}.${extension}`;

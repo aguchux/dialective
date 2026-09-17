@@ -1,7 +1,10 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { WhatsAppValidatorService } from './whatsapp-validator.service';
-import { RequestWhatsAppValidationDto, VerifyWhatsAppValidationDto } from './dto/whatsapp-validator.dto';
+import {
+  RequestWhatsAppValidationDto,
+  VerifyWhatsAppValidationDto,
+} from './dto/whatsapp-validator.dto';
 import { ListPendingWhatsAppValidationDto } from './dto/list-pending-whatsapp-validation.dto';
 
 @Controller('whatsapp-validator')
@@ -10,7 +13,10 @@ export class WhatsAppValidatorController {
   constructor(private readonly whatsappValidator: WhatsAppValidatorService) {}
 
   @Post('requests')
-  requestVerification(@Req() req: AuthenticatedRequest, @Body() body: RequestWhatsAppValidationDto) {
+  requestVerification(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: RequestWhatsAppValidationDto,
+  ) {
     return this.whatsappValidator.requestVerification(req.user.sub, body.phoneNumber);
   }
 

@@ -92,7 +92,9 @@ function CreateWebhookForm({
 
   function toggleEvent(eventType: WebhookEventType) {
     setEventTypes((current) =>
-      current.includes(eventType) ? current.filter((e) => e !== eventType) : [...current, eventType],
+      current.includes(eventType)
+        ? current.filter((e) => e !== eventType)
+        : [...current, eventType],
     );
   }
 
@@ -179,7 +181,9 @@ function DeliveryHistory({ webhookId }: { webhookId: string }) {
               delivery.succeeded ? 'bg-accent/10 text-accent-dark' : 'bg-danger/10 text-danger'
             }`}
           >
-            {delivery.succeeded ? `${delivery.resultCode ?? 'OK'}` : delivery.errorMessage ?? 'Failed'}
+            {delivery.succeeded
+              ? `${delivery.resultCode ?? 'OK'}`
+              : (delivery.errorMessage ?? 'Failed')}
           </span>
         </div>
       ))}

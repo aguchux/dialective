@@ -33,7 +33,11 @@ export function getChallenge(verificationId: string, token: string) {
   });
 }
 
-export function createDocumentUploadUrl(verificationId: string, token: string, contentType: string) {
+export function createDocumentUploadUrl(
+  verificationId: string,
+  token: string,
+  contentType: string,
+) {
   return post<{ uploadUrl: string; key: string }>(
     `/kyc/self/verifications/${verificationId}/document-upload-url`,
     { token, contentType },
@@ -81,7 +85,8 @@ export function submitSelfie(
 }
 
 export interface KycStatusResult {
-  kycStatus: 'NOT_STARTED' | 'IN_PROGRESS' | 'IN_REVIEW' | 'APPROVED' | 'DECLINED' | 'ABANDONED' | 'EXPIRED';
+  kycStatus:
+    'NOT_STARTED' | 'IN_PROGRESS' | 'IN_REVIEW' | 'APPROVED' | 'DECLINED' | 'ABANDONED' | 'EXPIRED';
   kycVerifiedAt: string | null;
 }
 

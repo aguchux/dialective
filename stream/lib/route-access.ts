@@ -37,10 +37,7 @@ export const DECK_MANAGER_ROLES: readonly SubscriberOrgRole[] = [
   'ADMIN',
   'DATASET_MANAGER',
 ];
-export const CHECKOUT_ROLES: readonly SubscriberOrgRole[] = [
-  'OWNER',
-  'BILLING_MANAGER',
-];
+export const CHECKOUT_ROLES: readonly SubscriberOrgRole[] = ['OWNER', 'BILLING_MANAGER'];
 export const REPORTING_ROLES: readonly SubscriberOrgRole[] = [
   'OWNER',
   'ADMIN',

@@ -121,7 +121,9 @@ describe('DLKYC submission evaluation', () => {
     it('routes to review when the bot flags a selfie submitted as the document photo, even though face-match/liveness both clear the approve thresholds', async () => {
       const { service, settings, llm } = setup();
       settings.isSelfHostedKycBotEnabled.mockResolvedValue(true);
-      llm.describeImage.mockResolvedValueOnce('{"fullName":null,"dateOfBirth":null,"documentNumber":null}');
+      llm.describeImage.mockResolvedValueOnce(
+        '{"fullName":null,"dateOfBirth":null,"documentNumber":null}',
+      );
       llm.describeImage.mockResolvedValueOnce(
         '{"plausibilityScore":10,"flags":["no_document_detected_appears_to_be_a_selfie"],"summary":"Looks like a selfie, not an ID"}',
       );

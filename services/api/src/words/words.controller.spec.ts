@@ -162,7 +162,10 @@ describe('WordsController delete', () => {
     it('disables exactly the given ids when dto.ids is provided', async () => {
       const { controller, prisma } = setup();
 
-      const result = await controller.bulkSetWordsDisabled({ ids: ['a', 'b', 'c'], setDisabled: true });
+      const result = await controller.bulkSetWordsDisabled({
+        ids: ['a', 'b', 'c'],
+        setDisabled: true,
+      });
 
       expect(prisma.word.updateMany).toHaveBeenCalledWith({
         where: { id: { in: ['a', 'b', 'c'] } },

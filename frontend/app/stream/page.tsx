@@ -56,7 +56,9 @@ export default function StreamPage() {
 
         <section className="grid gap-5 rounded-lg border border-line bg-white/80 p-5 shadow-[0_14px_32px_rgba(27,31,27,0.08)] backdrop-blur-sm md:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)] md:p-7">
           <div className="grid gap-4">
-            <p className="text-sm font-extrabold uppercase text-accent">Dialect Library Voice Stream</p>
+            <p className="text-sm font-extrabold uppercase text-accent">
+              Dialect Library Voice Stream
+            </p>
             <h1 className="max-w-3xl text-4xl font-black leading-tight md:text-5xl">
               Real dialect voice data, searchable and independently validated.
             </h1>
@@ -124,7 +126,8 @@ export default function StreamPage() {
           <h2 className="text-2xl font-black">Voice Stream is coming soon</h2>
           <p className="max-w-4xl leading-relaxed">
             Subscriptions aren&apos;t open yet. If you&apos;d like to be notified when Voice Stream
-            launches, reach out and we&apos;ll follow up about coverage, access, and licensing terms.
+            launches, reach out and we&apos;ll follow up about coverage, access, and licensing
+            terms.
           </p>
           <div>
             <Link

@@ -1,4 +1,8 @@
-import { CommunityProfilesService, deriveBadge, toAuthorSummary } from './community-profiles.service';
+import {
+  CommunityProfilesService,
+  deriveBadge,
+  toAuthorSummary,
+} from './community-profiles.service';
 
 describe('deriveBadge', () => {
   it('returns VERIFIED_TRAINER for a KYC-approved trainer', () => {
@@ -78,7 +82,12 @@ describe('CommunityProfilesService admin', () => {
     it('filters by status and role when provided', async () => {
       const { service, prisma } = setup();
 
-      await service.listForAdmin({ page: 1, pageSize: 20, status: 'SUSPENDED' as any, role: 'MODERATOR' as any });
+      await service.listForAdmin({
+        page: 1,
+        pageSize: 20,
+        status: 'SUSPENDED' as any,
+        role: 'MODERATOR' as any,
+      });
 
       expect(prisma.communityProfile.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { status: 'SUSPENDED', role: 'MODERATOR' } }),
@@ -142,7 +151,13 @@ describe('CommunityProfilesService admin', () => {
       prisma.communityProfile.findUnique.mockResolvedValue({
         id: 'profile-1',
         displayName: 'Ada O.',
-        user: { email: 'ada@example.com', firstName: 'Ada', lastName: 'Obi', role: 'TRAINER', kycStatus: 'APPROVED' },
+        user: {
+          email: 'ada@example.com',
+          firstName: 'Ada',
+          lastName: 'Obi',
+          role: 'TRAINER',
+          kycStatus: 'APPROVED',
+        },
         country: { name: 'Nigeria', code: 'NG' },
         spaceMemberships: [{ space: { id: 'space-1', name: 'General', slug: 'general' } }],
       });

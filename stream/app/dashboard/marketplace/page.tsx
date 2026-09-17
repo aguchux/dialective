@@ -12,7 +12,15 @@ import {
   useListPublicDecksQuery,
 } from '@/store/api';
 import type { SubscriberOrgRole } from '@/lib/api-client';
-import { Card, ErrorText, FieldLabel, PageHeading, PrimaryButton, SecondaryButton, TextInput } from '@/components/ui';
+import {
+  Card,
+  ErrorText,
+  FieldLabel,
+  PageHeading,
+  PrimaryButton,
+  SecondaryButton,
+  TextInput,
+} from '@/components/ui';
 
 const CAN_MANAGE_DECKS: SubscriberOrgRole[] = ['OWNER', 'ADMIN', 'DATASET_MANAGER'];
 const CAN_VALIDATE: SubscriberOrgRole[] = ['OWNER', 'ADMIN', 'DATASET_MANAGER', 'VALIDATOR'];
@@ -69,7 +77,9 @@ function DeckCard({
     setMessage(null);
     try {
       const result = await importToQueue(deck.id).unwrap();
-      setMessage(`Queued ${result.queued} recording${result.queued === 1 ? '' : 's'} for your validators.`);
+      setMessage(
+        `Queued ${result.queued} recording${result.queued === 1 ? '' : 's'} for your validators.`,
+      );
     } catch (err: any) {
       setError(err?.data?.message ?? 'Unable to queue this deck for validation.');
     }
@@ -95,8 +105,11 @@ function DeckCard({
           <p className="text-xs font-bold uppercase tracking-wide text-muted">License</p>
           <p className="mt-1 text-sm text-ink">{deck.license.termsSummary}</p>
           <p className="mt-1 text-xs text-muted">
-            {deck.license.attributionRequired ? 'Attribution required' : 'No attribution required'} ·{' '}
-            {deck.license.redistributionAllowed ? 'Redistribution allowed' : 'Redistribution not allowed'}
+            {deck.license.attributionRequired ? 'Attribution required' : 'No attribution required'}{' '}
+            ·{' '}
+            {deck.license.redistributionAllowed
+              ? 'Redistribution allowed'
+              : 'Redistribution not allowed'}
           </p>
         </div>
       )}
@@ -116,7 +129,11 @@ function DeckCard({
               </SecondaryButton>
             )}
             {canValidate && (
-              <SecondaryButton disabled={importing} onClick={() => void handleImportToQueue()} type="button">
+              <SecondaryButton
+                disabled={importing}
+                onClick={() => void handleImportToQueue()}
+                type="button"
+              >
                 <ClipboardList aria-hidden="true" className="size-3.5" />
                 {importing ? 'Queuing...' : 'Queue for validation'}
               </SecondaryButton>
@@ -132,10 +149,17 @@ function DeckCard({
       </div>
 
       {showCopyForm && !needsAcceptance && (
-        <form className="mt-3 flex flex-wrap items-end gap-2 border-t border-line pt-3" onSubmit={handleCopy}>
+        <form
+          className="mt-3 flex flex-wrap items-end gap-2 border-t border-line pt-3"
+          onSubmit={handleCopy}
+        >
           <div className="flex-1">
             <FieldLabel>New deck name</FieldLabel>
-            <TextInput onChange={(e) => setNewDeckName(e.target.value)} required value={newDeckName} />
+            <TextInput
+              onChange={(e) => setNewDeckName(e.target.value)}
+              required
+              value={newDeckName}
+            />
           </div>
           <PrimaryButton disabled={copying} type="submit">
             {copying ? 'Copying...' : 'Copy'}
@@ -151,7 +175,9 @@ function DeckCard({
 
 export default function DataMarketplacePage() {
   const { data: session } = useSession();
-  const canManageDecks = session?.user.orgRole ? CAN_MANAGE_DECKS.includes(session.user.orgRole) : false;
+  const canManageDecks = session?.user.orgRole
+    ? CAN_MANAGE_DECKS.includes(session.user.orgRole)
+    : false;
   const canValidate = session?.user.orgRole ? CAN_VALIDATE.includes(session.user.orgRole) : false;
 
   const [minQualityTier, setMinQualityTier] = useState<QualityTier | ''>('');
@@ -184,15 +210,20 @@ export default function DataMarketplacePage() {
       ) : decks && decks.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {decks.map((deck) => (
-            <DeckCard canManageDecks={canManageDecks} canValidate={canValidate} deck={deck} key={deck.id} />
+            <DeckCard
+              canManageDecks={canManageDecks}
+              canValidate={canValidate}
+              deck={deck}
+              key={deck.id}
+            />
           ))}
         </div>
       ) : (
         <Card className="p-8 text-center">
           <Store aria-hidden="true" className="mx-auto mb-3 size-8 text-muted" />
           <p className="text-sm text-muted">
-            No public decks match this filter yet. Check back later, or publish one of your own decks
-            from Stream Decks.
+            No public decks match this filter yet. Check back later, or publish one of your own
+            decks from Stream Decks.
           </p>
         </Card>
       )}

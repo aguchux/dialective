@@ -15,11 +15,7 @@ import {
 import { ActionButton } from '@/components/ui/ActionButton';
 import { countryFlagEmoji, formatCompactNumber } from '@/lib/format';
 import { Avatar, EmptyPanel, SectionTitle } from '@/components/dashboard/shared';
-import {
-  P2POffer,
-  P2PMarketSettings,
-  useListP2POffersQuery,
-} from '@/store/api';
+import { P2POffer, P2PMarketSettings, useListP2POffersQuery } from '@/store/api';
 
 /** Debounces a fast-changing value (e.g. every keystroke) so a search box doesn't fire a request per character. */
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -257,7 +253,10 @@ export function MarketOfferList({
                       ? Number(offer.fiatAmount) / Number(offer.tokenAmount)
                       : 0;
                   return (
-                    <tr className="border-b border-line last:border-0 hover:bg-surface-muted" key={offer.id}>
+                    <tr
+                      className="border-b border-line last:border-0 hover:bg-surface-muted"
+                      key={offer.id}
+                    >
                       <td className="px-4 py-3 align-top">
                         {offer.user ? (
                           <button

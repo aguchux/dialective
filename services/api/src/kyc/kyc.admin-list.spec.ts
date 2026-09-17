@@ -32,7 +32,7 @@ describe('KycService.adminList', () => {
     expect(prisma.kycVerification.count).toHaveBeenCalledWith({ where: { status: 'IN_REVIEW' } });
   });
 
-  it('matches name, email, or mobile number on the verification\'s user, case-insensitively', async () => {
+  it("matches name, email, or mobile number on the verification's user, case-insensitively", async () => {
     const { service, prisma } = setup();
 
     await service.adminList({ search: 'Ada', page: 1, pageSize: 5 });
@@ -56,7 +56,12 @@ describe('KycService.adminList', () => {
   it('combines a status filter and a search term', async () => {
     const { service, prisma } = setup();
 
-    await service.adminList({ status: 'APPROVED' as never, search: '447700', page: 1, pageSize: 5 });
+    await service.adminList({
+      status: 'APPROVED' as never,
+      search: '447700',
+      page: 1,
+      pageSize: 5,
+    });
 
     expect(prisma.kycVerification.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -77,7 +82,9 @@ describe('KycService.adminList', () => {
 
     await service.adminList({ search: '   ', page: 1, pageSize: 5 });
 
-    expect(prisma.kycVerification.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {} }));
+    expect(prisma.kycVerification.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: {} }),
+    );
   });
 
   it('paginates using the given page/pageSize, defaulting to a page size the admin can request as low as 5', async () => {

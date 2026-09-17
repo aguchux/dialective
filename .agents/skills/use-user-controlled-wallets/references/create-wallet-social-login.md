@@ -43,7 +43,7 @@ Returns a `challengeId` if the user needs to create a wallet. Error code 155106 
 const response = await circleClient.createUserPinWithWallets({
   userToken,
   blockchains: [Blockchain.MaticAmoy],
-  accountType: "EOA",
+  accountType: 'EOA',
 });
 // response.data: { challengeId }
 ```
@@ -72,21 +72,22 @@ The SDK must be initialized with a login callback to handle the OAuth redirect r
 IMPORTANT: Social login uses OAuth redirects. Use cookies (e.g., `react-cookie`) instead of React state to persist `deviceToken` and `deviceEncryptionKey` across page reloads.
 
 The frontend implements four button handlers mapping to the User Flow steps:
+
 1. `handleCreateDeviceToken` -- Create device token
 2. `handleLoginWithGoogle` -- Login with Google
 3. `handleInitializeUser` -- Initialize user (get challenge)
 4. `handleCreateWallet` -- Create wallet (execute challenge)
 
 ```tsx
-import { useState, useEffect, useRef } from "react";
-import { useCookies } from "react-cookie";
-import { SocialLoginProvider } from "@circle-fin/w3s-pw-web-sdk/dist/src/types";
-import type { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
+import { useState, useEffect, useRef } from 'react';
+import { useCookies } from 'react-cookie';
+import { SocialLoginProvider } from '@circle-fin/w3s-pw-web-sdk/dist/src/types';
+import type { W3SSdk } from '@circle-fin/w3s-pw-web-sdk';
 
 export default function SocialLoginWallet({
   circleAppId,
   googleClientId,
-  apiBaseUrl = "",
+  apiBaseUrl = '',
 }: {
   circleAppId: string;
   googleClientId: string;
@@ -94,34 +95,41 @@ export default function SocialLoginWallet({
 }) {
   const sdkRef = useRef<W3SSdk | null>(null);
   const [cookies, setCookie, removeCookie] = useCookies([
-    "deviceId", "deviceToken", "deviceEncryptionKey", "userToken", "encryptionKey",
+    'deviceId',
+    'deviceToken',
+    'deviceEncryptionKey',
+    'userToken',
+    'encryptionKey',
   ]);
 
-  const deviceId = (cookies.deviceId as string) || "";
-  const deviceToken = (cookies.deviceToken as string) || "";
-  const deviceEncryptionKey = (cookies.deviceEncryptionKey as string) || "";
-  const userToken = (cookies.userToken as string) || "";
-  const encryptionKey = (cookies.encryptionKey as string) || "";
+  const deviceId = (cookies.deviceId as string) || '';
+  const deviceToken = (cookies.deviceToken as string) || '';
+  const deviceEncryptionKey = (cookies.deviceEncryptionKey as string) || '';
+  const userToken = (cookies.userToken as string) || '';
+  const encryptionKey = (cookies.encryptionKey as string) || '';
 
   const [challengeId, setChallengeId] = useState<string | null>(null);
-  const [status, setStatus] = useState("Ready");
+  const [status, setStatus] = useState('Ready');
 
   useEffect(() => {
     let cancelled = false;
 
     const initSdk = async () => {
       try {
-        const { W3SSdk } = await import("@circle-fin/w3s-pw-web-sdk");
+        const { W3SSdk } = await import('@circle-fin/w3s-pw-web-sdk');
 
         const onLoginComplete = (error: unknown, result: unknown) => {
           if (cancelled) return;
           if (error) {
-            setStatus("Login failed: " + ((error as Error).message || "Unknown error"));
+            setStatus('Login failed: ' + ((error as Error).message || 'Unknown error'));
             return;
           }
-          const { userToken, encryptionKey } = result as { userToken: string; encryptionKey: string };
-          setCookie("userToken", userToken);
-          setCookie("encryptionKey", encryptionKey);
+          const { userToken, encryptionKey } = result as {
+            userToken: string;
+            encryptionKey: string;
+          };
+          setCookie('userToken', userToken);
+          setCookie('encryptionKey', encryptionKey);
         };
 
         const sdk = new W3SSdk(
@@ -137,21 +145,23 @@ export default function SocialLoginWallet({
               },
             },
           },
-          onLoginComplete
+          onLoginComplete,
         );
         sdkRef.current = sdk;
 
         if (!deviceId) {
           const id = await sdk.getDeviceId();
-          setCookie("deviceId", id);
+          setCookie('deviceId', id);
         }
       } catch {
-        if (!cancelled) setStatus("Failed to initialize Web SDK");
+        if (!cancelled) setStatus('Failed to initialize Web SDK');
       }
     };
 
     void initSdk();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [circleAppId, googleClientId, deviceToken, deviceEncryptionKey, deviceId, setCookie]);
 
   // Step 1: Create device token
@@ -159,14 +169,14 @@ export default function SocialLoginWallet({
     if (!deviceId) return;
 
     const response = await fetch(`${apiBaseUrl}/api/wallet/device-token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deviceId }),
     });
     const data = await response.json();
 
-    setCookie("deviceToken", data.deviceToken);
-    setCookie("deviceEncryptionKey", data.deviceEncryptionKey);
+    setCookie('deviceToken', data.deviceToken);
+    setCookie('deviceEncryptionKey', data.deviceEncryptionKey);
   };
 
   // Step 2: Login with Google
@@ -195,8 +205,8 @@ export default function SocialLoginWallet({
     if (!userToken) return;
 
     const response = await fetch(`${apiBaseUrl}/api/wallet/initialize`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userToken }),
     });
     const data = await response.json();
@@ -218,7 +228,7 @@ export default function SocialLoginWallet({
 
     sdk.execute(challengeId, (error) => {
       if (error) {
-        setStatus("Failed: " + ((error as Error).message || "Unknown error"));
+        setStatus('Failed: ' + ((error as Error).message || 'Unknown error'));
         return;
       }
       setChallengeId(null);
@@ -228,10 +238,10 @@ export default function SocialLoginWallet({
 
   // Logout
   const handleLogout = () => {
-    removeCookie("userToken");
-    removeCookie("encryptionKey");
-    removeCookie("deviceToken");
-    removeCookie("deviceEncryptionKey");
+    removeCookie('userToken');
+    removeCookie('encryptionKey');
+    removeCookie('deviceToken');
+    removeCookie('deviceEncryptionKey');
     setChallengeId(null);
   };
 
@@ -256,11 +266,11 @@ apple: { clientId: "...", redirectUri: "..." }
 
 ## Error Handling
 
-| Error Code | Meaning | Action |
-|------------|---------|--------|
-| 155106 | User already initialized | Fetch existing wallets instead of creating |
-| 155104 | Invalid user token | Re-authenticate user |
-| 155101 | Invalid device token | Regenerate device token |
+| Error Code | Meaning                  | Action                                     |
+| ---------- | ------------------------ | ------------------------------------------ |
+| 155106     | User already initialized | Fetch existing wallets instead of creating |
+| 155104     | Invalid user token       | Re-authenticate user                       |
+| 155101     | Invalid device token     | Regenerate device token                    |
 
 ## Reference Links
 

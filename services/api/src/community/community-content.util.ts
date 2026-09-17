@@ -6,7 +6,21 @@ import { marked } from 'marked';
 // down to exactly this allowlist (sanitize-html) before storage -- storing
 // sanitized HTML rather than raw Markdown means a render-time XSS bug can
 // never resurface from old content once the sanitizer itself is fixed.
-const ALLOWED_TAGS = ['strong', 'b', 'em', 'i', 'a', 'ul', 'ol', 'li', 'blockquote', 'code', 'pre', 'p', 'br'];
+const ALLOWED_TAGS = [
+  'strong',
+  'b',
+  'em',
+  'i',
+  'a',
+  'ul',
+  'ol',
+  'li',
+  'blockquote',
+  'code',
+  'pre',
+  'p',
+  'br',
+];
 const sanitizeOptions: sanitizeHtml.IOptions = {
   allowedTags: ALLOWED_TAGS,
   allowedAttributes: { a: ['href', 'target', 'rel'] },

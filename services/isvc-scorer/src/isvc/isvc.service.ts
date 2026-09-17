@@ -2,7 +2,13 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { IsvcConfidence, Prisma, ValidationReviewStatus } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisStreamsService, StreamMessage } from '../redis-streams/redis-streams.service';
-import { computeAgreement, computeConfidence, countOutliers, mean, stdDev } from './aggregation.util';
+import {
+  computeAgreement,
+  computeConfidence,
+  countOutliers,
+  mean,
+  stdDev,
+} from './aggregation.util';
 
 const ISVC_STREAM = process.env.ISVC_STREAM ?? 'isvc-jobs';
 const CONSUMER_GROUP = process.env.CONSUMER_GROUP ?? 'isvc-scorers';
@@ -53,7 +59,9 @@ export class IsvcService implements OnModuleInit {
     });
 
     if (orgConsensus.length === 0) {
-      this.logger.log(`No organization consensus for recording=${recordingId}; nothing to aggregate`);
+      this.logger.log(
+        `No organization consensus for recording=${recordingId}; nothing to aggregate`,
+      );
       return;
     }
 

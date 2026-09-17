@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ActivityEventType, StreamDeckVisibility } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogueService, QualityTier, qualityTierFor } from '../catalogue/catalogue.service';
@@ -46,13 +51,21 @@ export class PublicDecksService {
     visibility: StreamDeckVisibility,
   ) {
     const before = await this.getOwnedDeck(organizationId, deckId);
-    const deck = await this.prisma.streamDeck.update({ where: { id: deckId }, data: { visibility } });
+    const deck = await this.prisma.streamDeck.update({
+      where: { id: deckId },
+      data: { visibility },
+    });
     if (before.visibility !== visibility) {
-      void this.orgActivity.record(organizationId, ActivityEventType.DECK_VISIBILITY_CHANGED, actorUserId, {
-        deckId,
-        previousVisibility: before.visibility,
-        newVisibility: visibility,
-      });
+      void this.orgActivity.record(
+        organizationId,
+        ActivityEventType.DECK_VISIBILITY_CHANGED,
+        actorUserId,
+        {
+          deckId,
+          previousVisibility: before.visibility,
+          newVisibility: visibility,
+        },
+      );
     }
     return deck;
   }
@@ -90,7 +103,10 @@ export class PublicDecksService {
    */
   async listPublic(callerOrganizationId: string, minQualityTier?: QualityTier) {
     const decks = await this.prisma.streamDeck.findMany({
-      where: { visibility: StreamDeckVisibility.PUBLIC, organizationId: { not: callerOrganizationId } },
+      where: {
+        visibility: StreamDeckVisibility.PUBLIC,
+        organizationId: { not: callerOrganizationId },
+      },
       include: {
         items: true,
         license: { include: { acceptances: { where: { organizationId: callerOrganizationId } } } },
@@ -152,15 +168,22 @@ export class PublicDecksService {
       counts[tier]++;
       minRank = Math.min(minRank, TIER_RANK[tier]);
     }
-    const minTier = (Object.keys(TIER_RANK) as QualityTier[]).find((t) => TIER_RANK[t] === minRank)!;
+    const minTier = (Object.keys(TIER_RANK) as QualityTier[]).find(
+      (t) => TIER_RANK[t] === minRank,
+    )!;
     return { minTier, counts };
   }
 
-  private async requireLicenseAcceptedIfAny(callerOrganizationId: string, deckId: string): Promise<void> {
+  private async requireLicenseAcceptedIfAny(
+    callerOrganizationId: string,
+    deckId: string,
+  ): Promise<void> {
     const license = await this.prisma.deckLicense.findUnique({ where: { deckId } });
     if (!license) return; // no license attached -- nothing to accept
     const accepted = await this.prisma.deckLicenseAcceptance.findUnique({
-      where: { licenseId_organizationId: { licenseId: license.id, organizationId: callerOrganizationId } },
+      where: {
+        licenseId_organizationId: { licenseId: license.id, organizationId: callerOrganizationId },
+      },
     });
     if (!accepted) {
       throw new ForbiddenException('This deck requires accepting its license before use');
@@ -185,9 +208,15 @@ export class PublicDecksService {
       throw new BadRequestException('This deck has no license to accept');
     }
     return this.prisma.deckLicenseAcceptance.upsert({
-      where: { licenseId_organizationId: { licenseId: license.id, organizationId: callerOrganizationId } },
+      where: {
+        licenseId_organizationId: { licenseId: license.id, organizationId: callerOrganizationId },
+      },
       update: {},
-      create: { licenseId: license.id, organizationId: callerOrganizationId, acceptedByUserId: userId },
+      create: {
+        licenseId: license.id,
+        organizationId: callerOrganizationId,
+        acceptedByUserId: userId,
+      },
     });
   }
 
@@ -235,7 +264,10 @@ export class PublicDecksService {
       if (!eligible) continue;
       const already = await this.prisma.validationQueueItem.findUnique({
         where: {
-          organizationId_recordingId: { organizationId: callerOrganizationId, recordingId: item.recordingId },
+          organizationId_recordingId: {
+            organizationId: callerOrganizationId,
+            recordingId: item.recordingId,
+          },
         },
       });
       if (already) continue;

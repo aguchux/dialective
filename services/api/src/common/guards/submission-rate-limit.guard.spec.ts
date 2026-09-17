@@ -20,9 +20,11 @@ describe('SubmissionRateLimitGuard', () => {
     const { guard, platformSettings } = setup({ enabled: false });
     const superHandleRequest = jest.spyOn(ThrottlerGuard.prototype as never, 'handleRequest');
 
-    const allowed = await (guard as unknown as {
-      handleRequest: (...args: unknown[]) => Promise<boolean>;
-    }).handleRequest({} as never, 30, 1000, {} as never, jest.fn(), jest.fn());
+    const allowed = await (
+      guard as unknown as {
+        handleRequest: (...args: unknown[]) => Promise<boolean>;
+      }
+    ).handleRequest({} as never, 30, 1000, {} as never, jest.fn(), jest.fn());
 
     expect(allowed).toBe(true);
     expect(platformSettings.getSubmissionRateLimitPerHour).not.toHaveBeenCalled();
@@ -40,9 +42,11 @@ describe('SubmissionRateLimitGuard', () => {
     const throttler = {} as never;
     const getTracker = jest.fn();
     const generateKey = jest.fn();
-    await (guard as unknown as {
-      handleRequest: (...args: unknown[]) => Promise<boolean>;
-    }).handleRequest(context, 999, 1000, throttler, getTracker, generateKey);
+    await (
+      guard as unknown as {
+        handleRequest: (...args: unknown[]) => Promise<boolean>;
+      }
+    ).handleRequest(context, 999, 1000, throttler, getTracker, generateKey);
 
     expect(platformSettings.getSubmissionRateLimitPerHour).toHaveBeenCalled();
     expect(superHandleRequest).toHaveBeenCalledWith(
@@ -58,9 +62,11 @@ describe('SubmissionRateLimitGuard', () => {
 
   it('keys the throttle bucket by the authenticated user, falling back to IP', async () => {
     const { guard } = setup();
-    const tracker = (guard as unknown as {
-      getTracker: (req: Record<string, unknown>) => Promise<string>;
-    }).getTracker;
+    const tracker = (
+      guard as unknown as {
+        getTracker: (req: Record<string, unknown>) => Promise<string>;
+      }
+    ).getTracker;
 
     await expect(tracker({ user: { sub: 'user-1' }, ip: '1.2.3.4' })).resolves.toBe('user-1');
     await expect(tracker({ ip: '1.2.3.4' })).resolves.toBe('1.2.3.4');

@@ -10,7 +10,14 @@ import {
   useAddStreamDeckItemMutation,
   type IsvcConfidence,
 } from '@/store/api';
-import { Card, ErrorText, FieldLabel, PageHeading, SecondaryButton, TextInput } from '@/components/ui';
+import {
+  Card,
+  ErrorText,
+  FieldLabel,
+  PageHeading,
+  SecondaryButton,
+  TextInput,
+} from '@/components/ui';
 import { IsvcBadge } from '@/components/IsvcBadge';
 import { QualityTierBadge } from '@/components/QualityTierBadge';
 import { ValidationForm } from '@/components/ValidationForm';
@@ -164,15 +171,19 @@ export default function ExplorePage() {
         ) : data && data.items.length > 0 ? (
           <div className="divide-y divide-line">
             {data.items.map((item) => (
-              <div className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-center" key={item.recordingId}>
+              <div
+                className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-center"
+                key={item.recordingId}
+              >
                 <div>
                   <p className="font-bold text-ink">
                     {item.dialect?.name ?? item.dialectTag}
                     {item.subdialect ? ` — ${item.subdialect.name}` : ''}
                   </p>
                   <p className="text-xs text-muted">
-                    {item.country?.name ?? 'Unknown country'} · {((item.durationMs ?? 0) / 1000).toFixed(1)}s
-                    · DL score {item.dlCanonicalScore ?? '—'}
+                    {item.country?.name ?? 'Unknown country'} ·{' '}
+                    {((item.durationMs ?? 0) / 1000).toFixed(1)}s · DL score{' '}
+                    {item.dlCanonicalScore ?? '—'}
                   </p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-2">
                     <IsvcBadge

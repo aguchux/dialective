@@ -1,6 +1,6 @@
 ---
 name: swap-tokens
-description: "Build token swap functionality with Circle App Kit or standalone Swap Kit SDKs. App Kit (@circle-fin/app-kit) is an all-inclusive SDK covering swap, bridge, and send. Swap Kit (@circle-fin/swap-kit) is standalone for swap-only use cases. Both require a kit key and run server-side only. Swap runs on mainnet chains and on Arc Testnet. Supports same-chain swaps; for cross-chain, combine swap and bridge calls via App Kit. Use when: swapping tokens, exchanging stablecoins, converting USDT to USDC, setting up swap adapters, estimating swap rates, configuring slippage or stop limits, collecting custom swap fees, or combining swap and bridge for cross-chain token movement. Triggers: swap tokens, USDT to USDC, @circle-fin/swap-kit, @circle-fin/app-kit, estimateSwap, slippage, stop limit, kit key."
+description: 'Build token swap functionality with Circle App Kit or standalone Swap Kit SDKs. App Kit (@circle-fin/app-kit) is an all-inclusive SDK covering swap, bridge, and send. Swap Kit (@circle-fin/swap-kit) is standalone for swap-only use cases. Both require a kit key and run server-side only. Swap runs on mainnet chains and on Arc Testnet. Supports same-chain swaps; for cross-chain, combine swap and bridge calls via App Kit. Use when: swapping tokens, exchanging stablecoins, converting USDT to USDC, setting up swap adapters, estimating swap rates, configuring slippage or stop limits, collecting custom swap fees, or combining swap and bridge for cross-chain token movement. Triggers: swap tokens, USDT to USDC, @circle-fin/swap-kit, @circle-fin/app-kit, estimateSwap, slippage, stop limit, kit key.'
 ---
 
 ## Overview
@@ -71,7 +71,7 @@ Kit keys are network-agnostic -- the same key works on both mainnet and testnet.
 **App Kit** (recommended):
 
 ```ts
-import { AppKit } from "@circle-fin/app-kit";
+import { AppKit } from '@circle-fin/app-kit';
 
 const kit = new AppKit();
 ```
@@ -79,7 +79,7 @@ const kit = new AppKit();
 **Swap Kit** (standalone):
 
 ```ts
-import { SwapKit } from "@circle-fin/swap-kit";
+import { SwapKit } from '@circle-fin/swap-kit';
 
 const kit = new SwapKit();
 ```
@@ -93,6 +93,7 @@ These two decisions are independent -- ask both before writing any code.
 ### SDK Choice
 
 **Question 1 -- Will you need bridge or send functionality in the future?**
+
 - Yes, or unsure -> **App Kit** (recommended) -- single SDK covers swap + bridge + send, easier to extend later
 - No, swap-only and will never need bridge or send -> **Swap Kit** -- standalone, lighter package for swap-only use cases
 
@@ -101,10 +102,12 @@ These two decisions are independent -- ask both before writing any code.
 Swap requires a kit key, which is server-side only. Client-side wallet connections (wagmi, ConnectKit, browser wallets) are not supported for swap.
 
 **Question 2 -- How do you manage your wallet/keys?**
+
 - Managing your own private key (self-custodied, stored in env var or secrets manager) -> Question 3
 - Using Circle developer-controlled wallets (Circle manages key storage and signing) -> Use Circle Wallets adapter. READ `references/adapter-circle-wallets.md`
 
 **Question 3 -- Which chain are you swapping on?**
+
 - EVM chain (Ethereum, Base, Arbitrum, etc.) -> Use Viem adapter. READ `references/adapter-viem.md`
 - Solana -> Use Solana Kit adapter. READ `references/adapter-solana.md`
 
@@ -125,50 +128,48 @@ When building apps that present chain or token selections to users, ALWAYS use t
 
 ```ts
 const SUPPORTED_MAINNET_CHAINS = [
-  "Arbitrum",
-  "Avalanche",
-  "Base",
-  "Ethereum",
-  "HyperEVM",
-  "Ink",
-  "Linea",
-  "Monad",
-  "Optimism",
-  "Plume",
-  "Polygon",
-  "Sei",
-  "Solana",
-  "Sonic",
-  "Unichain",
-  "World_Chain",
-  "XDC",
+  'Arbitrum',
+  'Avalanche',
+  'Base',
+  'Ethereum',
+  'HyperEVM',
+  'Ink',
+  'Linea',
+  'Monad',
+  'Optimism',
+  'Plume',
+  'Polygon',
+  'Sei',
+  'Solana',
+  'Sonic',
+  'Unichain',
+  'World_Chain',
+  'XDC',
 ] as const;
 ```
 
 **Supported testnet chains** (use these exact string identifiers in the SDK):
 
 ```ts
-const SUPPORTED_TESTNET_CHAINS = [
-  "Arc_Testnet",
-] as const;
+const SUPPORTED_TESTNET_CHAINS = ['Arc_Testnet'] as const;
 ```
 
 **Supported token aliases** (use these exact symbols in the SDK):
 
 ```ts
 const SUPPORTED_TOKENS = [
-  "USDC",
-  "EURC",
-  "USDT",
-  "PYUSD",
-  "DAI",
-  "USDE",
-  "WBTC",
-  "WETH",
-  "WSOL",
-  "WAVAX",
-  "WPOL",
-  "NATIVE",
+  'USDC',
+  'EURC',
+  'USDT',
+  'PYUSD',
+  'DAI',
+  'USDE',
+  'WBTC',
+  'WETH',
+  'WSOL',
+  'WAVAX',
+  'WPOL',
+  'NATIVE',
 ] as const;
 ```
 
@@ -179,6 +180,7 @@ Any token can also be specified by contract address. The aliases above are short
 - **Slippage tolerance**: Default is 300 bps (3%), configurable via `slippageBps`. Alternatively, use `stopLimit` for an absolute minimum output amount. When both are set, `stopLimit` takes precedence.
 - **Allowance strategy**: `"permit"` or `"approve"`, configured in `config`.
 - **Fee structure**: Provider fee is 2 bps (0.02%). Custom developer fees are supported -- Circle retains 10% of the custom fee, and 90% goes to the configured recipient address.
+
 ## Implementation Patterns
 
 READ the corresponding reference based on the user's request:
@@ -221,34 +223,34 @@ Preview expected output before executing. Estimates do not guarantee actual amou
 
 ```ts
 const estimate = await kit.estimateSwap({
-  from: { adapter, chain: "Ethereum" },
-  tokenIn: "USDT",
-  tokenOut: "USDC",
-  amountIn: "100.00",
+  from: { adapter, chain: 'Ethereum' },
+  tokenIn: 'USDT',
+  tokenOut: 'USDC',
+  amountIn: '100.00',
   config: {
     kitKey: process.env.KIT_KEY as string,
   },
 });
 
-console.log("Estimated output:", estimate.estimatedOutput);
-console.log("Fees:", estimate.fees);
+console.log('Estimated output:', estimate.estimatedOutput);
+console.log('Fees:', estimate.fees);
 ```
 
 #### Using Swap Kit
 
 ```ts
 const estimate = await kit.estimate({
-  from: { adapter, chain: "Ethereum" },
-  tokenIn: "USDT",
-  tokenOut: "USDC",
-  amountIn: "100.00",
+  from: { adapter, chain: 'Ethereum' },
+  tokenIn: 'USDT',
+  tokenOut: 'USDC',
+  amountIn: '100.00',
   config: {
     kitKey: process.env.KIT_KEY as string,
   },
 });
 
-console.log("Estimated output:", estimate.estimatedOutput);
-console.log("Fees:", estimate.fees);
+console.log('Estimated output:', estimate.estimatedOutput);
+console.log('Fees:', estimate.fees);
 ```
 
 ### Slippage, stop limit, and custom fees
@@ -262,20 +264,20 @@ Wrap all swap operations in try/catch and inspect the result for failures.
 ```ts
 try {
   const result = await kit.swap({
-    from: { adapter, chain: "Ethereum" },
-    tokenIn: "USDT",
-    tokenOut: "USDC",
-    amountIn: "10.00",
+    from: { adapter, chain: 'Ethereum' },
+    tokenIn: 'USDT',
+    tokenOut: 'USDC',
+    amountIn: '10.00',
     config: {
       kitKey: process.env.KIT_KEY as string,
     },
   });
 
-  console.log("Swap completed:", result.txHash);
-  console.log("Amount out:", result.amountOut);
-  console.log("Explorer:", result.explorerUrl);
+  console.log('Swap completed:', result.txHash);
+  console.log('Amount out:', result.amountOut);
+  console.log('Explorer:', result.explorerUrl);
 } catch (err) {
-  console.error("Swap failed:", err);
+  console.error('Swap failed:', err);
 }
 ```
 
@@ -310,6 +312,7 @@ try {
 - ALWAYS use exported SDK types instead of creating custom interfaces.
 
 ## Reference Links
+
 - [Circle App Kit SDK](https://docs.arc.network/app-kit)
 - [Circle Swap Kit SDK](https://docs.arc.network/app-kit/swap)
 - [Circle Developer Docs](https://developers.circle.com/llms.txt) -- **Always read this first** when looking for relevant documentation from the source website.
@@ -317,10 +320,12 @@ try {
 ## Alternatives
 
 Trigger the `bridge-stablecoin` skill instead when:
+
 - You need USDC-only crosschain transfers with no swap involved.
 - You want CCTP-native bridging with retry/recovery support.
 
 Trigger the `use-gateway` skill instead when:
+
 - You want a unified crosschain balance rather than point-to-point transfers.
 - Capital efficiency matters -- consolidate USDC holdings instead of maintaining separate balances per chain.
 

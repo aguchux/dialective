@@ -18,7 +18,9 @@ function parseFxRates(raw: unknown): Record<string, number> {
 }
 
 /** Raw fetch+parse against the same FX API fx-rate-job uses. Returns null (never throws) on failure. */
-export async function fetchAllFxRatesOrNull(logger: Logger): Promise<Record<string, number> | null> {
+export async function fetchAllFxRatesOrNull(
+  logger: Logger,
+): Promise<Record<string, number> | null> {
   try {
     const res = await fetch(FX_API_URL);
     if (!res.ok) throw new Error(`FX API request failed: ${res.status} ${res.statusText}`);

@@ -1,6 +1,6 @@
 ---
 name: agent-wallet-policy
-description: "View spending policy on a Circle agent wallet — per-transaction, daily, weekly, and monthly USDC caps via the `circle` CLI. Use when the user wants to inspect current limits. Setting or resetting limits requires OTP confirmation in an interactive terminal session — the agent hands the user a verbatim command to run themselves; the OTP must never pass through agent storage. Mainnet-only — testnet chains are rejected. Triggers on: spending limit, spending policy, per-tx cap, daily cap, weekly cap, monthly cap, wallet rules, OTP confirmation."
+description: 'View spending policy on a Circle agent wallet — per-transaction, daily, weekly, and monthly USDC caps via the `circle` CLI. Use when the user wants to inspect current limits. Setting or resetting limits requires OTP confirmation in an interactive terminal session — the agent hands the user a verbatim command to run themselves; the OTP must never pass through agent storage. Mainnet-only — testnet chains are rejected. Triggers on: spending limit, spending policy, per-tx cap, daily cap, weekly cap, monthly cap, wallet rules, OTP confirmation.'
 ---
 
 ## Overview
@@ -9,11 +9,11 @@ For an overview of the Circle CLI's **full** capability set, see the `use-circle
 
 Circle agent wallets support **spending policies** — per-wallet caps that the CLI enforces on every payment and transfer. There are three operations:
 
-| Operation | Command | OTP required? |
-|---|---|---|
-| **View** current limits | `circle wallet limit --address <addr> --chain BASE --output json` | No |
-| **Set** custom limits | `circle wallet limit set ...` | **Yes — human OTP, run in user's own terminal** |
-| **Reset** to defaults | `circle wallet limit reset ...` | **Yes — human OTP, run in user's own terminal** |
+| Operation               | Command                                                           | OTP required?                                   |
+| ----------------------- | ----------------------------------------------------------------- | ----------------------------------------------- |
+| **View** current limits | `circle wallet limit --address <addr> --chain BASE --output json` | No                                              |
+| **Set** custom limits   | `circle wallet limit set ...`                                     | **Yes — human OTP, run in user's own terminal** |
+| **Reset** to defaults   | `circle wallet limit reset ...`                                   | **Yes — human OTP, run in user's own terminal** |
 
 Spending policies are **mainnet-only** (testnet chains are rejected; see Troubleshooting / Rules).
 
@@ -49,12 +49,12 @@ Limits must be **monotonic**: `per-tx ≤ daily ≤ weekly ≤ monthly`.
 
 A typical conservative configuration:
 
-| Tier | Suggested USDC value |
-|---|---|
-| `--per-tx` | `1` |
-| `--daily` | `5` |
-| `--weekly` | `20` |
-| `--monthly` | `50` |
+| Tier        | Suggested USDC value |
+| ----------- | -------------------- |
+| `--per-tx`  | `1`                  |
+| `--daily`   | `5`                  |
+| `--weekly`  | `20`                 |
+| `--monthly` | `50`                 |
 
 Adjust based on the user's stated tolerance. Get explicit yes before generating the command.
 
@@ -89,13 +89,13 @@ Confirms the new caps. Surface them to the user.
 
 ## Troubleshooting
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| User received multiple OTP emails | Command was re-run while a previous invocation was still waiting | Tell the user to use the **most recent** OTP only. Earlier ones are invalidated. |
-| OTP rejected with "prefix mismatch" | User entered an OTP from a previous request | Restart — each `set` / `reset` invocation has a fresh prefix. |
-| `Spending policies are mainnet-only` | Tried to set a policy on a testnet chain | Re-run with a mainnet `--chain` value (`BASE`, `MATIC`, etc.). |
-| `Limits must be monotonic` | per-tx > daily, daily > weekly, etc. | Re-check the values. `per-tx ≤ daily ≤ weekly ≤ monthly`. |
-| `Only agent wallets support spending policies` | Tried on a local (non-agent) wallet | Spending policies apply only to agent wallets created via `circle wallet create`. |
+| Symptom                                        | Cause                                                            | Fix                                                                               |
+| ---------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| User received multiple OTP emails              | Command was re-run while a previous invocation was still waiting | Tell the user to use the **most recent** OTP only. Earlier ones are invalidated.  |
+| OTP rejected with "prefix mismatch"            | User entered an OTP from a previous request                      | Restart — each `set` / `reset` invocation has a fresh prefix.                     |
+| `Spending policies are mainnet-only`           | Tried to set a policy on a testnet chain                         | Re-run with a mainnet `--chain` value (`BASE`, `MATIC`, etc.).                    |
+| `Limits must be monotonic`                     | per-tx > daily, daily > weekly, etc.                             | Re-check the values. `per-tx ≤ daily ≤ weekly ≤ monthly`.                         |
+| `Only agent wallets support spending policies` | Tried on a local (non-agent) wallet                              | Spending policies apply only to agent wallets created via `circle wallet create`. |
 
 ## Rules
 

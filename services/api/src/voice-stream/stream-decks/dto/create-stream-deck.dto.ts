@@ -1,4 +1,11 @@
-import { IsEnum, IsOptional, IsString, MaxLength, MinLength, ValidateNested } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { StreamDeckType } from '@dialectiva/db';
 import { StreamDeckRuleDto } from './stream-deck-rule.dto';

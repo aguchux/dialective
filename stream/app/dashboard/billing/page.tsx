@@ -29,7 +29,10 @@ export default function BillingPage() {
 
   return (
     <div>
-      <PageHeading subtitle="Manage your monthly Voice Stream subscription." title="Subscription & Billing" />
+      <PageHeading
+        subtitle="Manage your monthly Voice Stream subscription."
+        title="Subscription & Billing"
+      />
 
       {checkoutResult === 'success' && (
         <Card className="mb-6 border-success/30 bg-success/5 p-4">
@@ -47,7 +50,9 @@ export default function BillingPage() {
       <Card className="mb-6 p-5">
         <p className="text-xs font-bold uppercase tracking-wide text-muted">Current subscription</p>
         <p className="mt-1 text-lg font-black text-ink">
-          {subscription ? `${subscription.plan.name} — ${subscription.status}` : 'No active subscription'}
+          {subscription
+            ? `${subscription.plan.name} — ${subscription.status}`
+            : 'No active subscription'}
         </p>
         {subscription?.currentPeriodEnd && (
           <p className="mt-1 text-sm text-muted">
@@ -59,18 +64,18 @@ export default function BillingPage() {
       {canManageBilling ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {PLAN_KEYS.map((key) => (
-          <Card className="p-5" key={key}>
-            <p className="text-lg font-black capitalize text-ink">{key}</p>
-            <p className="mt-1 text-sm text-muted">Monthly billing.</p>
-            <PrimaryButton
-              className="mt-4 w-full"
-              disabled={isLoading}
-              onClick={() => void subscribe(key)}
-              type="button"
-            >
-              {subscription?.plan.key === key ? 'Current plan' : `Choose ${key}`}
-            </PrimaryButton>
-          </Card>
+            <Card className="p-5" key={key}>
+              <p className="text-lg font-black capitalize text-ink">{key}</p>
+              <p className="mt-1 text-sm text-muted">Monthly billing.</p>
+              <PrimaryButton
+                className="mt-4 w-full"
+                disabled={isLoading}
+                onClick={() => void subscribe(key)}
+                type="button"
+              >
+                {subscription?.plan.key === key ? 'Current plan' : `Choose ${key}`}
+              </PrimaryButton>
+            </Card>
           ))}
         </div>
       ) : (

@@ -3,6 +3,7 @@
 This example uses Solana Devnet, but the same deposit pattern applies to other supported Solana Gateway environments after substituting the correct RPC endpoint, Gateway Wallet address, and USDC mint address.
 
 Canonical runnable references:
+
 - Unified balance Solana quickstart: https://developers.circle.com/gateway/quickstarts/unified-balance-solana.md
 - Create unified USDC balance: https://developers.circle.com/gateway/howtos/create-unified-usdc-balance.md
 
@@ -24,31 +25,15 @@ Do **not** send USDC directly to the Gateway Wallet address or custody account. 
 ## Runnable example
 
 ```ts
-import { initiateDeveloperControlledWalletsClient } from "@circle-fin/developer-controlled-wallets";
-import {
-  Wallet,
-  AnchorProvider,
-  Program,
-  setProvider,
-  utils,
-} from "@coral-xyz/anchor";
-import {
-  Connection,
-  Keypair,
-  PublicKey,
-  SystemProgram,
-  Transaction,
-} from "@solana/web3.js";
-import {
-  getAssociatedTokenAddressSync,
-  getAccount,
-  TOKEN_PROGRAM_ID,
-} from "@solana/spl-token";
-import BN from "bn.js";
+import { initiateDeveloperControlledWalletsClient } from '@circle-fin/developer-controlled-wallets';
+import { Wallet, AnchorProvider, Program, setProvider, utils } from '@coral-xyz/anchor';
+import { Connection, Keypair, PublicKey, SystemProgram, Transaction } from '@solana/web3.js';
+import { getAssociatedTokenAddressSync, getAccount, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import BN from 'bn.js';
 
-const GATEWAY_WALLET_ADDRESS = "GATEwdfmYNELfp5wDmmR6noSr2vHnAfBPMm2PvCzX5vu";
-const USDC_ADDRESS = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
-const RPC_ENDPOINT = "https://api.devnet.solana.com";
+const GATEWAY_WALLET_ADDRESS = 'GATEwdfmYNELfp5wDmmR6noSr2vHnAfBPMm2PvCzX5vu';
+const USDC_ADDRESS = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
+const RPC_ENDPOINT = 'https://api.devnet.solana.com';
 const DEPOSIT_AMOUNT = new BN(5_000_000); // 5 USDC (6 decimals)
 
 const API_KEY = process.env.CIRCLE_API_KEY!;
@@ -57,35 +42,35 @@ const DEPOSITOR_ADDRESS = process.env.DEPOSITOR_ADDRESS!;
 
 if (!API_KEY || !ENTITY_SECRET || !DEPOSITOR_ADDRESS) {
   throw new Error(
-    "Missing required env vars: CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, DEPOSITOR_ADDRESS",
+    'Missing required env vars: CIRCLE_API_KEY, CIRCLE_ENTITY_SECRET, DEPOSITOR_ADDRESS',
   );
 }
 
 const gatewayWalletIdl = {
   address: GATEWAY_WALLET_ADDRESS,
   metadata: {
-    name: "gatewayWallet",
-    version: "0.1.0",
-    spec: "0.1.0",
+    name: 'gatewayWallet',
+    version: '0.1.0',
+    spec: '0.1.0',
   },
   instructions: [
     {
-      name: "deposit",
+      name: 'deposit',
       discriminator: [22, 0],
       accounts: [
-        { name: "payer", writable: true, signer: true },
-        { name: "owner", signer: true },
-        { name: "gatewayWallet" },
-        { name: "ownerTokenAccount", writable: true },
-        { name: "custodyTokenAccount", writable: true },
-        { name: "deposit", writable: true },
-        { name: "depositorDenylist" },
-        { name: "tokenProgram" },
-        { name: "systemProgram" },
-        { name: "eventAuthority" },
-        { name: "program" },
+        { name: 'payer', writable: true, signer: true },
+        { name: 'owner', signer: true },
+        { name: 'gatewayWallet' },
+        { name: 'ownerTokenAccount', writable: true },
+        { name: 'custodyTokenAccount', writable: true },
+        { name: 'deposit', writable: true },
+        { name: 'depositorDenylist' },
+        { name: 'tokenProgram' },
+        { name: 'systemProgram' },
+        { name: 'eventAuthority' },
+        { name: 'program' },
       ],
-      args: [{ name: "amount", type: "u64" }],
+      args: [{ name: 'amount', type: 'u64' }],
     },
   ],
 } as const;
@@ -95,46 +80,35 @@ const client = initiateDeveloperControlledWalletsClient({
   entitySecret: ENTITY_SECRET,
 });
 
-function findDepositPDAs(
-  programId: PublicKey,
-  usdcMint: PublicKey,
-  owner: PublicKey,
-) {
+function findDepositPDAs(programId: PublicKey, usdcMint: PublicKey, owner: PublicKey) {
   return {
     wallet: PublicKey.findProgramAddressSync(
-      [Buffer.from(utils.bytes.utf8.encode("gateway_wallet"))],
+      [Buffer.from(utils.bytes.utf8.encode('gateway_wallet'))],
       programId,
     )[0],
     custody: PublicKey.findProgramAddressSync(
-      [
-        Buffer.from(utils.bytes.utf8.encode("gateway_wallet_custody")),
-        usdcMint.toBuffer(),
-      ],
+      [Buffer.from(utils.bytes.utf8.encode('gateway_wallet_custody')), usdcMint.toBuffer()],
       programId,
     )[0],
     deposit: PublicKey.findProgramAddressSync(
-      [Buffer.from("gateway_deposit"), usdcMint.toBuffer(), owner.toBuffer()],
+      [Buffer.from('gateway_deposit'), usdcMint.toBuffer(), owner.toBuffer()],
       programId,
     )[0],
     denylist: PublicKey.findProgramAddressSync(
-      [Buffer.from("denylist"), owner.toBuffer()],
+      [Buffer.from('denylist'), owner.toBuffer()],
       programId,
     )[0],
   };
 }
 
 async function main() {
-  const connection = new Connection(RPC_ENDPOINT, "confirmed");
+  const connection = new Connection(RPC_ENDPOINT, 'confirmed');
   const usdcMint = new PublicKey(USDC_ADDRESS);
   const programId = new PublicKey(GATEWAY_WALLET_ADDRESS);
   const owner = new PublicKey(DEPOSITOR_ADDRESS);
 
   const dummyWallet = new Wallet(Keypair.generate());
-  const provider = new AnchorProvider(
-    connection,
-    dummyWallet,
-    AnchorProvider.defaultOptions(),
-  );
+  const provider = new AnchorProvider(connection, dummyWallet, AnchorProvider.defaultOptions());
   setProvider(provider);
   const program = new Program(gatewayWalletIdl, provider);
 
@@ -143,7 +117,7 @@ async function main() {
   const tokenAccountInfo = await getAccount(connection, ownerTokenAccount);
 
   if (tokenAccountInfo.amount < BigInt(DEPOSIT_AMOUNT.toString())) {
-    throw new Error("Insufficient USDC balance for deposit");
+    throw new Error('Insufficient USDC balance for deposit');
   }
 
   const depositIx = await program.methods
@@ -161,8 +135,7 @@ async function main() {
     })
     .instruction();
 
-  const { blockhash, lastValidBlockHeight } =
-    await connection.getLatestBlockhash();
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
   const transaction = new Transaction();
   transaction.add(depositIx);
   transaction.recentBlockhash = blockhash;
@@ -175,21 +148,21 @@ async function main() {
 
   const signResult = await client.signTransaction({
     walletAddress: DEPOSITOR_ADDRESS,
-    blockchain: "SOL-DEVNET",
-    rawTransaction: serializedTx.toString("base64"),
+    blockchain: 'SOL-DEVNET',
+    rawTransaction: serializedTx.toString('base64'),
   });
 
   const signedTxBase64 = signResult.data?.signedTransaction;
   if (!signedTxBase64) {
-    throw new Error("Failed to sign transaction");
+    throw new Error('Failed to sign transaction');
   }
 
-  const signedTxBytes = Buffer.from(signedTxBase64, "base64");
+  const signedTxBytes = Buffer.from(signedTxBase64, 'base64');
   const txSignature = await connection.sendRawTransaction(signedTxBytes);
 
   await connection.confirmTransaction(
     { signature: txSignature, blockhash, lastValidBlockHeight },
-    "confirmed",
+    'confirmed',
   );
 
   console.log(`Done on Solana Devnet. Deposit tx: ${txSignature}`);
@@ -200,5 +173,3 @@ main().catch((error) => {
   process.exit(1);
 });
 ```
-
-

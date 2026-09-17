@@ -1,6 +1,6 @@
 ---
 name: use-circle-wallets
-description: "Choose and implement the right Circle wallet type for your application. Compares developer-controlled, user-controlled, and modular (passkey) wallets across custody model, key management, account types, blockchain support, and use cases. Use whenever blockchain wallet integrations are required for onchain application development. Triggers on: which wallet, choose wallet, wallet comparison, EOA vs SCA vs Modular Wallet, custody model, programmable wallets."
+description: 'Choose and implement the right Circle wallet type for your application. Compares developer-controlled, user-controlled, and modular (passkey) wallets across custody model, key management, account types, blockchain support, and use cases. Use whenever blockchain wallet integrations are required for onchain application development. Triggers on: which wallet, choose wallet, wallet comparison, EOA vs SCA vs Modular Wallet, custody model, programmable wallets.'
 ---
 
 ## Overview
@@ -10,7 +10,7 @@ Circle offers three wallet types -- developer-controlled, user-controlled, and m
 ## Quick Comparison
 
 |                     | Developer-Controlled              | User-Controlled                | Modular (Passkey)                         |
-|---------------------|-----------------------------------|--------------------------------|-------------------------------------------|
+| ------------------- | --------------------------------- | ------------------------------ | ----------------------------------------- |
 | **Custody**         | Developer                         | User                           | User                                      |
 | **Auth**            | API key + entity secret (backend) | Social login / email OTP / PIN | Passkey (WebAuthn)                        |
 | **Account types**   | EOA, SCA                          | EOA, SCA                       | Modular Wallet SCA (ERC-6900)             |
@@ -25,26 +25,30 @@ For the latest supported account types on different blockchains: https://develop
 For the latest supported features on different blockchains: https://developers.circle.com/wallets/supported-blockchains
 
 **Step 1 -- Who controls the keys / who is the custodian?**
+
 - Developer controls -> Developer-controlled wallets -> Step 3
 - End user controls -> Step 2
 
 **Step 2 -- Auth method?**
+
 - Passkey (WebAuthn biometric) with extensible modules -> Modular wallets -> Step 4
 - Social login, email OTP, or PIN -> User-controlled wallets -> Step 3
 
 **Step 3 -- Account type?**
+
 - Solana, Aptos, or NEAR -> EOA (only option)
 - Ethereum mainnet -> EOA (SCA gas costs prohibitive, Modular Wallet not supported)
 - L2 (Arbitrum, Base, Polygon, Optimism, etc.) -> EOA if max TPS needed; SCA if gas sponsorship or batching needed; Modular Wallet if passkey or other modular plugins needed
 
 **Step 4 -- Chain check (Modular wallets)**
+
 - Supported: Arbitrum, Avalanche, Base, Monad, Optimism, Polygon, Unichain
 - NOT supported: Ethereum, Solana, Aptos, NEAR. Fall back to user-controlled wallets with SCA.
 
 ### Example Scenarios
 
 | Scenario                                         | Decision                    | Skill                              |
-|--------------------------------------------------|-----------------------------|------------------------------------|
+| ------------------------------------------------ | --------------------------- | ---------------------------------- |
 | Payment backend, programmatic payouts, high TPS  | Developer-controlled + EOA  | `use-developer-controlled-wallets` |
 | Consumer app with Google/Apple login, gasless UX | User-controlled + SCA on L2 | `use-user-controlled-wallets`      |
 | DeFi app with biometric auth, custom modules     | Modular Wallet on L2        | `use-modular-wallets`              |
@@ -57,7 +61,7 @@ Once a wallet type has been determined, TRIGGER the corresponding skill:
 
 - Developer-controlled -> `use-developer-controlled-wallets` skill
 - User-controlled -> `use-user-controlled-wallets` skill
-- Modular (Passkey) -> `use-modular-wallets` skill 
+- Modular (Passkey) -> `use-modular-wallets` skill
 
 ## Strict Rules
 

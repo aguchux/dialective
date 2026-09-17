@@ -161,7 +161,9 @@ describe('BillingService.createCheckoutSession', () => {
     });
     prisma.subscription.findUnique.mockResolvedValue(null);
 
-    await expect(service.createCheckoutSession('org-1', 'owner@example.com', 'community')).resolves.toEqual({
+    await expect(
+      service.createCheckoutSession('org-1', 'owner@example.com', 'community'),
+    ).resolves.toEqual({
       activated: true,
     });
 

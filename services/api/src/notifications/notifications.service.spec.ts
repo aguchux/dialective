@@ -140,8 +140,22 @@ describe('NotificationsService.listBannerUpdates', () => {
   it('returns only pushToBanner updates, newest first', async () => {
     const { service, prisma } = setup();
     prisma.systemUpdate.findMany.mockResolvedValue([
-      { id: 'u2', kind: 'MESSAGE', title: 'Newer', message: 'm2', href: null, createdAt: new Date('2026-02-01') },
-      { id: 'u1', kind: 'MESSAGE', title: 'Older', message: 'm1', href: null, createdAt: new Date('2026-01-01') },
+      {
+        id: 'u2',
+        kind: 'MESSAGE',
+        title: 'Newer',
+        message: 'm2',
+        href: null,
+        createdAt: new Date('2026-02-01'),
+      },
+      {
+        id: 'u1',
+        kind: 'MESSAGE',
+        title: 'Older',
+        message: 'm1',
+        href: null,
+        createdAt: new Date('2026-01-01'),
+      },
     ]);
 
     const result = await service.listBannerUpdates();

@@ -236,7 +236,7 @@ describe('subscription and license bypass', () => {
       expect(res.status).toBe(403);
     });
 
-    it('a VALIDATOR can still read the org\'s own deck list (read is not role-gated)', async () => {
+    it("a VALIDATOR can still read the org's own deck list (read is not role-gated)", async () => {
       const org = await seedOrg(prisma, { orgRole: SubscriberOrgRole.VALIDATOR });
       orgIds.push(org.organizationId);
 
@@ -254,7 +254,9 @@ describe('subscription and license bypass', () => {
       // JWT's orgRole claim is untouched (subscriber-jwt.util.ts embeds the
       // role at issuance, subscriber-roles.guard.ts never re-fetches it).
       await prisma.subscriberMembership.update({
-        where: { userId_organizationId: { userId: org.userId, organizationId: org.organizationId } },
+        where: {
+          userId_organizationId: { userId: org.userId, organizationId: org.organizationId },
+        },
         data: { role: SubscriberOrgRole.VALIDATOR },
       });
 

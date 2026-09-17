@@ -79,7 +79,10 @@ describe('CommunitySettingsService', () => {
     });
 
     it('withholds a network as disabled when the ID is set but the toggle is off', async () => {
-      const { service } = setup({ monetagEnabled: false, monetagScriptUrl: 'https://example.monetag.test/tag.min.js?z=1' });
+      const { service } = setup({
+        monetagEnabled: false,
+        monetagScriptUrl: 'https://example.monetag.test/tag.min.js?z=1',
+      });
 
       expect(await service.getPublicAdSettings()).toMatchObject({
         monetag: { enabled: false, scriptUrl: null },

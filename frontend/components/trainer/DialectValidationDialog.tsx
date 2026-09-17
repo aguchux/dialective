@@ -85,9 +85,10 @@ export function DialectValidationDialog({
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [qracOpen, setQracOpen] = useState(false);
-  const [submitted, setSubmitted] = useState<{ rewarded: boolean; rewardAmount: string | null } | null>(
-    null,
-  );
+  const [submitted, setSubmitted] = useState<{
+    rewarded: boolean;
+    rewardAmount: string | null;
+  } | null>(null);
 
   const [startSession, { isLoading: isStarting }] = useStartWordTrainingSessionMutation();
   const [loadNext, { isFetching: isLoadingNext }] = useLazyGetNextWordValidationItemQuery();
@@ -230,7 +231,12 @@ export function DialectValidationDialog({
 
   return (
     <>
-      <RadixDialog.Root open={open} onOpenChange={(nextOpen) => { if (!nextOpen) void closeDialog(); }}>
+      <RadixDialog.Root
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) void closeDialog();
+        }}
+      >
         <RadixDialog.Portal container={portalContainer}>
           <RadixDialog.Overlay className="fixed inset-0 z-40 bg-black/65 data-[state=open]:animate-[fadeIn_150ms_ease-out]" />
           <RadixDialog.Content
@@ -275,8 +281,9 @@ export function DialectValidationDialog({
                       confirm which word was said.
                     </p>
                     <p>
-                      If a recording is unclear, unusable, or doesn&apos;t sound like your dialect at
-                      all, tick the matching flag instead -- this helps keep the library accurate.
+                      If a recording is unclear, unusable, or doesn&apos;t sound like your dialect
+                      at all, tick the matching flag instead -- this helps keep the library
+                      accurate.
                     </p>
                   </div>
                   <label
@@ -327,7 +334,10 @@ export function DialectValidationDialog({
                 <section className="mx-auto grid w-full max-w-2xl gap-6">
                   {isLoadingNext || !item ? (
                     <div className="mx-auto grid place-items-center gap-3 text-center">
-                      <LoaderCircle className="size-8 animate-spin text-accent" aria-hidden="true" />
+                      <LoaderCircle
+                        className="size-8 animate-spin text-accent"
+                        aria-hidden="true"
+                      />
                       <p className="font-bold text-muted">Loading the next recording...</p>
                     </div>
                   ) : submitted ? (
@@ -451,7 +461,9 @@ export function DialectValidationDialog({
                       </div>
 
                       <div className="mx-auto grid w-full max-w-md gap-2">
-                        <p className="text-sm font-extrabold">Anything wrong with this recording?</p>
+                        <p className="text-sm font-extrabold">
+                          Anything wrong with this recording?
+                        </p>
                         <div className="grid gap-1.5">
                           {FLAG_OPTIONS.map((flag) => (
                             <label

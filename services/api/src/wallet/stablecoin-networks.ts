@@ -14,7 +14,10 @@ export type StablecoinNetwork = (typeof STABLECOIN_NETWORKS)[number];
 export const STABLECOIN_ASSETS = ['USDT', 'USDC'] as const;
 export type StablecoinAsset = (typeof STABLECOIN_ASSETS)[number];
 
-const NOWPAYMENTS_CURRENCY_CODES: Record<StablecoinAsset, Partial<Record<StablecoinNetwork, string>>> = {
+const NOWPAYMENTS_CURRENCY_CODES: Record<
+  StablecoinAsset,
+  Partial<Record<StablecoinNetwork, string>>
+> = {
   USDT: {
     TRC20: 'usdttrc20',
     ERC20: 'usdterc20',
@@ -33,10 +36,15 @@ const NOWPAYMENTS_CURRENCY_CODES: Record<StablecoinAsset, Partial<Record<Stablec
 };
 
 export function isValidStablecoinPair(asset: string, network: string): boolean {
-  return Boolean(NOWPAYMENTS_CURRENCY_CODES[asset as StablecoinAsset]?.[network as StablecoinNetwork]);
+  return Boolean(
+    NOWPAYMENTS_CURRENCY_CODES[asset as StablecoinAsset]?.[network as StablecoinNetwork],
+  );
 }
 
-export function getNowPaymentsCurrencyCode(asset: StablecoinAsset, network: StablecoinNetwork): string {
+export function getNowPaymentsCurrencyCode(
+  asset: StablecoinAsset,
+  network: StablecoinNetwork,
+): string {
   const code = NOWPAYMENTS_CURRENCY_CODES[asset]?.[network];
   if (!code) {
     throw new Error(`No NOWPayments currency code for ${asset} on ${network}`);

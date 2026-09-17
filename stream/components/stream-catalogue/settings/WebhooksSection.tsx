@@ -61,13 +61,17 @@ function RevealedSecretBanner({
         <code className="min-w-0 flex-1 break-all rounded-lg border border-catalogue-line bg-catalogue-bg px-3 py-2 text-sm text-catalogue-ink">
           {created.plaintextSecret}
         </code>
-        <SettingsPrimaryButton onClick={() => void copy()}>{copied ? 'Copied' : 'Copy'}</SettingsPrimaryButton>
+        <SettingsPrimaryButton onClick={() => void copy()}>
+          {copied ? 'Copied' : 'Copy'}
+        </SettingsPrimaryButton>
         <SettingsSecondaryButton onClick={onDismiss}>Done</SettingsSecondaryButton>
       </div>
       <p className="text-xs text-catalogue-dim">
         Each delivery is signed with{' '}
-        <code className="rounded bg-catalogue-bg px-1 py-0.5">X-Dialectiva-Signature: sha256=...</code> -- an
-        HMAC-SHA256 of the raw JSON body, keyed by this secret.
+        <code className="rounded bg-catalogue-bg px-1 py-0.5">
+          X-Dialectiva-Signature: sha256=...
+        </code>{' '}
+        -- an HMAC-SHA256 of the raw JSON body, keyed by this secret.
       </p>
     </div>
   );
@@ -87,7 +91,9 @@ function CreateWebhookForm({
 
   function toggleEvent(eventType: WebhookEventType) {
     setEventTypes((current) =>
-      current.includes(eventType) ? current.filter((e) => e !== eventType) : [...current, eventType],
+      current.includes(eventType)
+        ? current.filter((e) => e !== eventType)
+        : [...current, eventType],
     );
   }
 
@@ -107,7 +113,10 @@ function CreateWebhookForm({
   }
 
   return (
-    <form className="grid gap-3 rounded-lg border border-catalogue-line bg-catalogue-bg p-4" onSubmit={submit}>
+    <form
+      className="grid gap-3 rounded-lg border border-catalogue-line bg-catalogue-bg p-4"
+      onSubmit={submit}
+    >
       <SettingsField label="Endpoint URL">
         <input
           className={settingsInputClassName}
@@ -122,7 +131,11 @@ function CreateWebhookForm({
         <div className="grid gap-1.5 sm:grid-cols-2">
           {ALL_EVENT_TYPES.map((event) => (
             <label className="flex items-center gap-2 text-sm text-catalogue-ink" key={event.value}>
-              <input checked={eventTypes.includes(event.value)} onChange={() => toggleEvent(event.value)} type="checkbox" />
+              <input
+                checked={eventTypes.includes(event.value)}
+                onChange={() => toggleEvent(event.value)}
+                type="checkbox"
+              />
               {event.label}
             </label>
           ))}
@@ -159,10 +172,14 @@ function DeliveryHistory({ webhookId }: { webhookId: string }) {
           </div>
           <span
             className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${
-              delivery.succeeded ? 'bg-catalogue-green/15 text-catalogue-green' : 'bg-danger/15 text-danger'
+              delivery.succeeded
+                ? 'bg-catalogue-green/15 text-catalogue-green'
+                : 'bg-danger/15 text-danger'
             }`}
           >
-            {delivery.succeeded ? `${delivery.resultCode ?? 'OK'}` : delivery.errorMessage ?? 'Failed'}
+            {delivery.succeeded
+              ? `${delivery.resultCode ?? 'OK'}`
+              : (delivery.errorMessage ?? 'Failed')}
           </span>
         </div>
       ))}
@@ -193,18 +210,26 @@ function WebhookRow({ webhook }: { webhook: WebhookSubscriptionSummary }) {
             <code className="truncate text-sm font-bold text-catalogue-ink">{webhook.url}</code>
           </div>
           <p className="mt-1 text-xs text-catalogue-muted">{webhook.eventTypes.join(', ')}</p>
-          <p className="mt-1 text-xs text-catalogue-dim">Created {new Date(webhook.createdAt).toLocaleDateString()}</p>
+          <p className="mt-1 text-xs text-catalogue-dim">
+            Created {new Date(webhook.createdAt).toLocaleDateString()}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span
             className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${
-              webhook.active ? 'bg-catalogue-green/15 text-catalogue-green' : 'bg-danger/15 text-danger'
+              webhook.active
+                ? 'bg-catalogue-green/15 text-catalogue-green'
+                : 'bg-danger/15 text-danger'
             }`}
           >
             {webhook.active ? 'Active' : 'Inactive'}
           </span>
           <SettingsSecondaryButton onClick={() => setShowDeliveries((s) => !s)}>
-            {showDeliveries ? <ChevronUp aria-hidden="true" className="size-3.5" /> : <ChevronDown aria-hidden="true" className="size-3.5" />}
+            {showDeliveries ? (
+              <ChevronUp aria-hidden="true" className="size-3.5" />
+            ) : (
+              <ChevronDown aria-hidden="true" className="size-3.5" />
+            )}
           </SettingsSecondaryButton>
           <SettingsSecondaryButton disabled={isDeleting} onClick={() => void handleDelete()}>
             <Trash2 aria-hidden="true" className="size-3.5" />

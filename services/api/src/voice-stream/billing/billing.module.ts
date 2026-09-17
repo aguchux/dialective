@@ -15,7 +15,12 @@ import {
 @Module({
   imports: [ApiAccessTokensModule, WebhooksModule, UsageCounterModule],
   controllers: [BillingController, SubscriptionPlansController, PublicSubscriptionPlansController],
-  providers: [BillingService, RequireActiveSubscriptionGuard, TierGateGuard, SubscriptionPlansService],
+  providers: [
+    BillingService,
+    RequireActiveSubscriptionGuard,
+    TierGateGuard,
+    SubscriptionPlansService,
+  ],
   exports: [RequireActiveSubscriptionGuard, TierGateGuard],
 })
 export class BillingModule {}

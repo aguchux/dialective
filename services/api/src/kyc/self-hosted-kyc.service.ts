@@ -573,7 +573,7 @@ function buildBotPrompt(documentType: string | null): string {
     'The single most important check: does this image actually show a physical',
     'ID document (a card, booklet, or printed page with a small portrait photo,',
     'printed text/fields, and document-like edges/borders), or does it instead',
-    'show a live/close-up photo of a person\'s face or upper body with no',
+    "show a live/close-up photo of a person's face or upper body with no",
     'document visible -- i.e. someone submitted a selfie as their "document"',
     'photo instead of an actual ID. If the image shows a face filling most of',
     'the frame with no visible document, you MUST include the flag',

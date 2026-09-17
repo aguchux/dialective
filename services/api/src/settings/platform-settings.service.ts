@@ -582,7 +582,8 @@ export class PlatformSettingsService {
     learnMoreUrl: string | null;
   }> {
     const row = await this.getRow();
-    const enabled = row.topBannerEnabled && Boolean(row.topBannerImageBucket) && Boolean(row.topBannerImageKey);
+    const enabled =
+      row.topBannerEnabled && Boolean(row.topBannerImageBucket) && Boolean(row.topBannerImageKey);
     return {
       enabled,
       imageUrl:
@@ -1307,13 +1308,17 @@ export class PlatformSettingsService {
    * outside this codebase.
    */
   async uploadTopBannerImage(contentType: string) {
-    const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[contentType];
+    const extension = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }[
+      contentType
+    ];
     if (!extension) {
       throw new BadRequestException('contentType must be image/jpeg, image/png, or image/webp');
     }
     const key = `dyk/${randomUUID()}.${extension}`;
     const bucket =
-      process.env.SPACES_MARKETING_BUCKET ?? process.env.SPACES_BLOG_MEDIA_BUCKET ?? 'dialectiva-marketing';
+      process.env.SPACES_MARKETING_BUCKET ??
+      process.env.SPACES_BLOG_MEDIA_BUCKET ??
+      'dialectiva-marketing';
     const result = await this.storage.createPresignedUploadUrl(bucket, key, contentType, true);
     return { uploadUrl: result.url, key, bucket };
   }
@@ -1591,8 +1596,7 @@ export class PlatformSettingsService {
       data.selfHostedKycMaxFaceMatchScoreForDecline !== undefined
     ) {
       const existing = await this.getRow();
-      const min =
-        data.selfHostedKycMinFaceMatchScore ?? existing.selfHostedKycMinFaceMatchScore;
+      const min = data.selfHostedKycMinFaceMatchScore ?? existing.selfHostedKycMinFaceMatchScore;
       const max =
         data.selfHostedKycMaxFaceMatchScoreForDecline ??
         existing.selfHostedKycMaxFaceMatchScoreForDecline;

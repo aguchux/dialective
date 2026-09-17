@@ -19,7 +19,8 @@ const primaryButtonClass =
 export function GeneralSettingsPanel() {
   const { data: settings, isLoading } = useGetPlatformSettingsQuery();
   const [updateSettings, { isLoading: isSaving }] = useUpdatePlatformSettingsMutation();
-  const [uploadTopBannerImage, { isLoading: isUploadingBanner }] = useUploadTopBannerImageMutation();
+  const [uploadTopBannerImage, { isLoading: isUploadingBanner }] =
+    useUploadTopBannerImageMutation();
   const bannerFileInputRef = useRef<HTMLInputElement>(null);
 
   const [tokenUsdRate, setTokenUsdRate] = useState('');
@@ -158,9 +159,7 @@ export function GeneralSettingsPanel() {
         ...(minScoreRange !== '' ? { minScoreRange: Number(minScoreRange) } : {}),
         ...(maxScoreRange !== '' ? { maxScoreRange: Number(maxScoreRange) } : {}),
         topBannerEnabled,
-        ...(topBannerImageDirty
-          ? { topBannerImageBucket, topBannerImageKey }
-          : {}),
+        ...(topBannerImageDirty ? { topBannerImageBucket, topBannerImageKey } : {}),
         topBannerAltText: topBannerAltText || null,
         topBannerLearnMoreUrl: topBannerLearnMoreUrl || null,
       }).unwrap();
@@ -441,9 +440,9 @@ export function GeneralSettingsPanel() {
           <div className="grid gap-1">
             <span className="font-bold">Session timeout (all accounts)</span>
             <span className="text-sm leading-relaxed text-muted">
-              Applies uniformly to every trainer and admin session. Idle timeout signs a session
-              out after this many minutes of inactivity; the absolute limit forces a fresh login
-              at least this often regardless of activity.
+              Applies uniformly to every trainer and admin session. Idle timeout signs a session out
+              after this many minutes of inactivity; the absolute limit forces a fresh login at
+              least this often regardless of activity.
             </span>
             <div className="mt-2 grid grid-cols-2 gap-3">
               <div className="grid gap-1">
@@ -525,10 +524,7 @@ export function GeneralSettingsPanel() {
           </div>
 
           <div className="grid gap-3 rounded-lg border border-line bg-surface-muted p-4">
-            <label
-              className="flex cursor-pointer items-start gap-3"
-              htmlFor="top-banner-enabled"
-            >
+            <label className="flex cursor-pointer items-start gap-3" htmlFor="top-banner-enabled">
               <input
                 checked={topBannerEnabled}
                 className="mt-0.5 size-5 accent-accent"

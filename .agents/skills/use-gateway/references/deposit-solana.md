@@ -3,6 +3,7 @@
 This example uses Solana Devnet, but the same deposit pattern applies to other supported Solana Gateway environments after substituting the correct RPC endpoint, Gateway Wallet address, and USDC mint address.
 
 Canonical runnable references:
+
 - Create unified USDC balance: https://developers.circle.com/gateway/howtos/create-unified-usdc-balance.md
 - Unified balance Solana quickstart: https://developers.circle.com/gateway/quickstarts/unified-balance-solana.md
 
@@ -23,88 +24,72 @@ Do **not** send USDC directly to the Gateway Wallet address or custody account. 
 ## Runnable example
 
 ```ts
-import {
-  Wallet,
-  AnchorProvider,
-  Program,
-  setProvider,
-} from "@coral-xyz/anchor";
-import { Connection, Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
-import {
-  getAssociatedTokenAddressSync,
-  getAccount,
-  TOKEN_PROGRAM_ID,
-} from "@solana/spl-token";
-import BN from "bn.js";
+import { Wallet, AnchorProvider, Program, setProvider } from '@coral-xyz/anchor';
+import { Connection, Keypair, PublicKey, SystemProgram } from '@solana/web3.js';
+import { getAssociatedTokenAddressSync, getAccount, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import BN from 'bn.js';
 
-const RPC_ENDPOINT = "https://api.devnet.solana.com";
-const GATEWAY_WALLET_ADDRESS = "GATEwdfmYNELfp5wDmmR6noSr2vHnAfBPMm2PvCzX5vu";
-const USDC_ADDRESS = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
+const RPC_ENDPOINT = 'https://api.devnet.solana.com';
+const GATEWAY_WALLET_ADDRESS = 'GATEwdfmYNELfp5wDmmR6noSr2vHnAfBPMm2PvCzX5vu';
+const USDC_ADDRESS = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU';
 const DEPOSIT_AMOUNT = new BN(5_000_000); // 5 USDC (6 decimals)
 
 const gatewayWalletIdl = {
   address: GATEWAY_WALLET_ADDRESS,
   metadata: {
-    name: "gatewayWallet",
-    version: "0.1.0",
-    spec: "0.1.0",
+    name: 'gatewayWallet',
+    version: '0.1.0',
+    spec: '0.1.0',
   },
   instructions: [
     {
-      name: "deposit",
+      name: 'deposit',
       discriminator: [22, 0],
       accounts: [
-        { name: "payer", writable: true, signer: true },
-        { name: "owner", signer: true },
-        { name: "gatewayWallet" },
-        { name: "ownerTokenAccount", writable: true },
-        { name: "custodyTokenAccount", writable: true },
-        { name: "deposit", writable: true },
-        { name: "depositorDenylist" },
-        { name: "tokenProgram" },
-        { name: "systemProgram" },
-        { name: "eventAuthority" },
-        { name: "program" },
+        { name: 'payer', writable: true, signer: true },
+        { name: 'owner', signer: true },
+        { name: 'gatewayWallet' },
+        { name: 'ownerTokenAccount', writable: true },
+        { name: 'custodyTokenAccount', writable: true },
+        { name: 'deposit', writable: true },
+        { name: 'depositorDenylist' },
+        { name: 'tokenProgram' },
+        { name: 'systemProgram' },
+        { name: 'eventAuthority' },
+        { name: 'program' },
       ],
-      args: [{ name: "amount", type: "u64" }],
+      args: [{ name: 'amount', type: 'u64' }],
     },
   ],
 } as const;
 
-function findDepositPDAs(
-  programId: PublicKey,
-  usdcMint: PublicKey,
-  owner: PublicKey,
-) {
+function findDepositPDAs(programId: PublicKey, usdcMint: PublicKey, owner: PublicKey) {
   return {
-    wallet: PublicKey.findProgramAddressSync(
-      [Buffer.from("gateway_wallet")],
-      programId,
-    )[0],
+    wallet: PublicKey.findProgramAddressSync([Buffer.from('gateway_wallet')], programId)[0],
     custody: PublicKey.findProgramAddressSync(
-      [Buffer.from("gateway_wallet_custody"), usdcMint.toBuffer()],
+      [Buffer.from('gateway_wallet_custody'), usdcMint.toBuffer()],
       programId,
     )[0],
     deposit: PublicKey.findProgramAddressSync(
-      [Buffer.from("gateway_deposit"), usdcMint.toBuffer(), owner.toBuffer()],
+      [Buffer.from('gateway_deposit'), usdcMint.toBuffer(), owner.toBuffer()],
       programId,
     )[0],
     denylist: PublicKey.findProgramAddressSync(
-      [Buffer.from("denylist"), owner.toBuffer()],
+      [Buffer.from('denylist'), owner.toBuffer()],
       programId,
     )[0],
   };
 }
 
 if (!process.env.SOLANA_PRIVATE_KEYPAIR) {
-  throw new Error("SOLANA_PRIVATE_KEYPAIR not set");
+  throw new Error('SOLANA_PRIVATE_KEYPAIR not set');
 }
 
 const secretKey = Uint8Array.from(JSON.parse(process.env.SOLANA_PRIVATE_KEYPAIR));
 const keypair = Keypair.fromSecretKey(secretKey);
 
 async function main() {
-  const connection = new Connection(RPC_ENDPOINT, "confirmed");
+  const connection = new Connection(RPC_ENDPOINT, 'confirmed');
   const wallet = new Wallet(keypair);
   const owner = wallet.publicKey;
   const usdcMint = new PublicKey(USDC_ADDRESS);
@@ -116,14 +101,10 @@ async function main() {
   const tokenAccountInfo = await getAccount(connection, ownerTokenAccount);
 
   if (tokenAccountInfo.amount < BigInt(DEPOSIT_AMOUNT.toString())) {
-    throw new Error("Insufficient USDC balance for deposit");
+    throw new Error('Insufficient USDC balance for deposit');
   }
 
-  const provider = new AnchorProvider(
-    connection,
-    wallet,
-    AnchorProvider.defaultOptions(),
-  );
+  const provider = new AnchorProvider(connection, wallet, AnchorProvider.defaultOptions());
   setProvider(provider);
 
   const program = new Program(gatewayWalletIdl, provider);
@@ -152,5 +133,3 @@ main().catch((error) => {
   process.exit(1);
 });
 ```
-
-

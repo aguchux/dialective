@@ -905,115 +905,118 @@ export function WordTrainingDialog({
                       </div>
 
                       {!isSentenceSourced && (
-                      <div className="mx-auto grid w-full max-w-md gap-2 text-left">
-                        <label
-                          className="flex items-center gap-1.5 text-sm font-extrabold"
-                          htmlFor="training-response"
-                        >
-                          <span className="grid size-5 shrink-0 place-items-center rounded-full bg-accent-soft text-[11px] font-black text-accent">
-                            1
-                          </span>
-                          Type it in {assignment.responseLanguage}
-                        </label>
-                        <RadixPopover.Root
-                          open={suggestionsOpen && suggestions.length > 0}
-                          onOpenChange={setSuggestionsOpen}
-                        >
-                          <RadixPopover.Anchor asChild>
-                            <div className="relative">
-                              <input
-                                autoComplete="off"
-                                className="min-h-12 w-full rounded-lg border border-line bg-surface px-4 text-base font-bold outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft disabled:opacity-60"
-                                disabled={
-                                  recorderState === 'submitting' || recorderState === 'submitted'
-                                }
-                                id="training-response"
-                                onChange={(event) => {
-                                  setResponseText(event.target.value);
-                                  setSuggestionsOpen(true);
-                                }}
-                                onFocus={() => setSuggestionsOpen(true)}
-                                placeholder={`Type the ${assignment.responseLanguage} spelling`}
-                                ref={responseInputRef}
-                                value={responseText}
-                              />
-                              {assignment.dialectKeyboardLayout && (
-                                <button
-                                  aria-label={
-                                    keyboardOpen ? 'Hide dialect keyboard' : 'Show dialect keyboard'
-                                  }
-                                  aria-pressed={keyboardOpen}
-                                  className={`absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md transition-colors ${
-                                    keyboardOpen
-                                      ? 'bg-accent-soft text-accent'
-                                      : 'text-muted hover:bg-surface-muted'
-                                  }`}
+                        <div className="mx-auto grid w-full max-w-md gap-2 text-left">
+                          <label
+                            className="flex items-center gap-1.5 text-sm font-extrabold"
+                            htmlFor="training-response"
+                          >
+                            <span className="grid size-5 shrink-0 place-items-center rounded-full bg-accent-soft text-[11px] font-black text-accent">
+                              1
+                            </span>
+                            Type it in {assignment.responseLanguage}
+                          </label>
+                          <RadixPopover.Root
+                            open={suggestionsOpen && suggestions.length > 0}
+                            onOpenChange={setSuggestionsOpen}
+                          >
+                            <RadixPopover.Anchor asChild>
+                              <div className="relative">
+                                <input
+                                  autoComplete="off"
+                                  className="min-h-12 w-full rounded-lg border border-line bg-surface px-4 text-base font-bold outline-none focus:border-accent focus:ring-2 focus:ring-accent-soft disabled:opacity-60"
                                   disabled={
                                     recorderState === 'submitting' || recorderState === 'submitted'
                                   }
-                                  onClick={() => setKeyboardOpen((current) => !current)}
-                                  type="button"
-                                >
-                                  <Keyboard className="size-4" aria-hidden="true" />
-                                </button>
-                              )}
-                            </div>
-                          </RadixPopover.Anchor>
-                          <RadixPopover.Portal container={portalContainer}>
-                            <RadixPopover.Content
-                              align="start"
-                              className="z-60 w-[min(var(--container-md),90vw)] rounded-lg border border-line bg-surface p-1.5 shadow-[0_12px_32px_rgba(27,31,27,0.15)]"
-                              onOpenAutoFocus={(event) => event.preventDefault()}
-                              sideOffset={6}
-                            >
-                              <ul className="grid gap-0.5">
-                                {suggestions.map((suggestion) => (
-                                  <li key={`${suggestion.source}-${suggestion.text}`}>
-                                    <button
-                                      className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left font-bold hover:bg-surface-muted"
-                                      onClick={() => {
-                                        setResponseText(suggestion.text);
-                                        setSuggestionsOpen(false);
-                                        responseInputRef.current?.focus();
-                                      }}
-                                      type="button"
-                                    >
-                                      <span>{suggestion.text}</span>
-                                      <span
-                                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-extrabold ${
-                                          suggestion.source === 'community'
-                                            ? 'bg-emerald-100 text-emerald-700'
-                                            : 'bg-accent-soft text-accent'
-                                        }`}
+                                  id="training-response"
+                                  onChange={(event) => {
+                                    setResponseText(event.target.value);
+                                    setSuggestionsOpen(true);
+                                  }}
+                                  onFocus={() => setSuggestionsOpen(true)}
+                                  placeholder={`Type the ${assignment.responseLanguage} spelling`}
+                                  ref={responseInputRef}
+                                  value={responseText}
+                                />
+                                {assignment.dialectKeyboardLayout && (
+                                  <button
+                                    aria-label={
+                                      keyboardOpen
+                                        ? 'Hide dialect keyboard'
+                                        : 'Show dialect keyboard'
+                                    }
+                                    aria-pressed={keyboardOpen}
+                                    className={`absolute right-2 top-1/2 grid size-8 -translate-y-1/2 place-items-center rounded-md transition-colors ${
+                                      keyboardOpen
+                                        ? 'bg-accent-soft text-accent'
+                                        : 'text-muted hover:bg-surface-muted'
+                                    }`}
+                                    disabled={
+                                      recorderState === 'submitting' ||
+                                      recorderState === 'submitted'
+                                    }
+                                    onClick={() => setKeyboardOpen((current) => !current)}
+                                    type="button"
+                                  >
+                                    <Keyboard className="size-4" aria-hidden="true" />
+                                  </button>
+                                )}
+                              </div>
+                            </RadixPopover.Anchor>
+                            <RadixPopover.Portal container={portalContainer}>
+                              <RadixPopover.Content
+                                align="start"
+                                className="z-60 w-[min(var(--container-md),90vw)] rounded-lg border border-line bg-surface p-1.5 shadow-[0_12px_32px_rgba(27,31,27,0.15)]"
+                                onOpenAutoFocus={(event) => event.preventDefault()}
+                                sideOffset={6}
+                              >
+                                <ul className="grid gap-0.5">
+                                  {suggestions.map((suggestion) => (
+                                    <li key={`${suggestion.source}-${suggestion.text}`}>
+                                      <button
+                                        className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left font-bold hover:bg-surface-muted"
+                                        onClick={() => {
+                                          setResponseText(suggestion.text);
+                                          setSuggestionsOpen(false);
+                                          responseInputRef.current?.focus();
+                                        }}
+                                        type="button"
                                       >
-                                        {suggestion.source === 'community' ? 'Community' : 'AI'}
-                                      </span>
-                                    </button>
-                                  </li>
-                                ))}
-                              </ul>
-                            </RadixPopover.Content>
-                          </RadixPopover.Portal>
-                        </RadixPopover.Root>
+                                        <span>{suggestion.text}</span>
+                                        <span
+                                          className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-extrabold ${
+                                            suggestion.source === 'community'
+                                              ? 'bg-emerald-100 text-emerald-700'
+                                              : 'bg-accent-soft text-accent'
+                                          }`}
+                                        >
+                                          {suggestion.source === 'community' ? 'Community' : 'AI'}
+                                        </span>
+                                      </button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </RadixPopover.Content>
+                            </RadixPopover.Portal>
+                          </RadixPopover.Root>
 
-                        {keyboardOpen && assignment.dialectKeyboardLayout && (
-                          <div className="flex flex-wrap gap-1.5 rounded-lg border border-line bg-surface p-2">
-                            {assignment.dialectKeyboardLayout
-                              .split(/\s+/)
-                              .filter(Boolean)
-                              .map((char) => (
-                                <button
-                                  className="grid min-w-9 place-items-center rounded-md border border-line bg-white px-2 py-1.5 text-base font-bold hover:bg-surface-muted"
-                                  key={char}
-                                  onClick={() => insertCharacter(char)}
-                                  type="button"
-                                >
-                                  {char}
-                                </button>
-                              ))}
-                          </div>
-                        )}
-                      </div>
+                          {keyboardOpen && assignment.dialectKeyboardLayout && (
+                            <div className="flex flex-wrap gap-1.5 rounded-lg border border-line bg-surface p-2">
+                              {assignment.dialectKeyboardLayout
+                                .split(/\s+/)
+                                .filter(Boolean)
+                                .map((char) => (
+                                  <button
+                                    className="grid min-w-9 place-items-center rounded-md border border-line bg-white px-2 py-1.5 text-base font-bold hover:bg-surface-muted"
+                                    key={char}
+                                    onClick={() => insertCharacter(char)}
+                                    type="button"
+                                  >
+                                    {char}
+                                  </button>
+                                ))}
+                            </div>
+                          )}
+                        </div>
                       )}
 
                       <div className="mx-auto grid w-full max-w-md justify-items-center gap-1 text-center">
@@ -1072,7 +1075,11 @@ export function WordTrainingDialog({
                             else if (recorderState === 'recording') stopRecording();
                             else togglePlayback();
                           }}
-                          style={micButtonBackground ? { backgroundColor: micButtonBackground } : undefined}
+                          style={
+                            micButtonBackground
+                              ? { backgroundColor: micButtonBackground }
+                              : undefined
+                          }
                           type="button"
                         >
                           {recorderState === 'recording' ? (

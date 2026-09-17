@@ -321,8 +321,11 @@ export class KycService {
 
     for (const verification of stale) {
       const cancelled = await this.prisma.kycVerification.updateMany({
-        where: { id: verification.id, status: { in: NON_TERMINAL_STATUSES },
-          NOT: { provider: 'self', status: KycStatus.IN_REVIEW } },
+        where: {
+          id: verification.id,
+          status: { in: NON_TERMINAL_STATUSES },
+          NOT: { provider: 'self', status: KycStatus.IN_REVIEW },
+        },
         data: {
           status: KycStatus.ABANDONED,
           declineReason: `Auto-cancelled after ${minutes} minutes without completion.`,

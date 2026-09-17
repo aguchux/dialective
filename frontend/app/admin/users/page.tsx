@@ -371,8 +371,10 @@ function UserIdentityCell({ user, selfId }: { user: PublicUser; selfId?: string 
         {(user.potentialDuplicateNameMatches?.length ?? 0) > 0 && (
           <p
             className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-extrabold text-amber-800"
-            title={user.potentialDuplicateNameMatches!
-              .map((match) => `${match.email}${match.phoneNumber ? ` | ${match.phoneNumber}` : ''}`)
+            title={user
+              .potentialDuplicateNameMatches!.map(
+                (match) => `${match.email}${match.phoneNumber ? ` | ${match.phoneNumber}` : ''}`,
+              )
               .join('\n')}
           >
             Flag: same name on {user.potentialDuplicateNameMatches!.length} account

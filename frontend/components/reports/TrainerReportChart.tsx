@@ -94,9 +94,11 @@ function ChartRow({
 function formatBarDate(isoDate: string): string {
   const date = new Date(`${isoDate}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(
-    date,
-  );
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  }).format(date);
 }
 
 function formatBarDayNumber(isoDate: string): string {

@@ -3,6 +3,7 @@
 This example uses Arc Testnet, but the same deposit pattern applies to any supported EVM chain after substituting the correct chain config, Gateway Wallet address, and USDC address.
 
 Canonical runnable references:
+
 - Create unified USDC balance: https://developers.circle.com/gateway/howtos/create-unified-usdc-balance.md
 - Unified balance EVM quickstart: https://developers.circle.com/gateway/quickstarts/unified-balance-evm.md
 - Arc crosschain USDC tutorial: https://docs.arc.network/arc/tutorials/access-usdc-crosschain.md
@@ -33,8 +34,8 @@ import {
   formatUnits,
   getContract,
   parseUnits,
-} from "viem";
-import { arcTestnet } from "viem/chains";
+} from 'viem';
+import { arcTestnet } from 'viem/chains';
 
 type Eip1193Provider = {
   request(args: { method: string; params?: unknown[] | object }): Promise<unknown>;
@@ -55,20 +56,20 @@ declare global {
   }
 }
 
-const GATEWAY_WALLET_ADDRESS = "0x0077777d7EBA4688BDeF3E311b846F25870A19B9";
-const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
-const DEPOSIT_AMOUNT_USDC = "5";
+const GATEWAY_WALLET_ADDRESS = '0x0077777d7EBA4688BDeF3E311b846F25870A19B9';
+const USDC_ADDRESS = '0x3600000000000000000000000000000000000000';
+const DEPOSIT_AMOUNT_USDC = '5';
 
 const gatewayWalletAbi = [
   {
-    type: "function",
-    name: "deposit",
+    type: 'function',
+    name: 'deposit',
     inputs: [
-      { name: "token", type: "address" },
-      { name: "value", type: "uint256" },
+      { name: 'token', type: 'address' },
+      { name: 'value', type: 'uint256' },
     ],
     outputs: [],
-    stateMutability: "nonpayable",
+    stateMutability: 'nonpayable',
   },
 ] as const;
 
@@ -80,14 +81,18 @@ async function getInjectedProvider(): Promise<Eip1193Provider> {
     if (detail?.provider) discovered.push(detail);
   };
 
-  window.addEventListener("eip6963:announceProvider", onAnnounce as EventListener);
-  window.dispatchEvent(new Event("eip6963:requestProvider"));
+  window.addEventListener('eip6963:announceProvider', onAnnounce as EventListener);
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
   await new Promise((resolve) => setTimeout(resolve, 150));
-  window.removeEventListener("eip6963:announceProvider", onAnnounce as EventListener);
+  window.removeEventListener('eip6963:announceProvider', onAnnounce as EventListener);
 
-  return discovered[0]?.provider ?? window.ethereum ?? (() => {
-    throw new Error("No EVM wallet provider found");
-  })();
+  return (
+    discovered[0]?.provider ??
+    window.ethereum ??
+    (() => {
+      throw new Error('No EVM wallet provider found');
+    })()
+  );
 }
 
 async function ensureChain(provider: Eip1193Provider) {
@@ -95,12 +100,12 @@ async function ensureChain(provider: Eip1193Provider) {
 
   try {
     await provider.request({
-      method: "wallet_switchEthereumChain",
+      method: 'wallet_switchEthereumChain',
       params: [{ chainId: targetChainHex }],
     });
   } catch {
     await provider.request({
-      method: "wallet_addEthereumChain",
+      method: 'wallet_addEthereumChain',
       params: [
         {
           chainId: targetChainHex,
@@ -119,11 +124,11 @@ async function ensureChain(provider: Eip1193Provider) {
 async function main() {
   const provider = await getInjectedProvider();
   const accounts = (await provider.request({
-    method: "eth_requestAccounts",
+    method: 'eth_requestAccounts',
   })) as string[];
 
   const account = accounts[0];
-  if (!account) throw new Error("No wallet account returned");
+  if (!account) throw new Error('No wallet account returned');
 
   await ensureChain(provider);
 
@@ -155,18 +160,12 @@ async function main() {
   console.log(`Connected wallet: ${account}`);
   console.log(`Approving ${formatUnits(amount, 6)} USDC...`);
 
-  const approvalTx = await usdc.write.approve(
-    [gatewayWallet.address, amount],
-    { account },
-  );
+  const approvalTx = await usdc.write.approve([gatewayWallet.address, amount], { account });
   await publicClient.waitForTransactionReceipt({ hash: approvalTx });
 
   console.log(`Depositing ${formatUnits(amount, 6)} USDC into Gateway...`);
 
-  const depositTx = await gatewayWallet.write.deposit(
-    [usdc.address, amount],
-    { account },
-  );
+  const depositTx = await gatewayWallet.write.deposit([usdc.address, amount], { account });
   await publicClient.waitForTransactionReceipt({ hash: depositTx });
 
   console.log(`Deposit tx: ${depositTx}`);
@@ -202,36 +201,26 @@ async function discoverEvmProviders(): Promise<Eip6963ProviderDetail[]> {
     const detail = (event as CustomEvent<Eip6963ProviderDetail>).detail;
     if (!detail?.provider) return;
 
-    const alreadySeen = providers.some(
-      (entry) => entry.info.uuid === detail.info.uuid,
-    );
+    const alreadySeen = providers.some((entry) => entry.info.uuid === detail.info.uuid);
     if (!alreadySeen) providers.push(detail);
   };
 
-  window.addEventListener(
-    "eip6963:announceProvider",
-    onAnnounce as EventListener,
-  );
-  window.dispatchEvent(new Event("eip6963:requestProvider"));
+  window.addEventListener('eip6963:announceProvider', onAnnounce as EventListener);
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
   await new Promise((resolve) => setTimeout(resolve, 150));
-  window.removeEventListener(
-    "eip6963:announceProvider",
-    onAnnounce as EventListener,
-  );
+  window.removeEventListener('eip6963:announceProvider', onAnnounce as EventListener);
 
   return providers;
 }
 
 async function connectChosenProvider(provider: Eip1193Provider) {
   const accounts = (await provider.request({
-    method: "eth_requestAccounts",
+    method: 'eth_requestAccounts',
   })) as string[];
 
   const address = accounts[0];
-  if (!address) throw new Error("No wallet account returned");
+  if (!address) throw new Error('No wallet account returned');
 
   return { address, provider };
 }
 ```
-
-

@@ -49,8 +49,24 @@ describe('SubscriberAnalyticsService.build', () => {
   it('sums bytesStreamed across audio rows and scopes the where clause by date range', async () => {
     const { prisma, service } = setup();
     prisma.streamAccessLog.findMany.mockResolvedValue([
-      { bytesStreamed: BigInt(1000), durationStreamedMs: 1_800_000, createdAt: new Date(), deckId: 'deck-1', recordingId: 'rec-1', resultCode: 200, entitlementDecision: 'allowed' },
-      { bytesStreamed: BigInt(2000), durationStreamedMs: 1_800_000, createdAt: new Date(), deckId: 'deck-1', recordingId: 'rec-2', resultCode: 200, entitlementDecision: 'allowed' },
+      {
+        bytesStreamed: BigInt(1000),
+        durationStreamedMs: 1_800_000,
+        createdAt: new Date(),
+        deckId: 'deck-1',
+        recordingId: 'rec-1',
+        resultCode: 200,
+        entitlementDecision: 'allowed',
+      },
+      {
+        bytesStreamed: BigInt(2000),
+        durationStreamedMs: 1_800_000,
+        createdAt: new Date(),
+        deckId: 'deck-1',
+        recordingId: 'rec-2',
+        resultCode: 200,
+        entitlementDecision: 'allowed',
+      },
     ]);
 
     const from = new Date('2026-01-01');

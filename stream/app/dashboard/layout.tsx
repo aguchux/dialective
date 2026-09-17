@@ -77,25 +77,29 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
-          {NAV_ITEMS.filter((item) => canAccessPath(session.user.orgRole, item.href)).map((item) => {
-            const active =
-              item.href === '/dashboard' ? pathname === item.href : pathname.startsWith(item.href);
-            const Icon = item.icon;
-            return (
-              <Link
-                className={`mb-0.5 flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-bold no-underline transition-colors ${
-                  active
-                    ? 'bg-accent text-white'
-                    : 'text-muted hover:bg-surface-muted hover:text-ink'
-                }`}
-                href={item.href}
-                key={item.href}
-              >
-                <Icon aria-hidden="true" className="size-4 shrink-0" />
-                <span className="truncate">{item.label}</span>
-              </Link>
-            );
-          })}
+          {NAV_ITEMS.filter((item) => canAccessPath(session.user.orgRole, item.href)).map(
+            (item) => {
+              const active =
+                item.href === '/dashboard'
+                  ? pathname === item.href
+                  : pathname.startsWith(item.href);
+              const Icon = item.icon;
+              return (
+                <Link
+                  className={`mb-0.5 flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-bold no-underline transition-colors ${
+                    active
+                      ? 'bg-accent text-white'
+                      : 'text-muted hover:bg-surface-muted hover:text-ink'
+                  }`}
+                  href={item.href}
+                  key={item.href}
+                >
+                  <Icon aria-hidden="true" className="size-4 shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                </Link>
+              );
+            },
+          )}
         </nav>
 
         <div className="border-t border-line px-3 py-3">

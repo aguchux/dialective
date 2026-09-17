@@ -19,11 +19,11 @@ Use `receiveAddress` with a testnet faucet (for example, `https://faucet.circle.
 
 ```ts
 const txResponse = await circleDeveloperSdk.listTransactions({
-  walletIds: ["<wallet-id>"],
+  walletIds: ['<wallet-id>'],
 });
 
 const inboundTransactions =
-  txResponse.data?.transactions?.filter((tx) => tx.transactionType === "INBOUND") ?? [];
+  txResponse.data?.transactions?.filter((tx) => tx.transactionType === 'INBOUND') ?? [];
 ```
 
 Lists transactions for the wallet so you can confirm inbound transfers and state progression.

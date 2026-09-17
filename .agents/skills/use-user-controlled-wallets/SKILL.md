@@ -20,9 +20,9 @@ npm install @circle-fin/user-controlled-wallets@latest @circle-fin/w3s-pw-web-sd
 The SDKs depends on Node.js built-ins (`buffer`, `crypto`, etc.) that are not available in the browser. Add `vite-plugin-node-polyfills` to your Vite config:
 
 ```typescript
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
-import { nodePolyfills } from "vite-plugin-node-polyfills";
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 export default defineConfig({
   plugins: [react(), nodePolyfills()],
@@ -44,7 +44,7 @@ CIRCLE_APP_ID=           # App ID from Wallets > User Controlled > Configurator
 Uses `@circle-fin/user-controlled-wallets` for all server-side operations (user creation, challenge creation, transaction queries).
 
 ```typescript
-import { initiateUserControlledWalletsClient } from "@circle-fin/user-controlled-wallets";
+import { initiateUserControlledWalletsClient } from '@circle-fin/user-controlled-wallets';
 
 const circleClient = initiateUserControlledWalletsClient({
   apiKey: process.env.CIRCLE_API_KEY!,
@@ -56,7 +56,7 @@ const circleClient = initiateUserControlledWalletsClient({
 Uses `@circle-fin/w3s-pw-web-sdk` for user-facing operations (challenge execution, auth flows, PIN/OTP/OAuth UI).
 
 ```typescript
-import { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
+import { W3SSdk } from '@circle-fin/w3s-pw-web-sdk';
 
 const sdk = new W3SSdk({ appSettings: { appId: circleAppId } });
 ```
@@ -112,11 +112,11 @@ All sensitive operations (wallet creation, transactions, signing) follow this pa
 
 ### Authentication Methods
 
-| Method | Console Setup | How `userToken` Is Obtained |
-|--------|--------------|----------------------------|
-| PIN | None | Backend calls `createUserToken({ userId })` (60 min expiry) |
-| Email OTP | SMTP config | SDK login callback after OTP verification |
-| Social Login | OAuth client ID | SDK login callback after OAuth redirect |
+| Method       | Console Setup   | How `userToken` Is Obtained                                 |
+| ------------ | --------------- | ----------------------------------------------------------- |
+| PIN          | None            | Backend calls `createUserToken({ userId })` (60 min expiry) |
+| Email OTP    | SMTP config     | SDK login callback after OTP verification                   |
+| Social Login | OAuth client ID | SDK login callback after OAuth redirect                     |
 
 ### Developer Access and Limitations
 
@@ -155,6 +155,7 @@ All on-chain operations (transfers, contract executions) follow the same asynchr
 **Happy path:** `INITIATED` -> `CLEARED` -> `QUEUED` -> `SENT` -> `CONFIRMED` -> `COMPLETE`
 
 **Intermediate states:**
+
 - `INITIATED` -- Request accepted, not yet validated or checked.
 - `WAITING` -- In queue for validation and compliance checks.
 - `CLEARED` -- Finish compliance checks.
@@ -164,6 +165,7 @@ All on-chain operations (transfers, contract executions) follow the same asynchr
 - `CONFIRMED` -- Included in a block, awaiting finality.
 
 **Terminal states:**
+
 - `COMPLETE` -- Transaction succeeded and is finalized on-chain.
 - `FAILED` -- Transaction reverted or encountered an unrecoverable error.
 - `DENIED` -- Transaction was rejected by risk screening.
@@ -173,16 +175,16 @@ Always wait until a terminal state before treating any transaction as done. For 
 
 ## Error Handling
 
-| Error Code | Meaning | Action |
-|------------|---------|--------|
-| 155106 | User already initialized | Fetch existing wallets instead of creating |
-| 155104 | Invalid user token | Re-authenticate user (token expired) |
-| 155101 | Invalid device token / User not found | Re-create device token or user |
-| 155130 | OTP token expired | Request new OTP |
-| 155131 | OTP token invalid | Request new OTP |
-| 155133 | OTP value invalid | User should re-enter code |
-| 155134 | OTP value not matched | User should re-enter code |
-| 155146 | OTP invalid after 3 attempts | Request new OTP (locked out) |
+| Error Code | Meaning                               | Action                                     |
+| ---------- | ------------------------------------- | ------------------------------------------ |
+| 155106     | User already initialized              | Fetch existing wallets instead of creating |
+| 155104     | Invalid user token                    | Re-authenticate user (token expired)       |
+| 155101     | Invalid device token / User not found | Re-create device token or user             |
+| 155130     | OTP token expired                     | Request new OTP                            |
+| 155131     | OTP token invalid                     | Request new OTP                            |
+| 155133     | OTP value invalid                     | User should re-enter code                  |
+| 155134     | OTP value not matched                 | User should re-enter code                  |
+| 155146     | OTP invalid after 3 attempts          | Request new OTP (locked out)               |
 
 ## Rules
 

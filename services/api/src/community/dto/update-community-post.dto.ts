@@ -9,7 +9,10 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { CREATABLE_COMMUNITY_POST_STATUSES, CreatableCommunityPostStatus } from './create-community-post.dto';
+import {
+  CREATABLE_COMMUNITY_POST_STATUSES,
+  CreatableCommunityPostStatus,
+} from './create-community-post.dto';
 import { CommunityAttachmentInputDto } from './community-attachment-input.dto';
 
 export class UpdateCommunityPostDto {

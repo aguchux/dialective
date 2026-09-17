@@ -15,7 +15,9 @@ import {
 
 function formatTokens(value: string) {
   const number = Number(value);
-  return Number.isFinite(number) ? number.toLocaleString(undefined, { maximumFractionDigits: 4 }) : value;
+  return Number.isFinite(number)
+    ? number.toLocaleString(undefined, { maximumFractionDigits: 4 })
+    : value;
 }
 
 function formatDateTime(iso: string) {
@@ -29,7 +31,11 @@ function formatDateTime(iso: string) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 const statLabel = 'text-xs font-bold uppercase text-muted';
@@ -96,8 +102,8 @@ export default function MyProofAccountReportPage() {
             <div>
               <h1 className="text-3xl font-black">Your account proof report</h1>
               <p className="mt-1 leading-relaxed text-muted">
-                A full lifetime breakdown of your token balance -- every transaction, and how they add
-                up.
+                A full lifetime breakdown of your token balance -- every transaction, and how they
+                add up.
               </p>
             </div>
             {data && (
@@ -176,8 +182,8 @@ function ReportBody({ report, sharedAt }: { report: ProofAccountReport; sharedAt
         <div className="grid gap-1">
           <h2 className="text-lg font-extrabold">Balance breakdown by transaction type</h2>
           <p className="text-sm text-muted">
-            Every credit and debit type ever posted to your wallet, summed -- this is what adds up to
-            the totals above.
+            Every credit and debit type ever posted to your wallet, summed -- this is what adds up
+            to the totals above.
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -200,7 +206,9 @@ function ReportBody({ report, sharedAt }: { report: ProofAccountReport; sharedAt
                 report.ledgerTotalsByType.map((row) => (
                   <tr key={row.type}>
                     <td className="py-2.5 pr-4 font-bold">{row.type.replace(/_/g, ' ')}</td>
-                    <td className="py-2.5 pr-4 text-right text-muted">{row.count.toLocaleString()}</td>
+                    <td className="py-2.5 pr-4 text-right text-muted">
+                      {row.count.toLocaleString()}
+                    </td>
                     <td
                       className={`py-2.5 text-right font-bold tabular-nums ${
                         Number(row.totalAmount) < 0 ? 'text-danger' : 'text-accent'
@@ -220,8 +228,8 @@ function ReportBody({ report, sharedAt }: { report: ProofAccountReport; sharedAt
         <div className="grid gap-1">
           <h2 className="text-lg font-extrabold">Full transaction history</h2>
           <p className="text-sm text-muted">
-            Every ledger entry on your wallet, oldest first ({report.ledgerEntries.length.toLocaleString()}
-            {' '}total).
+            Every ledger entry on your wallet, oldest first (
+            {report.ledgerEntries.length.toLocaleString()} total).
           </p>
         </div>
         <div className="overflow-x-auto">

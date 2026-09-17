@@ -78,8 +78,8 @@ export default function HeldInReviewPage() {
           <div>
             <h3 className="font-black">Tasks holding DL</h3>
             <p className="text-sm text-muted">
-              Released back to your available balance (or paid out) once transcription, scoring,
-              and settlement finish.
+              Released back to your available balance (or paid out) once transcription, scoring, and
+              settlement finish.
             </p>
           </div>
         </div>

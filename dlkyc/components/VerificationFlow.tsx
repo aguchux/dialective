@@ -53,7 +53,9 @@ export function VerificationFlow({ token }: { token: string }) {
       })
       .catch((err) => {
         if (cancelled) return;
-        setError(err instanceof KycApiError ? err.message : 'Could not load your verification session.');
+        setError(
+          err instanceof KycApiError ? err.message : 'Could not load your verification session.',
+        );
         setStep('error');
       });
     return () => {
@@ -63,49 +65,63 @@ export function VerificationFlow({ token }: { token: string }) {
 
   const goToDocument = useCallback(() => setStep('document'), []);
 
-  const handleDocumentCaptured = useCallback(async (frontBlob: Blob) => {
-    if (!verificationId) return;
-    setError(null);
-    try {
-      const { uploadUrl, key } = await createDocumentUploadUrl(
-        verificationId,
-        token,
-        CAPTURE_CONTENT_TYPE,
-      );
-      await uploadToSignedUrl(uploadUrl, frontBlob, CAPTURE_CONTENT_TYPE);
-      await submitDocument(verificationId, token, { documentType, frontKey: key });
-      const { challenge: nextChallenge } = await getChallenge(verificationId, token);
-      setChallenge(nextChallenge);
-      setStep('selfie-intro');
-    } catch (err) {
-      setError(err instanceof KycApiError ? err.message : 'Could not upload your document. Please try again.');
-    }
-  }, [documentType, token, verificationId]);
-
-  const handleSelfieCaptured = useCallback(async (frames: Blob[]) => {
-    if (!verificationId || !challenge) return;
-    setError(null);
-    setStep('submitting');
-    try {
-      const frameKeys: string[] = [];
-      for (const frame of frames) {
-        const { uploadUrl, key } = await createSelfieUploadUrl(
+  const handleDocumentCaptured = useCallback(
+    async (frontBlob: Blob) => {
+      if (!verificationId) return;
+      setError(null);
+      try {
+        const { uploadUrl, key } = await createDocumentUploadUrl(
           verificationId,
           token,
           CAPTURE_CONTENT_TYPE,
         );
-        await uploadToSignedUrl(uploadUrl, frame, CAPTURE_CONTENT_TYPE);
-        frameKeys.push(key);
+        await uploadToSignedUrl(uploadUrl, frontBlob, CAPTURE_CONTENT_TYPE);
+        await submitDocument(verificationId, token, { documentType, frontKey: key });
+        const { challenge: nextChallenge } = await getChallenge(verificationId, token);
+        setChallenge(nextChallenge);
+        setStep('selfie-intro');
+      } catch (err) {
+        setError(
+          err instanceof KycApiError
+            ? err.message
+            : 'Could not upload your document. Please try again.',
+        );
       }
-      await submitSelfie(verificationId, token, { frameKeys, challenge });
-      const decision = await submitForDecision(verificationId, token);
-      setResult(decision);
-      setStep('result');
-    } catch (err) {
-      setError(err instanceof KycApiError ? err.message : 'Could not complete your verification. Please try again.');
-      setStep('selfie-intro');
-    }
-  }, [challenge, token, verificationId]);
+    },
+    [documentType, token, verificationId],
+  );
+
+  const handleSelfieCaptured = useCallback(
+    async (frames: Blob[]) => {
+      if (!verificationId || !challenge) return;
+      setError(null);
+      setStep('submitting');
+      try {
+        const frameKeys: string[] = [];
+        for (const frame of frames) {
+          const { uploadUrl, key } = await createSelfieUploadUrl(
+            verificationId,
+            token,
+            CAPTURE_CONTENT_TYPE,
+          );
+          await uploadToSignedUrl(uploadUrl, frame, CAPTURE_CONTENT_TYPE);
+          frameKeys.push(key);
+        }
+        await submitSelfie(verificationId, token, { frameKeys, challenge });
+        const decision = await submitForDecision(verificationId, token);
+        setResult(decision);
+        setStep('result');
+      } catch (err) {
+        setError(
+          err instanceof KycApiError
+            ? err.message
+            : 'Could not complete your verification. Please try again.',
+        );
+        setStep('selfie-intro');
+      }
+    },
+    [challenge, token, verificationId],
+  );
 
   return (
     <main className="mx-auto flex min-h-screen max-w-lg flex-col gap-6 px-4 py-10">
@@ -138,9 +154,7 @@ export function VerificationFlow({ token }: { token: string }) {
         <SelfieCaptureStep challenge={challenge} error={error} onCaptured={handleSelfieCaptured} />
       )}
       {step === 'submitting' && <SubmittingCard />}
-      {step === 'result' && result && (
-        <ResultStep callbackUrl={callbackUrl} result={result} />
-      )}
+      {step === 'result' && result && <ResultStep callbackUrl={callbackUrl} result={result} />}
     </main>
   );
 }
@@ -185,8 +199,14 @@ function ConsentStep({ onContinue }: { onContinue: () => void }) {
       />
       <ul className="grid gap-2 text-sm leading-relaxed text-muted">
         <li>- Have your accepted ID document ready in hand before you continue.</li>
-        <li>- You&apos;ll photograph the front of it live with your camera -- uploading a saved photo is not accepted.</li>
-        <li>- You&apos;ll take a short selfie and follow an on-screen instruction, such as turning your head.</li>
+        <li>
+          - You&apos;ll photograph the front of it live with your camera -- uploading a saved photo
+          is not accepted.
+        </li>
+        <li>
+          - You&apos;ll take a short selfie and follow an on-screen instruction, such as turning
+          your head.
+        </li>
         <li>- Your evidence is stored privately and only used for this verification.</li>
         <li>- A result of Verified, Under review, or Unsuccessful will show here.</li>
       </ul>
@@ -330,19 +350,22 @@ const RESULT_PRESENTATION: Record<
     Icon: Clock,
     color: 'text-warning',
     title: 'Under review',
-    description: 'Your submission is being reviewed. We will update your status once it is resolved.',
+    description:
+      'Your submission is being reviewed. We will update your status once it is resolved.',
   },
   IN_PROGRESS: {
     Icon: Clock,
     color: 'text-warning',
     title: 'Under review',
-    description: 'Your submission is being reviewed. We will update your status once it is resolved.',
+    description:
+      'Your submission is being reviewed. We will update your status once it is resolved.',
   },
   DECLINED: {
     Icon: XCircle,
     color: 'text-danger',
     title: 'Unsuccessful',
-    description: 'We could not verify your identity from this submission. You can try again from Dialect Library.',
+    description:
+      'We could not verify your identity from this submission. You can try again from Dialect Library.',
   },
   ABANDONED: {
     Icon: RotateCcw,
@@ -435,7 +458,9 @@ function CameraCapture({
     const ctx = canvas.getContext('2d');
     if (!ctx) return Promise.resolve(null);
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), CAPTURE_CONTENT_TYPE, 0.9));
+    return new Promise((resolve) =>
+      canvas.toBlob((blob) => resolve(blob), CAPTURE_CONTENT_TYPE, 0.9),
+    );
   }
 
   async function handleSingleCapture() {
@@ -465,7 +490,9 @@ function CameraCapture({
       <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-4 text-center text-sm">
         <Camera className="mx-auto size-6 text-muted" aria-hidden="true" />
         <p className="font-bold text-danger">{permissionError}</p>
-        <p className="text-muted">Please allow camera access in your browser and reload this page.</p>
+        <p className="text-muted">
+          Please allow camera access in your browser and reload this page.
+        </p>
       </div>
     );
   }
@@ -475,13 +502,7 @@ function CameraCapture({
       <div
         className={`relative overflow-hidden rounded-lg border border-line bg-black ${oval ? 'aspect-[3/4]' : 'aspect-[4/3]'}`}
       >
-        <video
-          autoPlay
-          className="size-full object-cover"
-          muted
-          playsInline
-          ref={videoRef}
-        />
+        <video autoPlay className="size-full object-cover" muted playsInline ref={videoRef} />
         {rectGuide && (
           <div className="pointer-events-none absolute inset-0 grid place-items-center p-6">
             <div className="relative aspect-[1.586/1] w-full max-w-md">

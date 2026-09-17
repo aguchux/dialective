@@ -16,7 +16,9 @@ function ctxWith(organizationId: string) {
 describe('SecurityPolicyEntitlementGuard.canActivate', () => {
   it('throws ForbiddenException when the plan flag is off', async () => {
     const { guard, prisma } = setup();
-    prisma.subscription.findUnique.mockResolvedValue({ plan: { enterpriseSecurityPoliciesEnabled: false } });
+    prisma.subscription.findUnique.mockResolvedValue({
+      plan: { enterpriseSecurityPoliciesEnabled: false },
+    });
 
     await expect(guard.canActivate(ctxWith('org-1'))).rejects.toThrow(ForbiddenException);
   });
@@ -30,7 +32,9 @@ describe('SecurityPolicyEntitlementGuard.canActivate', () => {
 
   it('allows when the plan flag is on', async () => {
     const { guard, prisma } = setup();
-    prisma.subscription.findUnique.mockResolvedValue({ plan: { enterpriseSecurityPoliciesEnabled: true } });
+    prisma.subscription.findUnique.mockResolvedValue({
+      plan: { enterpriseSecurityPoliciesEnabled: true },
+    });
 
     const result = await guard.canActivate(ctxWith('org-1'));
 

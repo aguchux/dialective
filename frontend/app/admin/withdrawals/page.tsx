@@ -204,7 +204,9 @@ export default function AdminWithdrawalsPage() {
           </div>
         )}
         {bulkError && (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger">{bulkError}</p>
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger">
+            {bulkError}
+          </p>
         )}
 
         <div className="overflow-x-auto rounded-lg border border-line bg-white">
@@ -391,7 +393,8 @@ function WithdrawalRow({
             className={`rounded-full px-2 py-1 ${withdrawal.wallet.user.phoneVerified ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-danger'}`}
           >
             Mobile: {withdrawal.wallet.user.phoneVerified ? 'Verified' : 'Unverified'}
-            {withdrawal.wallet.user.phoneNumberMasked && ` ${withdrawal.wallet.user.phoneNumberMasked}`}
+            {withdrawal.wallet.user.phoneNumberMasked &&
+              ` ${withdrawal.wallet.user.phoneNumberMasked}`}
           </span>
           <span
             className={`rounded-full px-2 py-1 ${withdrawal.wallet.user.kycStatus === 'APPROVED' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}

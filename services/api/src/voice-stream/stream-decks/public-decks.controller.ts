@@ -60,7 +60,12 @@ export class PublicDecksController {
     @Param('id') id: string,
     @Body() dto: CopyPublicDeckDto,
   ) {
-    return this.publicDecks.copyToOwnDeck(subscriber.organizationId, subscriber.sub, id, dto.newDeckName);
+    return this.publicDecks.copyToOwnDeck(
+      subscriber.organizationId,
+      subscriber.sub,
+      id,
+      dto.newDeckName,
+    );
   }
 
   @Post(':id/import-to-validation-queue')

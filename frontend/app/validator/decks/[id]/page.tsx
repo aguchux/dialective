@@ -97,7 +97,10 @@ export default function ValidatorDeckDetailPage() {
 
   return (
     <div className="mx-auto grid max-w-4xl gap-6 p-4 sm:p-6">
-      <Link className="inline-flex items-center gap-1 text-sm font-bold text-accent" href="/validator?view=decks">
+      <Link
+        className="inline-flex items-center gap-1 text-sm font-bold text-accent"
+        href="/validator?view=decks"
+      >
         <ChevronLeft className="size-4" aria-hidden="true" />
         Stream Decks
       </Link>
@@ -106,7 +109,11 @@ export default function ValidatorDeckDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             {renaming ? (
-              <RenameDeckForm deckId={deck.id} initialName={deck.name} onDone={() => setRenaming(false)} />
+              <RenameDeckForm
+                deckId={deck.id}
+                initialName={deck.name}
+                onDone={() => setRenaming(false)}
+              />
             ) : (
               <button
                 className="text-left text-2xl font-black hover:underline"
@@ -135,7 +142,11 @@ export default function ValidatorDeckDetailPage() {
               onClick={() => void handleSubmit()}
               type="button"
             >
-              {submitting ? 'Submitting…' : deck.status === 'REJECTED' ? 'Resubmit for approval' : 'Submit for approval'}
+              {submitting
+                ? 'Submitting…'
+                : deck.status === 'REJECTED'
+                  ? 'Resubmit for approval'
+                  : 'Submit for approval'}
             </button>
             {submitError && <p className="mt-2 text-sm font-bold text-danger">{submitError}</p>}
           </div>
@@ -143,7 +154,10 @@ export default function ValidatorDeckDetailPage() {
       </section>
 
       {deck.status === 'DRAFT' && (
-        <form className={`${cardClass} flex flex-wrap items-end gap-3 p-4`} onSubmit={(e) => void handleAddItem(e)}>
+        <form
+          className={`${cardClass} flex flex-wrap items-end gap-3 p-4`}
+          onSubmit={(e) => void handleAddItem(e)}
+        >
           <label className="grid flex-1 gap-1 text-sm font-bold">
             Recording ID
             <input
@@ -164,7 +178,9 @@ export default function ValidatorDeckDetailPage() {
       )}
 
       <section className="grid gap-2">
-        <h2 className="text-lg font-black">{deck.items.length} recording{deck.items.length === 1 ? '' : 's'}</h2>
+        <h2 className="text-lg font-black">
+          {deck.items.length} recording{deck.items.length === 1 ? '' : 's'}
+        </h2>
         {deck.items.length === 0 ? (
           <EmptyPanel icon={ClipboardCheck} title="No recordings in this deck yet" />
         ) : (
@@ -203,7 +219,10 @@ function DeckAuditTrail({ deckId }: { deckId: string }) {
   return (
     <ol className={`${cardClass} grid gap-3 p-4`}>
       {entries.map((entry) => (
-        <li className="grid gap-0.5 border-b border-line pb-3 text-sm last:border-0 last:pb-0" key={entry.id}>
+        <li
+          className="grid gap-0.5 border-b border-line pb-3 text-sm last:border-0 last:pb-0"
+          key={entry.id}
+        >
           <span className="font-black">{entry.action}</span>
           {entry.fromStatus && entry.toStatus && (
             <span className="text-xs text-muted">
@@ -268,7 +287,14 @@ function DeckItemRow({
 }: {
   deckId: string;
   editable: boolean;
-  item: { id: string; recordingId: string; validationStatus: ValidatorItemStatus; validatorScore: string | null; validatorNotes: string | null; scoredAt: string | null };
+  item: {
+    id: string;
+    recordingId: string;
+    validationStatus: ValidatorItemStatus;
+    validatorScore: string | null;
+    validatorNotes: string | null;
+    scoredAt: string | null;
+  };
   onRemove: () => void;
 }) {
   const [scoreItem, { isLoading }] = useScoreValidatorDeckItemMutation();
@@ -283,7 +309,9 @@ function DeckItemRow({
         )}
       </div>
       <div className="flex items-center gap-2">
-        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${ITEM_STATUS_STYLES[item.validationStatus]}`}>
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-bold ${ITEM_STATUS_STYLES[item.validationStatus]}`}
+        >
           {item.validationStatus}
           {item.validatorScore ? ` · ${item.validatorScore}` : ''}
         </span>
@@ -339,7 +367,11 @@ function ScoreItemDialog({
   initialScore: string | null;
   initialStatus: ValidatorItemStatus;
   onClose: () => void;
-  onSubmit: (body: { status: ValidatorItemStatus; score?: number; notes?: string }) => Promise<void>;
+  onSubmit: (body: {
+    status: ValidatorItemStatus;
+    score?: number;
+    notes?: string;
+  }) => Promise<void>;
   submitting: boolean;
 }) {
   const [status, setStatus] = useState<ValidatorItemStatus>(initialStatus);
@@ -356,8 +388,15 @@ function ScoreItemDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-40 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true">
-      <form className={`${cardClass} grid w-full max-w-sm gap-3 p-5`} onSubmit={(e) => void handleSubmit(e)}>
+    <div
+      className="fixed inset-0 z-40 grid place-items-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <form
+        className={`${cardClass} grid w-full max-w-sm gap-3 p-5`}
+        onSubmit={(e) => void handleSubmit(e)}
+      >
         <h2 className="text-lg font-black">Score recording</h2>
         <label className="grid gap-1 text-sm font-bold">
           Status
@@ -392,7 +431,11 @@ function ScoreItemDialog({
           />
         </label>
         <div className="mt-1 flex justify-end gap-2">
-          <button className="min-h-10 rounded-lg border border-line px-3 font-bold" onClick={onClose} type="button">
+          <button
+            className="min-h-10 rounded-lg border border-line px-3 font-bold"
+            onClick={onClose}
+            type="button"
+          >
             Cancel
           </button>
           <button

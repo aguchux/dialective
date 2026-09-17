@@ -45,11 +45,11 @@ QRAC is configured in **Admin > Settings > Voice Quality Gate**. The settings
 are stored on the singleton `PlatformSettings` record and take effect on the
 next attempt to load an assignment.
 
-| Setting | Behaviour |
-| --- | --- |
-| `qracEnabled` | Master switch. When off, QRAC does not block any training assignment. |
+| Setting                      | Behaviour                                                                                                                              |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `qracEnabled`                | Master switch. When off, QRAC does not block any training assignment.                                                                  |
 | `qracRequiredAtSessionStart` | Selects session-start mode. When on with QRAC enabled, a trainer must sign QRAC before the first assignment in every new task session. |
-| `qracIntervalMinutes` | Selects the periodic mode interval. It is used only when QRAC is enabled and session-start mode is off. |
+| `qracIntervalMinutes`        | Selects the periodic mode interval. It is used only when QRAC is enabled and session-start mode is off.                                |
 
 ### Modes
 
@@ -106,13 +106,13 @@ QRAC by calling the API directly or by hiding the dialog in the browser.
 Every successful affirmation creates an append-only
 `QracAffirmationSubmission` record. The record contains:
 
-| Field | Meaning |
-| --- | --- |
-| `userId` | Trainer who made the affirmation. |
-| `sessionId` | Training session associated with the affirmation. |
-| `signedAt` | Timestamp of the successful server-side signing. |
-| `version` | Per-trainer sequential record version, such as `1.0`, `1.1`, then `2.0`. This identifies the signing sequence, not the checklist wording. |
-| `checklistVersion` | Version of the checklist text that was affirmed. The current version is `v1`. |
+| Field              | Meaning                                                                                                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `userId`           | Trainer who made the affirmation.                                                                                                         |
+| `sessionId`        | Training session associated with the affirmation.                                                                                         |
+| `signedAt`         | Timestamp of the successful server-side signing.                                                                                          |
+| `version`          | Per-trainer sequential record version, such as `1.0`, `1.1`, then `2.0`. This identifies the signing sequence, not the checklist wording. |
+| `checklistVersion` | Version of the checklist text that was affirmed. The current version is `v1`.                                                             |
 
 The same transaction updates `TrainingSession.lastQracAt`. That timestamp is
 used by periodic mode to determine when the trainer must re-affirm. A session

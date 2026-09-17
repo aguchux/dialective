@@ -37,11 +37,14 @@ export default function AdminAiConversationsPage() {
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [faqDraft, setFaqDraft] = useState<{ question: string; messageId: string } | null>(null);
-  const [issueDraft, setIssueDraft] = useState<{ question: string; messageId: string } | null>(null);
+  const [issueDraft, setIssueDraft] = useState<{ question: string; messageId: string } | null>(
+    null,
+  );
   const [issueTitle, setIssueTitle] = useState('');
   const [issueBody, setIssueBody] = useState('');
   const [issueError, setIssueError] = useState('');
-  const [createIssue, { isLoading: isCreatingIssue }] = useCreateAdminAssistantGithubIssueMutation();
+  const [createIssue, { isLoading: isCreatingIssue }] =
+    useCreateAdminAssistantGithubIssueMutation();
   const deferredSearch = useDeferredValue(search.trim());
   const { data, isFetching, isLoading, isError } = useGetAdminAssistantConversationsQuery({
     page,
@@ -332,7 +335,9 @@ export default function AdminAiConversationsPage() {
                   }).unwrap();
                   setIssueDraft(null);
                 } catch {
-                  setIssueError('Unable to create the Git issue. Check the backlog integration and try again.');
+                  setIssueError(
+                    'Unable to create the Git issue. Check the backlog integration and try again.',
+                  );
                 }
               }}
             >
@@ -359,11 +364,28 @@ export default function AdminAiConversationsPage() {
                   value={issueBody}
                 />
               </label>
-              {issueError && <p className="text-sm font-bold text-danger" role="alert">{issueError}</p>}
+              {issueError && (
+                <p className="text-sm font-bold text-danger" role="alert">
+                  {issueError}
+                </p>
+              )}
               <div className="flex justify-end gap-2">
-                <button className="min-h-10 rounded-lg border border-line px-4 font-bold" disabled={isCreatingIssue} onClick={() => setIssueDraft(null)} type="button">Cancel</button>
-                <button className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-accent px-4 font-bold text-white disabled:opacity-60" disabled={isCreatingIssue} type="submit">
-                  {isCreatingIssue && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                <button
+                  className="min-h-10 rounded-lg border border-line px-4 font-bold"
+                  disabled={isCreatingIssue}
+                  onClick={() => setIssueDraft(null)}
+                  type="button"
+                >
+                  Cancel
+                </button>
+                <button
+                  className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-accent px-4 font-bold text-white disabled:opacity-60"
+                  disabled={isCreatingIssue}
+                  type="submit"
+                >
+                  {isCreatingIssue && (
+                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  )}
                   {isCreatingIssue ? 'Creating...' : 'Create issue'}
                 </button>
               </div>

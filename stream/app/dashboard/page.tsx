@@ -118,7 +118,11 @@ export default function OverviewPage() {
             {formatDateRangeLabel(from, to)}
           </span>
           {canViewReports && (
-            <SecondaryButton disabled={downloading} onClick={() => void handleExport()} type="button">
+            <SecondaryButton
+              disabled={downloading}
+              onClick={() => void handleExport()}
+              type="button"
+            >
               <Download aria-hidden="true" className="size-3.5" />
               {downloading ? 'Exporting...' : 'Download'}
             </SecondaryButton>
@@ -189,7 +193,8 @@ export default function OverviewPage() {
                   </button>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold text-ink">
-                      {item.dialect?.name ?? item.dialectTag} {item.country ? `(${item.country.name})` : ''}
+                      {item.dialect?.name ?? item.dialectTag}{' '}
+                      {item.country ? `(${item.country.name})` : ''}
                     </p>
                     <p className="text-xs text-muted">
                       {item.durationMs ? `${Math.round(item.durationMs / 1000)}s` : '—'}
@@ -242,8 +247,18 @@ export default function OverviewPage() {
                     color: 'var(--color-ink)',
                   }}
                 />
-                <Bar dataKey="successful" fill="var(--color-accent)" radius={[3, 3, 0, 0]} stackId="a" />
-                <Bar dataKey="failed" fill="var(--color-danger)" radius={[3, 3, 0, 0]} stackId="a" />
+                <Bar
+                  dataKey="successful"
+                  fill="var(--color-accent)"
+                  radius={[3, 3, 0, 0]}
+                  stackId="a"
+                />
+                <Bar
+                  dataKey="failed"
+                  fill="var(--color-danger)"
+                  radius={[3, 3, 0, 0]}
+                  stackId="a"
+                />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -286,12 +301,16 @@ export default function OverviewPage() {
         </Card>
       </div>
 
-      {!org?.subscription || org.subscription.status === 'CANCELED' || org.subscription.status === 'SUSPENDED' ? (
+      {!org?.subscription ||
+      org.subscription.status === 'CANCELED' ||
+      org.subscription.status === 'SUSPENDED' ? (
         <Card className="border-warning/30 bg-warning/5 p-5">
-          <p className="font-bold text-ink">Activate a subscription to start streaming voice data</p>
+          <p className="font-bold text-ink">
+            Activate a subscription to start streaming voice data
+          </p>
           <p className="mt-1 text-sm text-muted">
-            Search and preview are always available; creating Stream Decks and previewing
-            recordings require an active monthly subscription.
+            Search and preview are always available; creating Stream Decks and previewing recordings
+            require an active monthly subscription.
           </p>
           <Link className="mt-3 inline-block" href="/dashboard/billing">
             <PrimaryButton type="button">View plans</PrimaryButton>
@@ -315,10 +334,7 @@ function MetricCard({
   unit?: string;
   chartData: number[];
 }) {
-  const sparkline = useMemo(
-    () => chartData.slice(-14).map((v, i) => ({ i, v })),
-    [chartData],
-  );
+  const sparkline = useMemo(() => chartData.slice(-14).map((v, i) => ({ i, v })), [chartData]);
 
   return (
     <Card className="flex min-h-32 items-start gap-3 p-4 md:p-5">

@@ -1,5 +1,13 @@
 import { SystemUpdateKind } from '@dialectiva/db';
-import { IsBoolean, IsEnum, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import {
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class CreateSystemUpdateDto {
   @IsEnum(SystemUpdateKind)

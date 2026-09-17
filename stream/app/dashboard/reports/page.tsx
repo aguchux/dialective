@@ -12,7 +12,15 @@ import {
 import { Card, FieldLabel, PageHeading, SecondaryButton } from '@/components/ui';
 import { downloadCsvReport } from '@/lib/download-csv-report';
 
-function ExportButton({ path, filename, label }: { path: string; filename: string; label?: string }) {
+function ExportButton({
+  path,
+  filename,
+  label,
+}: {
+  path: string;
+  filename: string;
+  label?: string;
+}) {
   const [downloading, setDownloading] = useState(false);
 
   async function handleExport() {
@@ -40,16 +48,24 @@ function DatasetQualitySection() {
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <p className="font-bold text-ink">Dataset Quality</p>
-          <p className="text-sm text-muted">Confidence-tier breakdown of the full eligible catalogue.</p>
+          <p className="text-sm text-muted">
+            Confidence-tier breakdown of the full eligible catalogue.
+          </p>
         </div>
-        <ExportButton filename="dataset-quality-report.csv" path="/reports/dataset-quality?format=csv" />
+        <ExportButton
+          filename="dataset-quality-report.csv"
+          path="/reports/dataset-quality?format=csv"
+        />
       </div>
       {isLoading ? (
         <p className="text-sm text-muted">Loading...</p>
       ) : data ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
           <Stat label="Eligible recordings" value={data.totalEligibleRecordings.toLocaleString()} />
-          <Stat label="Premium Verified" value={data.tierCounts.premium_verified.toLocaleString()} />
+          <Stat
+            label="Premium Verified"
+            value={data.tierCounts.premium_verified.toLocaleString()}
+          />
           <Stat label="High Confidence" value={data.tierCounts.high.toLocaleString()} />
           <Stat label="Mean ISVS" value={data.meanIsvs?.toFixed(1) ?? '—'} />
           <Stat label="Mean agreement" value={data.meanAgreement?.toFixed(1) ?? '—'} />
@@ -78,8 +94,14 @@ function ValidationContributionSection() {
         <p className="text-sm text-muted">Loading...</p>
       ) : data && data.totalRecordingsValidated > 0 ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <Stat label="Recordings validated" value={data.totalRecordingsValidated.toLocaleString()} />
-          <Stat label="Avg. validators/recording" value={data.averageValidatorCount?.toFixed(1) ?? '—'} />
+          <Stat
+            label="Recordings validated"
+            value={data.totalRecordingsValidated.toLocaleString()}
+          />
+          <Stat
+            label="Avg. validators/recording"
+            value={data.averageValidatorCount?.toFixed(1) ?? '—'}
+          />
           <Stat label="Avg. score contributed" value={data.averageMeanScore?.toFixed(1) ?? '—'} />
         </div>
       ) : (
@@ -168,7 +190,8 @@ function AnomalyEventsSection() {
       <div className="mb-4">
         <p className="font-bold text-ink">Anomaly Alerts</p>
         <p className="text-sm text-muted">
-          Automatically detected unusual activity on your Stream Keys and OAuth clients (checked hourly).
+          Automatically detected unusual activity on your Stream Keys and OAuth clients (checked
+          hourly).
         </p>
       </div>
       {isLoading ? (
@@ -183,7 +206,8 @@ function AnomalyEventsSection() {
                   {ANOMALY_RULE_LABELS[row.ruleKey] ?? row.ruleKey}
                 </p>
                 <p className="text-xs text-muted">
-                  {new Date(row.windowStart).toLocaleString()} - {new Date(row.windowEnd).toLocaleString()}
+                  {new Date(row.windowStart).toLocaleString()} -{' '}
+                  {new Date(row.windowEnd).toLocaleString()}
                 </p>
               </div>
             </div>
@@ -202,7 +226,8 @@ function AuditExportsSection() {
       <div className="mb-4">
         <p className="font-bold text-ink">Audit Exports</p>
         <p className="text-sm text-muted">
-          Raw request logs, webhook delivery history, and org activity -- for compliance or your own analysis.
+          Raw request logs, webhook delivery history, and org activity -- for compliance or your own
+          analysis.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">

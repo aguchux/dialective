@@ -33,7 +33,9 @@ export class SubscriberAnalyticsService {
   async build(organizationId: string, from?: Date, to?: Date): Promise<SubscriberAnalyticsReport> {
     const where = {
       organizationId,
-      ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
+      ...(from || to
+        ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } }
+        : {}),
     };
 
     const [totalRequests, byType, byResult, byDeck, audioRows] = await Promise.all([
@@ -84,7 +86,8 @@ export class SubscriberAnalyticsService {
       (sum, row) => sum + (row.durationStreamedMs ?? 0),
       0,
     );
-    const deniedRequestRate = totalRequests > 0 ? Number((deniedCount / totalRequests).toFixed(4)) : 0;
+    const deniedRequestRate =
+      totalRequests > 0 ? Number((deniedCount / totalRequests).toFixed(4)) : 0;
 
     return {
       totalRequests,
@@ -139,7 +142,11 @@ export class SubscriberAnalyticsService {
     while (cursor <= end) {
       const day = cursor.toISOString().slice(0, 10);
       const bucket = buckets.get(day) ?? { successful: 0, failed: 0 };
-      points.push({ date: day, successfulRequests: bucket.successful, failedRequests: bucket.failed });
+      points.push({
+        date: day,
+        successfulRequests: bucket.successful,
+        failedRequests: bucket.failed,
+      });
       cursor.setUTCDate(cursor.getUTCDate() + 1);
     }
     return points;

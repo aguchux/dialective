@@ -592,7 +592,10 @@ export class WalletController {
       // omitted COURSE_COMPLETION_REWARD while wallet/report's equivalent
       // figure included it, so the same "Total earned" label showed two
       // different numbers depending which screen a trainer was on.
-      trainingEarningsTokens: ledgerAmount(['TRAINING_PAYOUT', 'COURSE_COMPLETION_REWARD']).toString(),
+      trainingEarningsTokens: ledgerAmount([
+        'TRAINING_PAYOUT',
+        'COURSE_COMPLETION_REWARD',
+      ]).toString(),
       referralEarningsTokens: ledgerAmount([
         'REFERRAL_COMMISSION',
         'REFERRAL_FUNDING_BONUS',
@@ -925,10 +928,7 @@ export class WalletController {
     const accountLabel = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email;
     const pdf = await renderProofAccountPdf(report, `${accountLabel} (${user.email})`);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="proof-account-${user.id}.pdf"`,
-    );
+    res.setHeader('Content-Disposition', `attachment; filename="proof-account-${user.id}.pdf"`);
     res.send(pdf);
   }
 
@@ -974,7 +974,9 @@ export class WalletController {
   @Get('wallet/proof-report')
   @UseGuards(JwtAuthGuard)
   async getMyProofAccountReport(@Req() req: AuthenticatedRequest) {
-    const share = await this.prisma.proofReportShare.findUnique({ where: { userId: req.user.sub } });
+    const share = await this.prisma.proofReportShare.findUnique({
+      where: { userId: req.user.sub },
+    });
     if (!share) {
       throw new NotFoundException('No proof report has been shared with you yet');
     }
@@ -1040,7 +1042,13 @@ export class WalletController {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
     const contextHash = depositContextHash({ usdAmount: body.usdAmount, currency: body.currency });
     const { destination, channel } = await resolveOtpDestination(user, this.platformSettings);
-    return this.otp.issueForUser(req.user.sub, OtpPurpose.DEPOSIT, destination, contextHash, channel);
+    return this.otp.issueForUser(
+      req.user.sub,
+      OtpPurpose.DEPOSIT,
+      destination,
+      contextHash,
+      channel,
+    );
   }
 
   @Post('wallet/deposits')
@@ -1108,7 +1116,13 @@ export class WalletController {
     // depositContextHash as-is rather than a Flutterwave-specific variant.
     const contextHash = depositContextHash({ usdAmount: body.usdAmount, currency: body.currency });
     const { destination, channel } = await resolveOtpDestination(user, this.platformSettings);
-    return this.otp.issueForUser(req.user.sub, OtpPurpose.DEPOSIT, destination, contextHash, channel);
+    return this.otp.issueForUser(
+      req.user.sub,
+      OtpPurpose.DEPOSIT,
+      destination,
+      contextHash,
+      channel,
+    );
   }
 
   /**
@@ -1598,7 +1612,9 @@ export class WalletController {
         ),
       );
     } catch (err) {
-      this.logger.error(`Failed to send referral funding-bonus SMS: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.error(
+        `Failed to send referral funding-bonus SMS: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 
@@ -1976,10 +1992,7 @@ export class WalletController {
       );
     }
 
-    if (
-      reported.currency &&
-      reported.currency.toUpperCase() !== deposit.currency.toUpperCase()
-    ) {
+    if (reported.currency && reported.currency.toUpperCase() !== deposit.currency.toUpperCase()) {
       this.logger.error(
         `Flutterwave currency mismatch deposit=${deposit.id} expected=${deposit.currency} reported=${reported.currency}`,
       );
@@ -2570,8 +2583,7 @@ export class WalletController {
                   destinationMobileNetwork: payoutAccount.mobileMoneyNetwork,
                   destinationMobileNumberEncryptedJson:
                     payoutAccount.mobileMoneyNumberEncryptedJson as
-                      | Prisma.InputJsonValue
-                      | undefined,
+                      Prisma.InputJsonValue | undefined,
                   destinationMobileNumberMasked: payoutAccount.mobileMoneyNumberMasked,
                 }),
         }
@@ -3192,7 +3204,13 @@ export class WalletController {
         throw err;
       }
       const result = await this.nowPayments.getPayoutStatus(withdrawal.providerPayoutId);
-      await this.recordNowPaymentsPayoutStatus(id, result.payoutId, 'cancel', result.status, result.raw);
+      await this.recordNowPaymentsPayoutStatus(
+        id,
+        result.payoutId,
+        'cancel',
+        result.status,
+        result.raw,
+      );
     }
 
     const refreshed = await this.prisma.withdrawalRequest.findUniqueOrThrow({ where: { id } });
@@ -3437,7 +3455,9 @@ export class WalletController {
       const detailsSubmitted = Boolean(data.details_submitted);
       const payoutsEnabled = Boolean(data.payouts_enabled);
       const account = stripeAccountId
-        ? await this.prisma.payoutAccount.findFirst({ where: { stripeConnectAccountId: stripeAccountId } })
+        ? await this.prisma.payoutAccount.findFirst({
+            where: { stripeConnectAccountId: stripeAccountId },
+          })
         : null;
       await this.prisma.$transaction([
         ...(account
@@ -3459,7 +3479,9 @@ export class WalletController {
             eventHash: event.id,
             eventType: event.type,
             payload: data as unknown as Prisma.InputJsonValue,
-            processingError: account ? undefined : 'No PayoutAccount matched this connected account',
+            processingError: account
+              ? undefined
+              : 'No PayoutAccount matched this connected account',
           },
         }),
       ]);
@@ -3549,7 +3571,12 @@ export class WalletController {
       throw new UnprocessableEntityException('This withdrawal is not a Stripe payout');
     }
 
-    await this.verifyAdminPayoutOtpIfEnabled(req.user.sub, withdrawal, body.otpRequestId, body.code);
+    await this.verifyAdminPayoutOtpIfEnabled(
+      req.user.sub,
+      withdrawal,
+      body.otpRequestId,
+      body.code,
+    );
 
     // Same atomic-claim pattern as submit-flutterwave -- only the request
     // that wins this update proceeds to createTransfer.
@@ -4268,8 +4295,10 @@ export class WalletController {
 
   private mapStripeTransferStatus(status: string | null | undefined): WithdrawalStatus {
     const normalized = status?.toLowerCase();
-    if (normalized && STRIPE_TRANSFER_FINISHED_STATUSES.has(normalized)) return WithdrawalStatus.PAID;
-    if (normalized && STRIPE_TRANSFER_FAILED_STATUSES.has(normalized)) return WithdrawalStatus.FAILED;
+    if (normalized && STRIPE_TRANSFER_FINISHED_STATUSES.has(normalized))
+      return WithdrawalStatus.PAID;
+    if (normalized && STRIPE_TRANSFER_FAILED_STATUSES.has(normalized))
+      return WithdrawalStatus.FAILED;
     return WithdrawalStatus.PROCESSING;
   }
 

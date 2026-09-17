@@ -83,7 +83,7 @@ describe('SettlementAdminService', () => {
       expect(result.stuckCount).toBe(1);
     });
 
-    it('scopes the query by userId when provided, for a single trainer\'s pending-scoring view', async () => {
+    it("scopes the query by userId when provided, for a single trainer's pending-scoring view", async () => {
       prisma.wordRecording.findMany.mockResolvedValue([]);
 
       await service.listUnsettled({ page: 1, pageSize: 20, userId: 'user-1' });
@@ -140,8 +140,18 @@ describe('SettlementAdminService', () => {
 
       const result = await service.settleOne('rec-1', false);
 
-      expect(creditTrainingPayoutOps).toHaveBeenCalledWith(prisma, 'user-1', expect.anything(), 'rec-1');
-      expect(mintTrainingPayoutOps).toHaveBeenCalledWith(prisma, 'user-1', expect.anything(), 'rec-1');
+      expect(creditTrainingPayoutOps).toHaveBeenCalledWith(
+        prisma,
+        'user-1',
+        expect.anything(),
+        'rec-1',
+      );
+      expect(mintTrainingPayoutOps).toHaveBeenCalledWith(
+        prisma,
+        'user-1',
+        expect.anything(),
+        'rec-1',
+      );
       expect(prisma.wordRecording.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'rec-1' },

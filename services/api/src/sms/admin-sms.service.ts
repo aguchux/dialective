@@ -115,10 +115,15 @@ export class AdminSmsService {
       where: { id: dto.recipientId },
       select: { id: true, phoneNumber: true },
     });
-    if (!recipient?.phoneNumber) throw new NotFoundException('Recipient phone number was not found');
+    if (!recipient?.phoneNumber)
+      throw new NotFoundException('Recipient phone number was not found');
 
     try {
-      const result = await this.sms.sendTransactional(recipient.phoneNumber, dto.message, dto.provider);
+      const result = await this.sms.sendTransactional(
+        recipient.phoneNumber,
+        dto.message,
+        dto.provider,
+      );
       const record = await this.prisma.adminSmsMessage.create({
         data: {
           senderId: adminId,
@@ -129,9 +134,15 @@ export class AdminSmsService {
           status: 'SENT',
         },
       });
-      return { id: record.id, status: record.status, provider: result.provider, createdAt: record.createdAt };
+      return {
+        id: record.id,
+        status: record.status,
+        provider: result.provider,
+        createdAt: record.createdAt,
+      };
     } catch (error) {
-      const failureReason = error instanceof Error ? error.message.slice(0, 500) : 'SMS delivery failed';
+      const failureReason =
+        error instanceof Error ? error.message.slice(0, 500) : 'SMS delivery failed';
       await this.prisma.adminSmsMessage.create({
         data: {
           senderId: adminId,

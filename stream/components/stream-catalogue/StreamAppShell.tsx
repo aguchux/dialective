@@ -6,7 +6,13 @@ import { useSession } from 'next-auth/react';
 import { ArrowRight, RefreshCw, X } from 'lucide-react';
 import { useGetCatalogueShowcaseQuery } from '@/store/api';
 import { defaultFilters } from './mock-data';
-import type { CatalogueCollection, CatalogueFilters, FilterKey, StreamDeck, VerifiedSpeaker } from './types';
+import type {
+  CatalogueCollection,
+  CatalogueFilters,
+  FilterKey,
+  StreamDeck,
+  VerifiedSpeaker,
+} from './types';
 import { CollectionCard } from './CollectionCard';
 import { CollectionInspector } from './CollectionInspector';
 import { DiscoverHero } from './DiscoverHero';
@@ -234,7 +240,9 @@ export function StreamAppShell() {
           <div className="mx-auto grid min-w-0 max-w-[1360px] gap-5 px-4 py-5 sm:px-5 lg:px-7">
             {isError && (
               <div className="flex items-center justify-between gap-3 rounded-[10px] border border-catalogue-yellow/40 bg-catalogue-yellow/10 px-4 py-2.5 text-xs text-catalogue-ink">
-                <span>Couldn&apos;t load the voice catalogue. Showing what&apos;s cached, if anything.</span>
+                <span>
+                  Couldn&apos;t load the voice catalogue. Showing what&apos;s cached, if anything.
+                </span>
                 <button
                   className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-catalogue-line-strong px-2.5 py-1 font-semibold hover:bg-catalogue-surface-hover"
                   onClick={() => void refetch()}
@@ -336,7 +344,11 @@ export function StreamAppShell() {
                 onAdd={toggleDeckAdded}
                 onSelect={selectDeck}
               />
-              <VerifiedVoices isLoading={isLoading} onSelect={selectSpeaker} speakers={verifiedSpeakers} />
+              <VerifiedVoices
+                isLoading={isLoading}
+                onSelect={selectSpeaker}
+                speakers={verifiedSpeakers}
+              />
             </div>
           </div>
         </main>

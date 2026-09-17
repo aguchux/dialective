@@ -38,5 +38,4 @@ describe('renderTrainerReportPdf', () => {
 
     expect(buffer.length).toBeGreaterThan(100);
   });
-
 });

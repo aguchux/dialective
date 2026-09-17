@@ -122,6 +122,6 @@ does for Redis.
 4. Fill in GCP's new `secrets/*.env`/`configs/api.env` files.
 5. `kubectl --context <gke-context> apply -k k8s/gcp-cloud/overlays/prod/`
    and confirm `api` comes up healthy (`kubectl rollout status
-   deployment/api`) — it will NOT receive public traffic yet.
+deployment/api`) — it will NOT receive public traffic yet.
 6. Decide and implement the actual cross-cluster routing strategy before
    `api.dialectlibrary.com` ever points at GCP.

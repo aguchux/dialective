@@ -50,7 +50,11 @@ const FLAG_REASONS: { value: ValidatorFlagReason; label: string }[] = [
   { value: 'OTHER', label: 'Other' },
 ];
 
-const SORT_OPTIONS: { sortBy: ValidatorRecordingSortField; sortDir: 'asc' | 'desc'; label: string }[] = [
+const SORT_OPTIONS: {
+  sortBy: ValidatorRecordingSortField;
+  sortDir: 'asc' | 'desc';
+  label: string;
+}[] = [
   { sortBy: 'createdAt', sortDir: 'desc', label: 'Newest' },
   { sortBy: 'createdAt', sortDir: 'asc', label: 'Oldest' },
   { sortBy: 'compositeScore', sortDir: 'desc', label: 'Highest score' },
@@ -73,7 +77,12 @@ interface RecordingFilters {
   maxScore: number | null;
 }
 
-const EMPTY_FILTERS: RecordingFilters = { dialectTag: '', status: null, minScore: null, maxScore: null };
+const EMPTY_FILTERS: RecordingFilters = {
+  dialectTag: '',
+  status: null,
+  minScore: null,
+  maxScore: null,
+};
 
 function countActiveFilters(filters: RecordingFilters): number {
   let count = 0;
@@ -107,7 +116,9 @@ export function TaskMode({ onEndTask }: { onEndTask: () => void }) {
   const pageSize = 20;
   const [activeRecording, setActiveRecording] = useState<ValidatorRecordingSummary | null>(null);
   const [isPlayerExpanded, setIsPlayerExpanded] = useState(false);
-  const [deckPickerRecording, setDeckPickerRecording] = useState<ValidatorRecordingSummary | null>(null);
+  const [deckPickerRecording, setDeckPickerRecording] = useState<ValidatorRecordingSummary | null>(
+    null,
+  );
   const [reviewedCount, setReviewedCount] = useState(0);
   // recordingId -> deckId overrides -- Transcribe/Flag are deck-item-scoped
   // (same as scoring), so the Expanded Player needs to know which deck to
@@ -175,7 +186,11 @@ export function TaskMode({ onEndTask }: { onEndTask: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-bg text-ink" role="dialog" aria-label="Validation task">
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-bg text-ink"
+      role="dialog"
+      aria-label="Validation task"
+    >
       {/*
         Exactly one <audio> element for the lifetime of Task Mode (headless
         -- no native `controls`; MiniPlayer/ExpandedPlayer build their own
@@ -338,17 +353,19 @@ export function TaskMode({ onEndTask }: { onEndTask: () => void }) {
       )}
 
       {isSortSheetOpen && (
-        <SortSheet
-          onClose={() => setIsSortSheetOpen(false)}
-          onSelect={setSort}
-          selected={sort}
-        />
+        <SortSheet onClose={() => setIsSortSheetOpen(false)} onSelect={setSort} selected={sort} />
       )}
     </div>
   );
 }
 
-function TaskModeTopBar({ onEndTask, reviewedCount }: { onEndTask: () => void; reviewedCount: number }) {
+function TaskModeTopBar({
+  onEndTask,
+  reviewedCount,
+}: {
+  onEndTask: () => void;
+  reviewedCount: number;
+}) {
   return (
     <div className="flex h-12 shrink-0 items-center justify-between border-b border-line bg-surface px-3">
       <button
@@ -385,7 +402,10 @@ function SearchToolbar({
     <div className="shrink-0 border-b border-line bg-bg px-4 py-3">
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden="true" />
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
+            aria-hidden="true"
+          />
           <input
             className="min-h-11 w-full rounded-lg border border-line bg-surface pl-9 pr-3 text-sm"
             onChange={(e) => onSearchChange(e.target.value)}
@@ -395,7 +415,9 @@ function SearchToolbar({
         </div>
         <button
           className={`relative flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-sm font-bold ${
-            activeFilterCount > 0 ? 'border-accent text-accent' : 'border-line text-ink hover:bg-surface-muted'
+            activeFilterCount > 0
+              ? 'border-accent text-accent'
+              : 'border-line text-ink hover:bg-surface-muted'
           }`}
           onClick={onFilterOpen}
           type="button"
@@ -544,7 +566,9 @@ function FilterSheet({
 
           <div className="grid grid-cols-2 gap-3">
             <label className="grid gap-1.5">
-              <span className="text-xs font-bold uppercase tracking-wide text-muted">Min score</span>
+              <span className="text-xs font-bold uppercase tracking-wide text-muted">
+                Min score
+              </span>
               <input
                 className="min-h-10 rounded-lg border border-line bg-surface px-3 text-sm"
                 max={100}
@@ -560,7 +584,9 @@ function FilterSheet({
               />
             </label>
             <label className="grid gap-1.5">
-              <span className="text-xs font-bold uppercase tracking-wide text-muted">Max score</span>
+              <span className="text-xs font-bold uppercase tracking-wide text-muted">
+                Max score
+              </span>
               <input
                 className="min-h-10 rounded-lg border border-line bg-surface px-3 text-sm"
                 max={100}
@@ -663,7 +689,9 @@ function RecordingCard({
     <div
       className={`${cardClass} grid gap-2.5 p-3.5 ${isActive ? 'border-accent bg-accent/5' : ''} relative`}
     >
-      {isActive && <span className="absolute inset-y-3 left-0 w-1 rounded-full bg-accent" aria-hidden="true" />}
+      {isActive && (
+        <span className="absolute inset-y-3 left-0 w-1 rounded-full bg-accent" aria-hidden="true" />
+      )}
       <button className="grid gap-2.5 pl-2 text-left" onClick={onSelect} type="button">
         <div className="flex items-center justify-between gap-2">
           <p className="truncate text-xs font-bold uppercase tracking-wide text-muted">
@@ -677,7 +705,9 @@ function RecordingCard({
         </div>
         <p className="line-clamp-2 font-bold leading-snug">{recording.promptText}</p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-          {recording.compositeScore && <ScoreBadge label="Overall" value={recording.compositeScore} />}
+          {recording.compositeScore && (
+            <ScoreBadge label="Overall" value={recording.compositeScore} />
+          )}
           {recording.score && <ScoreBadge label="Score" value={recording.score} />}
           <StatusPill status={recording.status} />
           <span>{formatDateTime(recording.createdAt)}</span>
@@ -777,7 +807,11 @@ function MiniPlayer({
           }
         }}
       >
-        {isPlaying ? <Pause className="size-5" aria-hidden="true" /> : <Play className="size-5" aria-hidden="true" />}
+        {isPlaying ? (
+          <Pause className="size-5" aria-hidden="true" />
+        ) : (
+          <Play className="size-5" aria-hidden="true" />
+        )}
       </span>
     </button>
   );
@@ -814,7 +848,11 @@ function DesktopWorkstation({
         type="button"
         aria-label={isPlaying ? 'Pause' : 'Play'}
       >
-        {isPlaying ? <Pause className="size-5" aria-hidden="true" /> : <Play className="size-5" aria-hidden="true" />}
+        {isPlaying ? (
+          <Pause className="size-5" aria-hidden="true" />
+        ) : (
+          <Play className="size-5" aria-hidden="true" />
+        )}
       </button>
 
       <div className="min-w-0 shrink-0" style={{ width: '220px' }}>
@@ -981,7 +1019,9 @@ function PlaybackSegment({
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
       <div>
-        <p className="text-xs font-bold uppercase tracking-wide text-muted">{recording.dialectTag}</p>
+        <p className="text-xs font-bold uppercase tracking-wide text-muted">
+          {recording.dialectTag}
+        </p>
         <p className="mt-2 text-xl font-black leading-snug">{recording.promptText}</p>
         <p className="mt-1 select-all font-mono text-xs text-muted">{recording.id}</p>
       </div>
@@ -993,13 +1033,19 @@ function PlaybackSegment({
           type="button"
           aria-label={isPlaying ? 'Pause' : 'Play'}
         >
-          {isPlaying ? <Pause className="size-5" aria-hidden="true" /> : <Play className="size-5" aria-hidden="true" />}
+          {isPlaying ? (
+            <Pause className="size-5" aria-hidden="true" />
+          ) : (
+            <Play className="size-5" aria-hidden="true" />
+          )}
         </button>
         <button
           aria-label="Loop selected region"
           aria-pressed={isLoopEnabled}
           className={`grid size-9 shrink-0 place-items-center rounded-lg border ${
-            isLoopEnabled ? 'border-accent bg-accent/10 text-accent' : 'border-line text-muted hover:bg-surface-muted'
+            isLoopEnabled
+              ? 'border-accent bg-accent/10 text-accent'
+              : 'border-line text-muted hover:bg-surface-muted'
           } disabled:cursor-not-allowed disabled:opacity-40`}
           disabled={!loopRegion}
           onClick={() => setIsLoopEnabled((v) => !v)}
@@ -1049,7 +1095,8 @@ function useAudioTime(audioRef: React.RefObject<HTMLAudioElement | null>, record
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
-    const onLoadedMetadata = () => setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
+    const onLoadedMetadata = () =>
+      setDuration(Number.isFinite(audio.duration) ? audio.duration : 0);
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
     return () => {
       cancelAnimationFrame(frame);
@@ -1104,7 +1151,8 @@ function useWaveformPeaks(audioUrl: string | null, recordingId: string): Wavefor
     }
     let cancelled = false;
     const AudioContextCtor =
-      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      window.AudioContext ??
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextCtor) {
       setState({ status: 'error', peaks: null });
       return;
@@ -1229,7 +1277,10 @@ function Waveform({
 
   const previewRegion =
     dragStartRef.current !== null && dragCurrent !== null
-      ? ([Math.min(dragStartRef.current, dragCurrent), Math.max(dragStartRef.current, dragCurrent)] as const)
+      ? ([
+          Math.min(dragStartRef.current, dragCurrent),
+          Math.max(dragStartRef.current, dragCurrent),
+        ] as const)
       : null;
   const visibleRegion = previewRegion ?? loopRegion;
 
@@ -1248,11 +1299,15 @@ function Waveform({
         aria-valuenow={currentTime}
       >
         {peaksStatus === 'ready' && peaks ? (
-          <div className="relative flex h-full items-center gap-px px-1" style={{ width: `${zoom * 100}%` }}>
+          <div
+            className="relative flex h-full items-center gap-px px-1"
+            style={{ width: `${zoom * 100}%` }}
+          >
             {peaks.map((peak, i) => {
               const barTime = (i / peaks.length) * duration;
               const isPlayed = duration > 0 && barTime <= currentTime;
-              const isInRegion = visibleRegion && barTime >= visibleRegion[0] && barTime <= visibleRegion[1];
+              const isInRegion =
+                visibleRegion && barTime >= visibleRegion[0] && barTime <= visibleRegion[1];
               return (
                 <span
                   aria-hidden="true"
@@ -1283,7 +1338,10 @@ function Waveform({
           // and drag-to-loop still work against this plain bar since
           // neither depends on peaks, only on duration/currentTime.
           <div className="relative h-full">
-            <div className="absolute inset-y-0 left-0 right-0 m-auto h-1 rounded-full bg-muted/30" aria-hidden="true" />
+            <div
+              className="absolute inset-y-0 left-0 right-0 m-auto h-1 rounded-full bg-muted/30"
+              aria-hidden="true"
+            />
             {duration > 0 && (
               <span
                 aria-hidden="true"
@@ -1305,7 +1363,9 @@ function Waveform({
         )}
       </div>
       {peaksStatus === 'error' && (
-        <p className="mt-1 text-xs text-muted">Waveform preview unavailable -- tap or drag above to seek/loop.</p>
+        <p className="mt-1 text-xs text-muted">
+          Waveform preview unavailable -- tap or drag above to seek/loop.
+        </p>
       )}
 
       <div className="mt-2 flex items-center justify-between gap-2">
@@ -1423,7 +1483,9 @@ function TranscribeEditor({
   return (
     <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-4">
       <div>
-        <p className="text-xs font-bold uppercase tracking-wide text-muted">{recording.dialectTag}</p>
+        <p className="text-xs font-bold uppercase tracking-wide text-muted">
+          {recording.dialectTag}
+        </p>
         <p className="mt-1 font-bold leading-snug">{recording.promptText}</p>
       </div>
 
@@ -1445,7 +1507,13 @@ function TranscribeEditor({
 
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs font-bold text-muted">
-          {isSaving ? 'Saving…' : savedAt ? 'Saved' : item?.validatorTranscriptUpdatedAt ? 'Unsaved changes' : ''}
+          {isSaving
+            ? 'Saving…'
+            : savedAt
+              ? 'Saved'
+              : item?.validatorTranscriptUpdatedAt
+                ? 'Unsaved changes'
+                : ''}
         </span>
         <ActionButton
           className="min-h-10 rounded-lg bg-accent px-4 text-sm font-extrabold text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
@@ -1483,7 +1551,12 @@ function FlagRecordingSheet({
     if (!deckId || !reason) return;
     setError(null);
     try {
-      await flagItem({ id: deckId, recordingId: recording.id, reason, note: note.trim() || undefined }).unwrap();
+      await flagItem({
+        id: deckId,
+        recordingId: recording.id,
+        reason,
+        note: note.trim() || undefined,
+      }).unwrap();
       setIsFlagged(true);
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to flag this recording.'));
@@ -1605,7 +1678,7 @@ function AddToDeckSheet({
     setError(null);
     const dialect = myDialects?.find((d) => d.dialectTag === recording.dialectTag);
     if (!dialect) {
-      setError('You are not onboarded to this recording\'s dialect.');
+      setError("You are not onboarded to this recording's dialect.");
       return;
     }
     try {

@@ -165,7 +165,10 @@ export class SsoService {
    * JIT -- config.defaultRole is validated at config-creation/update time
    * (SsoIdpConfigService) to never be OWNER.
    */
-  async handleAssertion(config: SsoIdpConfig, assertion: SsoAssertion): Promise<SubscriberAuthResult> {
+  async handleAssertion(
+    config: SsoIdpConfig,
+    assertion: SsoAssertion,
+  ): Promise<SubscriberAuthResult> {
     const existingIdentity = await this.prisma.ssoIdentity.findUnique({
       where: { idpConfigId_nameId: { idpConfigId: config.id, nameId: assertion.nameId } },
       include: { user: true },
@@ -229,7 +232,9 @@ export class SsoService {
       });
 
       const existingMembership = await tx.subscriberMembership.findUnique({
-        where: { userId_organizationId: { userId: targetUser.id, organizationId: config.organizationId } },
+        where: {
+          userId_organizationId: { userId: targetUser.id, organizationId: config.organizationId },
+        },
       });
       if (!existingMembership) {
         await tx.subscriberMembership.create({

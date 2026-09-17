@@ -3,6 +3,7 @@
 This example uses Arc Testnet, but the same deposit pattern applies to any supported EVM chain after substituting the correct chain config, Gateway Wallet address, and USDC address.
 
 Canonical runnable references:
+
 - Create unified USDC balance: https://developers.circle.com/gateway/howtos/create-unified-usdc-balance.md
 - Unified balance EVM quickstart: https://developers.circle.com/gateway/quickstarts/unified-balance-evm.md
 - Arc crosschain USDC tutorial: https://docs.arc.network/arc/tutorials/access-usdc-crosschain.md
@@ -29,34 +30,32 @@ import {
   formatUnits,
   getContract,
   http,
-} from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import { arcTestnet } from "viem/chains";
+} from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { arcTestnet } from 'viem/chains';
 
-const GATEWAY_WALLET_ADDRESS = "0x0077777d7EBA4688BDeF3E311b846F25870A19B9";
-const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
+const GATEWAY_WALLET_ADDRESS = '0x0077777d7EBA4688BDeF3E311b846F25870A19B9';
+const USDC_ADDRESS = '0x3600000000000000000000000000000000000000';
 const DEPOSIT_AMOUNT = 5_000_000n; // 5 USDC (6 decimals)
 
 const gatewayWalletAbi = [
   {
-    type: "function",
-    name: "deposit",
+    type: 'function',
+    name: 'deposit',
     inputs: [
-      { name: "token", type: "address" },
-      { name: "value", type: "uint256" },
+      { name: 'token', type: 'address' },
+      { name: 'value', type: 'uint256' },
     ],
     outputs: [],
-    stateMutability: "nonpayable",
+    stateMutability: 'nonpayable',
   },
 ] as const;
 
 if (!process.env.EVM_PRIVATE_KEY) {
-  throw new Error("EVM_PRIVATE_KEY not set");
+  throw new Error('EVM_PRIVATE_KEY not set');
 }
 
-const account = privateKeyToAccount(
-  process.env.EVM_PRIVATE_KEY as `0x${string}`,
-);
+const account = privateKeyToAccount(process.env.EVM_PRIVATE_KEY as `0x${string}`);
 
 const publicClient = createPublicClient({
   chain: arcTestnet,
@@ -84,21 +83,13 @@ const gatewayWallet = getContract({
 async function main() {
   console.log(`Approving ${formatUnits(DEPOSIT_AMOUNT, 6)} USDC...`);
 
-  const approvalTx = await usdc.write.approve(
-    [gatewayWallet.address, DEPOSIT_AMOUNT],
-    { account },
-  );
+  const approvalTx = await usdc.write.approve([gatewayWallet.address, DEPOSIT_AMOUNT], { account });
   await publicClient.waitForTransactionReceipt({ hash: approvalTx });
   console.log(`Approved: ${approvalTx}`);
 
-  console.log(
-    `Depositing ${formatUnits(DEPOSIT_AMOUNT, 6)} USDC to Gateway Wallet...`,
-  );
+  console.log(`Depositing ${formatUnits(DEPOSIT_AMOUNT, 6)} USDC to Gateway Wallet...`);
 
-  const depositTx = await gatewayWallet.write.deposit(
-    [usdc.address, DEPOSIT_AMOUNT],
-    { account },
-  );
+  const depositTx = await gatewayWallet.write.deposit([usdc.address, DEPOSIT_AMOUNT], { account });
   await publicClient.waitForTransactionReceipt({ hash: depositTx });
   console.log(`Deposit tx: ${depositTx}`);
 }
@@ -108,5 +99,3 @@ main().catch((error) => {
   process.exit(1);
 });
 ```
-
-

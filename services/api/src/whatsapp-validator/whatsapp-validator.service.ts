@@ -54,7 +54,9 @@ export class WhatsAppValidatorService {
     const pending = await this.prisma.whatsAppValidationRequest.findFirst({
       where: {
         requesterId: userId,
-        status: { in: [WhatsAppValidationRequestStatus.PENDING, WhatsAppValidationRequestStatus.CLAIMED] },
+        status: {
+          in: [WhatsAppValidationRequestStatus.PENDING, WhatsAppValidationRequestStatus.CLAIMED],
+        },
         expiresAt: { gt: now },
       },
       select: { id: true },
@@ -108,7 +110,9 @@ export class WhatsAppValidatorService {
     const request = await this.prisma.whatsAppValidationRequest.findFirst({
       where: {
         requesterId: userId,
-        status: { in: [WhatsAppValidationRequestStatus.PENDING, WhatsAppValidationRequestStatus.CLAIMED] },
+        status: {
+          in: [WhatsAppValidationRequestStatus.PENDING, WhatsAppValidationRequestStatus.CLAIMED],
+        },
         expiresAt: { gt: now },
       },
     });
@@ -320,7 +324,8 @@ export class WhatsAppValidatorService {
       select: { email: true },
     });
     if (requesterContact) {
-      const validatorName = [validator?.firstName, validator?.lastName].filter(Boolean).join(' ') || null;
+      const validatorName =
+        [validator?.firstName, validator?.lastName].filter(Boolean).join(' ') || null;
       try {
         await this.mail.sendWhatsAppValidationClaimedEmail(
           requesterContact.email,
@@ -341,7 +346,9 @@ export class WhatsAppValidatorService {
     // WhatsApp doesn't spuriously fail the hash comparison.
     const code = rawCode.trim().toUpperCase();
     await this.expireStale();
-    const request = await this.prisma.whatsAppValidationRequest.findUnique({ where: { id: requestId } });
+    const request = await this.prisma.whatsAppValidationRequest.findUnique({
+      where: { id: requestId },
+    });
     if (!request) throw new NotFoundException('WhatsApp validation request not found');
     if (request.status !== WhatsAppValidationRequestStatus.CLAIMED) {
       throw new UnprocessableEntityException('This request is no longer claimed');
@@ -369,7 +376,11 @@ export class WhatsAppValidatorService {
       throw new UnauthorizedException('Invalid verification code');
     }
 
-    await this.completeVerification(request, WhatsAppValidationRequestStatus.CLAIMED, validatorUserId);
+    await this.completeVerification(
+      request,
+      WhatsAppValidationRequestStatus.CLAIMED,
+      validatorUserId,
+    );
 
     const updated = await this.prisma.whatsAppValidationRequest.findUniqueOrThrow({
       where: { id: requestId },
@@ -480,7 +491,9 @@ export class WhatsAppValidatorService {
 
   /** Claimant-only. Returns the request to the pool rather than a terminal REJECTED state -- a peer declining isn't necessarily fraud, it might just mean the requester never sent the code, and another validator may still be able to fulfill it before it expires. */
   async reject(validatorUserId: string, requestId: string) {
-    const request = await this.prisma.whatsAppValidationRequest.findUnique({ where: { id: requestId } });
+    const request = await this.prisma.whatsAppValidationRequest.findUnique({
+      where: { id: requestId },
+    });
     if (!request) throw new NotFoundException('WhatsApp validation request not found');
     if (request.status !== WhatsAppValidationRequestStatus.CLAIMED) {
       throw new UnprocessableEntityException('This request is no longer claimed');
@@ -599,8 +612,16 @@ export class WhatsAppValidatorService {
               { requester: { firstName: { contains: search, mode: 'insensitive' as const } } },
               { requester: { lastName: { contains: search, mode: 'insensitive' as const } } },
               { claimedByValidator: { email: { contains: search, mode: 'insensitive' as const } } },
-              { claimedByValidator: { firstName: { contains: search, mode: 'insensitive' as const } } },
-              { claimedByValidator: { lastName: { contains: search, mode: 'insensitive' as const } } },
+              {
+                claimedByValidator: {
+                  firstName: { contains: search, mode: 'insensitive' as const },
+                },
+              },
+              {
+                claimedByValidator: {
+                  lastName: { contains: search, mode: 'insensitive' as const },
+                },
+              },
             ],
           }
         : {}),
@@ -626,7 +647,9 @@ export class WhatsAppValidatorService {
         take: params.pageSize,
         include: {
           requester: { select: { id: true, email: true, firstName: true, lastName: true } },
-          claimedByValidator: { select: { id: true, email: true, firstName: true, lastName: true } },
+          claimedByValidator: {
+            select: { id: true, email: true, firstName: true, lastName: true },
+          },
         },
       }),
     ]);
@@ -665,7 +688,9 @@ export class WhatsAppValidatorService {
   async adminVerify(requestId: string, rawCode: string) {
     const code = rawCode.trim().toUpperCase();
     await this.expireStale();
-    const request = await this.prisma.whatsAppValidationRequest.findUnique({ where: { id: requestId } });
+    const request = await this.prisma.whatsAppValidationRequest.findUnique({
+      where: { id: requestId },
+    });
     if (!request) throw new NotFoundException('WhatsApp validation request not found');
     if (
       request.status !== WhatsAppValidationRequestStatus.PENDING &&
@@ -698,7 +723,9 @@ export class WhatsAppValidatorService {
    */
   async adminForceVerify(requestId: string) {
     await this.expireStale();
-    const request = await this.prisma.whatsAppValidationRequest.findUnique({ where: { id: requestId } });
+    const request = await this.prisma.whatsAppValidationRequest.findUnique({
+      where: { id: requestId },
+    });
     if (!request) throw new NotFoundException('WhatsApp validation request not found');
     if (
       request.status !== WhatsAppValidationRequestStatus.PENDING &&
@@ -721,7 +748,9 @@ export class WhatsAppValidatorService {
    * this point (see verify()), so there's nothing to refund.
    */
   async adminReject(requestId: string) {
-    const request = await this.prisma.whatsAppValidationRequest.findUnique({ where: { id: requestId } });
+    const request = await this.prisma.whatsAppValidationRequest.findUnique({
+      where: { id: requestId },
+    });
     if (!request) throw new NotFoundException('WhatsApp validation request not found');
     if (
       request.status !== WhatsAppValidationRequestStatus.PENDING &&
@@ -776,7 +805,9 @@ export class WhatsAppValidatorService {
     // so there's nothing to refund here either.
     await this.prisma.whatsAppValidationRequest.updateMany({
       where: {
-        status: { in: [WhatsAppValidationRequestStatus.PENDING, WhatsAppValidationRequestStatus.CLAIMED] },
+        status: {
+          in: [WhatsAppValidationRequestStatus.PENDING, WhatsAppValidationRequestStatus.CLAIMED],
+        },
         expiresAt: { lt: now },
       },
       data: { status: WhatsAppValidationRequestStatus.EXPIRED },

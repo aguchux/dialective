@@ -121,7 +121,9 @@ describe('revoked-key and replay tests', () => {
     });
 
     it('rejects a request with no Authorization header at all', async () => {
-      const res = await request(app.getHttpServer()).get(apiPath(`stream/v1/decks/${deckId}/manifest`));
+      const res = await request(app.getHttpServer()).get(
+        apiPath(`stream/v1/decks/${deckId}/manifest`),
+      );
       expect(res.status).toBe(401);
     });
   });

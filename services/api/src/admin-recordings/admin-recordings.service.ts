@@ -155,7 +155,13 @@ export class AdminRecordingsService {
       recordingId,
       tokenAmount: -record.payoutTokenAmount.toNumber(),
     });
-    return this.otp.issueForUser(adminId, OtpPurpose.ADMIN_PAYOUT, destination, contextHash, channel);
+    return this.otp.issueForUser(
+      adminId,
+      OtpPurpose.ADMIN_PAYOUT,
+      destination,
+      contextHash,
+      channel,
+    );
   }
 
   async audit(adminId: string, recordingId: string, dto: AuditRecordingDto) {

@@ -14,7 +14,10 @@ export class AdminValidatorDecksController {
   constructor(private readonly decks: ValidatorDecksService) {}
 
   @Get()
-  listAll(@Query('status') status?: ValidatorDeckStatus, @Query('ownerUserId') ownerUserId?: string) {
+  listAll(
+    @Query('status') status?: ValidatorDeckStatus,
+    @Query('ownerUserId') ownerUserId?: string,
+  ) {
     return this.decks.adminListAll({ status, ownerUserId });
   }
 
@@ -34,7 +37,11 @@ export class AdminValidatorDecksController {
   }
 
   @Post(':id/reassign')
-  reassign(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() dto: ReassignValidatorDeckDto) {
+  reassign(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: ReassignValidatorDeckDto,
+  ) {
     return this.decks.reassign(id, req.user.sub, dto.newOwnerUserId, dto.penaltyPercent);
   }
 
@@ -45,6 +52,10 @@ export class AdminValidatorDecksController {
 
   @Post('from-stream-deck')
   cloneFromStreamDeck(@Req() req: AuthenticatedRequest, @Body() dto: CloneFromStreamDeckDto) {
-    return this.decks.adminCloneFromStreamDeck(dto.streamDeckId, dto.targetOwnerUserId, req.user.sub);
+    return this.decks.adminCloneFromStreamDeck(
+      dto.streamDeckId,
+      dto.targetOwnerUserId,
+      req.user.sub,
+    );
   }
 }

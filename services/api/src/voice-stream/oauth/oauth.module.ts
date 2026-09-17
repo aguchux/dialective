@@ -17,7 +17,12 @@ import { EitherStreamCredentialGuard } from './either-stream-credential.guard';
 @Module({
   imports: [OrgActivityModule],
   controllers: [OAuthClientsController, OAuthTokenController],
-  providers: [OAuthClientsService, StreamKeyAuthGuard, OAuthJwtAuthGuard, EitherStreamCredentialGuard],
+  providers: [
+    OAuthClientsService,
+    StreamKeyAuthGuard,
+    OAuthJwtAuthGuard,
+    EitherStreamCredentialGuard,
+  ],
   exports: [EitherStreamCredentialGuard],
 })
 export class OAuthModule {}

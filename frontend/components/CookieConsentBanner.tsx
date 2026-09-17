@@ -47,7 +47,10 @@ export function CookieConsentBanner() {
             We use a strictly necessary session cookie to keep you signed in, and, where enabled,
             Google Analytics cookies to understand how the site is used. We don&apos;t use
             advertising cookies. See our{' '}
-            <Link href="/cookies" className="font-semibold text-accent underline underline-offset-2">
+            <Link
+              href="/cookies"
+              className="font-semibold text-accent underline underline-offset-2"
+            >
               Cookie Policy
             </Link>{' '}
             for details.

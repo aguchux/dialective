@@ -79,7 +79,9 @@ describe('DomainConversationsService', () => {
       $transaction: jest.fn(async (fn: (tx: any) => unknown) => fn(prisma)),
     };
     storage = {
-      createPresignedUploadUrl: jest.fn().mockResolvedValue({ url: 'https://upload', expiresInSeconds: 900 }),
+      createPresignedUploadUrl: jest
+        .fn()
+        .mockResolvedValue({ url: 'https://upload', expiresInSeconds: 900 }),
     };
     settings = {
       isDomainConversationTaskEnabled: jest.fn().mockResolvedValue(true),
@@ -168,7 +170,9 @@ describe('DomainConversationsService', () => {
 
     it('rejects with insufficient balance before picking a prompt', async () => {
       prisma.wallet.upsert.mockResolvedValue({ id: 'wallet-1', balance: { lt: () => true } });
-      await expect(service.nextPrompt(trainer.id, session.id)).rejects.toThrow('Insufficient balance');
+      await expect(service.nextPrompt(trainer.id, session.id)).rejects.toThrow(
+        'Insufficient balance',
+      );
       expect(prisma.domainPrompt.findFirst).not.toHaveBeenCalled();
     });
 
@@ -213,7 +217,9 @@ describe('DomainConversationsService', () => {
         contentType: 'audio/webm',
       });
       const [, key] = storage.createPresignedUploadUrl.mock.calls[0];
-      expect(key).toMatch(/^ig\/basic\/domain-conversation\/market\/assignment-1\/[a-f0-9-]+\.webm$/);
+      expect(key).toMatch(
+        /^ig\/basic\/domain-conversation\/market\/assignment-1\/[a-f0-9-]+\.webm$/,
+      );
     });
 
     it('refuses to re-upload for an already-consumed assignment', async () => {
@@ -222,14 +228,17 @@ describe('DomainConversationsService', () => {
         consumedAt: new Date(),
       });
       await expect(
-        service.createUploadUrl(trainer.id, { assignmentId: assignment.id, contentType: 'audio/webm' }),
+        service.createUploadUrl(trainer.id, {
+          assignmentId: assignment.id,
+          contentType: 'audio/webm',
+        }),
       ).rejects.toThrow('already been submitted');
     });
 
     // iOS Safari's MediaRecorder supports neither webm nor ogg and falls
     // back to audio/mp4 (an M4A container) -- must map to a real extension
     // here, not the 'bin' a missing entry would silently produce.
-    it('maps iOS Safari\'s audio/mp4 fallback to an .m4a storage key', async () => {
+    it("maps iOS Safari's audio/mp4 fallback to an .m4a storage key", async () => {
       await service.createUploadUrl(trainer.id, {
         assignmentId: assignment.id,
         contentType: 'audio/mp4' as never,
@@ -240,7 +249,11 @@ describe('DomainConversationsService', () => {
   });
 
   describe('createRecording', () => {
-    const uploadedAssignment = { ...assignment, uploadBucket: 'dialectiva-word-recordings', uploadKey: 'ig/domain-conversation/market/assignment-1/x.webm' };
+    const uploadedAssignment = {
+      ...assignment,
+      uploadBucket: 'dialectiva-word-recordings',
+      uploadKey: 'ig/domain-conversation/market/assignment-1/x.webm',
+    };
 
     beforeEach(() => {
       prisma.domainConversationAssignment.findUnique.mockResolvedValue(uploadedAssignment);

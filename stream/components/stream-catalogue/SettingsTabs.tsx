@@ -20,7 +20,10 @@ export function SettingsTabs() {
   const { data: session } = useSession();
 
   return (
-    <nav aria-label="Settings sections" className="stream-catalogue-scrollbar flex min-w-0 gap-1 overflow-x-auto border-b border-catalogue-line">
+    <nav
+      aria-label="Settings sections"
+      className="stream-catalogue-scrollbar flex min-w-0 gap-1 overflow-x-auto border-b border-catalogue-line"
+    >
       {TABS.filter((tab) => canAccessPath(session?.user.orgRole, tab.href)).map((tab) => {
         const active = pathname === tab.href;
         return (

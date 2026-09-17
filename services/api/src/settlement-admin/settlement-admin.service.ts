@@ -1,5 +1,15 @@
-import { Injectable, Logger, NotFoundException, UnprocessableEntityException } from '@nestjs/common';
-import { Prisma, computeTrainingPayout, creditTrainingPayoutOps, mintTrainingPayoutOps } from '@dialectiva/db';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
+import {
+  Prisma,
+  computeTrainingPayout,
+  creditTrainingPayoutOps,
+  mintTrainingPayoutOps,
+} from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { TokenomicsService } from '../tokenomics/tokenomics.service';
@@ -39,7 +49,10 @@ export class SettlementAdminService {
   ) {}
 
   /** Best-effort SMS to the referrer credited a payout bonus off this settlement -- mirrors WalletController.notifyReferralFundingBonusesSms, never blocks the settle-row transaction. */
-  private async notifyReferralPayoutBonusSms(referrerUserId: string, amount: string): Promise<void> {
+  private async notifyReferralPayoutBonusSms(
+    referrerUserId: string,
+    amount: string,
+  ): Promise<void> {
     try {
       const enabled = await this.settings.isReferralSmsPayoutBonusEnabled();
       if (!enabled) return;
@@ -139,16 +152,23 @@ export class SettlementAdminService {
    * yet).
    */
   async settleOne(id: string, force: boolean) {
-    const [bonusCapMultiple, qualityGateEnabled, qualityWeights, asrMatchWeight, scoreRange, settlementDelayMinutes, mintingPaused] =
-      await Promise.all([
-        this.settings.getTrainingPayoutBonusCapMultiple(),
-        this.settings.isQualityGateEnabled(),
-        this.settings.getQualityWeights(),
-        this.settings.getAsrMatchWeight(),
-        this.settings.getScoreRange(),
-        this.settings.getSettlementDelayMinutes(),
-        this.tokenomics.isMintingPaused(),
-      ]);
+    const [
+      bonusCapMultiple,
+      qualityGateEnabled,
+      qualityWeights,
+      asrMatchWeight,
+      scoreRange,
+      settlementDelayMinutes,
+      mintingPaused,
+    ] = await Promise.all([
+      this.settings.getTrainingPayoutBonusCapMultiple(),
+      this.settings.isQualityGateEnabled(),
+      this.settings.getQualityWeights(),
+      this.settings.getAsrMatchWeight(),
+      this.settings.getScoreRange(),
+      this.settings.getSettlementDelayMinutes(),
+      this.tokenomics.isMintingPaused(),
+    ]);
 
     return this.settleWordRecording(id, force, {
       bonusCapMultiple,
@@ -222,7 +242,10 @@ export class SettlementAdminService {
   }
 
   private isPendingDelay(scoredAt: Date, settlementDelayMinutes: number): boolean {
-    return settlementDelayMinutes > 0 && scoredAt > new Date(Date.now() - settlementDelayMinutes * 60_000);
+    return (
+      settlementDelayMinutes > 0 &&
+      scoredAt > new Date(Date.now() - settlementDelayMinutes * 60_000)
+    );
   }
 
   private async settleWordRecording(
@@ -241,7 +264,9 @@ export class SettlementAdminService {
     const recording = await this.prisma.wordRecording.findUnique({ where: { id } });
     if (!recording) throw new NotFoundException('Word recording not found');
     if (recording.status !== 'SCORED' || recording.settledAt) {
-      throw new UnprocessableEntityException('This word recording is not currently eligible for settlement');
+      throw new UnprocessableEntityException(
+        'This word recording is not currently eligible for settlement',
+      );
     }
     if (recording.score === null || recording.userId === null) {
       throw new UnprocessableEntityException(
@@ -249,7 +274,10 @@ export class SettlementAdminService {
       );
     }
     const userId = recording.userId;
-    if (!force && this.isPendingDelay(recording.scoredAt ?? recording.createdAt, ctx.settlementDelayMinutes)) {
+    if (
+      !force &&
+      this.isPendingDelay(recording.scoredAt ?? recording.createdAt, ctx.settlementDelayMinutes)
+    ) {
       throw new UnprocessableEntityException(
         'This word recording is still inside the settlement delay window -- pass force to settle it early',
       );
@@ -268,7 +296,12 @@ export class SettlementAdminService {
     const payoutScore = ctx.qualityGateEnabled ? compositeScore : recording.score;
     const payout = computeTrainingPayout(recording.tokensSpent, payoutScore, ctx.bonusCapMultiple);
     const sourceKey = trainingPayoutSourceKey(recording.wordId, recording.sentenceId);
-    const { ops, result } = await creditTrainingPayoutOps(this.prisma, userId, payout, recording.id);
+    const { ops, result } = await creditTrainingPayoutOps(
+      this.prisma,
+      userId,
+      payout,
+      recording.id,
+    );
     const mintOps = ctx.mintingPaused
       ? []
       : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;
@@ -298,7 +331,12 @@ export class SettlementAdminService {
         ...mintOps,
         this.prisma.wordRecording.update({
           where: { id: recording.id },
-          data: { status: 'SETTLED', compositeScore, payoutTokenAmount: payout, settledAt: new Date() },
+          data: {
+            status: 'SETTLED',
+            compositeScore,
+            payoutTokenAmount: payout,
+            settledAt: new Date(),
+          },
         }),
       ]);
     } catch (err) {

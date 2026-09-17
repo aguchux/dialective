@@ -3,6 +3,7 @@
 This example burns from Arc Testnet and mints on Base Sepolia. The same pattern applies to any supported EVM source and destination chains after substituting the correct chain config, contract addresses, and domain IDs.
 
 Canonical runnable references:
+
 - Transfer unified USDC balance: https://developers.circle.com/gateway/howtos/transfer-unified-usdc-balance.md
 - Unified balance EVM quickstart: https://developers.circle.com/gateway/quickstarts/unified-balance-evm.md
 
@@ -30,9 +31,9 @@ import {
   getContract,
   parseUnits,
   zeroAddress,
-} from "viem";
-import { arcTestnet, baseSepolia } from "viem/chains";
-import type { Chain } from "viem";
+} from 'viem';
+import { arcTestnet, baseSepolia } from 'viem/chains';
+import type { Chain } from 'viem';
 
 type Eip1193Provider = {
   request(args: { method: string; params?: unknown[] | object }): Promise<unknown>;
@@ -53,68 +54,68 @@ declare global {
   }
 }
 
-const GATEWAY_WALLET_ADDRESS = "0x0077777d7EBA4688BDeF3E311b846F25870A19B9";
-const GATEWAY_MINTER_ADDRESS = "0x0022222ABE238Cc2C7Bb1f21003F0a260052475B";
-const GATEWAY_API_URL = "https://gateway-api-testnet.circle.com/v1/transfer";
+const GATEWAY_WALLET_ADDRESS = '0x0077777d7EBA4688BDeF3E311b846F25870A19B9';
+const GATEWAY_MINTER_ADDRESS = '0x0022222ABE238Cc2C7Bb1f21003F0a260052475B';
+const GATEWAY_API_URL = 'https://gateway-api-testnet.circle.com/v1/transfer';
 
 const SOURCE_CHAIN = {
   chain: arcTestnet,
   domain: 26,
-  usdc: "0x3600000000000000000000000000000000000000",
+  usdc: '0x3600000000000000000000000000000000000000',
 };
 
 const DESTINATION_CHAIN = {
   chain: baseSepolia,
   domain: 6,
-  usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+  usdc: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
 };
 
-const TRANSFER_AMOUNT_USDC = "5";
+const TRANSFER_AMOUNT_USDC = '5';
 const MAX_FEE = 2_010000n;
 
 const gatewayMinterAbi = [
   {
-    type: "function",
-    name: "gatewayMint",
+    type: 'function',
+    name: 'gatewayMint',
     inputs: [
-      { name: "attestationPayload", type: "bytes" },
-      { name: "signature", type: "bytes" },
+      { name: 'attestationPayload', type: 'bytes' },
+      { name: 'signature', type: 'bytes' },
     ],
     outputs: [],
-    stateMutability: "nonpayable",
+    stateMutability: 'nonpayable',
   },
 ] as const;
 
 const typedData = {
-  domain: { name: "GatewayWallet", version: "1" },
+  domain: { name: 'GatewayWallet', version: '1' },
   types: {
     EIP712Domain: [
-      { name: "name", type: "string" },
-      { name: "version", type: "string" },
+      { name: 'name', type: 'string' },
+      { name: 'version', type: 'string' },
     ],
     TransferSpec: [
-      { name: "version", type: "uint32" },
-      { name: "sourceDomain", type: "uint32" },
-      { name: "destinationDomain", type: "uint32" },
-      { name: "sourceContract", type: "bytes32" },
-      { name: "destinationContract", type: "bytes32" },
-      { name: "sourceToken", type: "bytes32" },
-      { name: "destinationToken", type: "bytes32" },
-      { name: "sourceDepositor", type: "bytes32" },
-      { name: "destinationRecipient", type: "bytes32" },
-      { name: "sourceSigner", type: "bytes32" },
-      { name: "destinationCaller", type: "bytes32" },
-      { name: "value", type: "uint256" },
-      { name: "salt", type: "bytes32" },
-      { name: "hookData", type: "bytes" },
+      { name: 'version', type: 'uint32' },
+      { name: 'sourceDomain', type: 'uint32' },
+      { name: 'destinationDomain', type: 'uint32' },
+      { name: 'sourceContract', type: 'bytes32' },
+      { name: 'destinationContract', type: 'bytes32' },
+      { name: 'sourceToken', type: 'bytes32' },
+      { name: 'destinationToken', type: 'bytes32' },
+      { name: 'sourceDepositor', type: 'bytes32' },
+      { name: 'destinationRecipient', type: 'bytes32' },
+      { name: 'sourceSigner', type: 'bytes32' },
+      { name: 'destinationCaller', type: 'bytes32' },
+      { name: 'value', type: 'uint256' },
+      { name: 'salt', type: 'bytes32' },
+      { name: 'hookData', type: 'bytes' },
     ],
     BurnIntent: [
-      { name: "maxBlockHeight", type: "uint256" },
-      { name: "maxFee", type: "uint256" },
-      { name: "spec", type: "TransferSpec" },
+      { name: 'maxBlockHeight', type: 'uint256' },
+      { name: 'maxFee', type: 'uint256' },
+      { name: 'spec', type: 'TransferSpec' },
     ],
   },
-  primaryType: "BurnIntent" as const,
+  primaryType: 'BurnIntent' as const,
 };
 
 async function getInjectedProvider(): Promise<Eip1193Provider> {
@@ -125,14 +126,18 @@ async function getInjectedProvider(): Promise<Eip1193Provider> {
     if (detail?.provider) discovered.push(detail);
   };
 
-  window.addEventListener("eip6963:announceProvider", onAnnounce as EventListener);
-  window.dispatchEvent(new Event("eip6963:requestProvider"));
+  window.addEventListener('eip6963:announceProvider', onAnnounce as EventListener);
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
   await new Promise((resolve) => setTimeout(resolve, 150));
-  window.removeEventListener("eip6963:announceProvider", onAnnounce as EventListener);
+  window.removeEventListener('eip6963:announceProvider', onAnnounce as EventListener);
 
-  return discovered[0]?.provider ?? window.ethereum ?? (() => {
-    throw new Error("No EVM wallet provider found");
-  })();
+  return (
+    discovered[0]?.provider ??
+    window.ethereum ??
+    (() => {
+      throw new Error('No EVM wallet provider found');
+    })()
+  );
 }
 
 async function ensureChain(provider: Eip1193Provider, chain: Chain) {
@@ -140,12 +145,12 @@ async function ensureChain(provider: Eip1193Provider, chain: Chain) {
 
   try {
     await provider.request({
-      method: "wallet_switchEthereumChain",
+      method: 'wallet_switchEthereumChain',
       params: [{ chainId: chainIdHex }],
     });
   } catch {
     await provider.request({
-      method: "wallet_addEthereumChain",
+      method: 'wallet_addEthereumChain',
       params: [
         {
           chainId: chainIdHex,
@@ -162,22 +167,22 @@ async function ensureChain(provider: Eip1193Provider, chain: Chain) {
 }
 
 function toBytes32(address: `0x${string}`) {
-  return `0x${address.toLowerCase().replace(/^0x/, "").padStart(64, "0")}` as const;
+  return `0x${address.toLowerCase().replace(/^0x/, '').padStart(64, '0')}` as const;
 }
 
 function randomHex32(): `0x${string}` {
   const bytes = crypto.getRandomValues(new Uint8Array(32));
-  return `0x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+  return `0x${Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')}`;
 }
 
 async function main() {
   const provider = await getInjectedProvider();
   const accounts = (await provider.request({
-    method: "eth_requestAccounts",
+    method: 'eth_requestAccounts',
   })) as string[];
 
   const account = accounts[0] as `0x${string}` | undefined;
-  if (!account) throw new Error("No wallet account returned");
+  if (!account) throw new Error('No wallet account returned');
 
   await ensureChain(provider, SOURCE_CHAIN.chain);
 
@@ -204,7 +209,7 @@ async function main() {
       destinationCaller: toBytes32(zeroAddress),
       value: parseUnits(TRANSFER_AMOUNT_USDC, 6),
       salt: randomHex32(),
-      hookData: "0x",
+      hookData: '0x',
     },
   };
 
@@ -214,11 +219,10 @@ async function main() {
   });
 
   const apiResponse = await fetch(GATEWAY_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(
-      [{ burnIntent, signature }],
-      (_key, value) => (typeof value === "bigint" ? value.toString() : value),
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify([{ burnIntent, signature }], (_key, value) =>
+      typeof value === 'bigint' ? value.toString() : value,
     ),
   });
 
@@ -291,35 +295,26 @@ async function discoverEvmProviders(): Promise<Eip6963ProviderDetail[]> {
     const detail = (event as CustomEvent<Eip6963ProviderDetail>).detail;
     if (!detail?.provider) return;
 
-    const alreadySeen = providers.some(
-      (entry) => entry.info.uuid === detail.info.uuid,
-    );
+    const alreadySeen = providers.some((entry) => entry.info.uuid === detail.info.uuid);
     if (!alreadySeen) providers.push(detail);
   };
 
-  window.addEventListener(
-    "eip6963:announceProvider",
-    onAnnounce as EventListener,
-  );
-  window.dispatchEvent(new Event("eip6963:requestProvider"));
+  window.addEventListener('eip6963:announceProvider', onAnnounce as EventListener);
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
   await new Promise((resolve) => setTimeout(resolve, 150));
-  window.removeEventListener(
-    "eip6963:announceProvider",
-    onAnnounce as EventListener,
-  );
+  window.removeEventListener('eip6963:announceProvider', onAnnounce as EventListener);
 
   return providers;
 }
 
 async function connectChosenProvider(provider: Eip1193Provider) {
   const accounts = (await provider.request({
-    method: "eth_requestAccounts",
+    method: 'eth_requestAccounts',
   })) as string[];
 
   const address = accounts[0];
-  if (!address) throw new Error("No wallet account returned");
+  if (!address) throw new Error('No wallet account returned');
 
   return { address, provider };
 }
 ```
-

@@ -26,7 +26,8 @@ export function attachmentsCreateInput(attachments: CommunityAttachmentInputDto[
   return attachments.map((attachment) => ({
     bucket: attachment.bucket,
     storageKey: attachment.key,
-    type: ATTACHMENT_TYPE_BY_CONTENT_TYPE[attachment.contentType] ?? CommunityAttachmentType.DOCUMENT,
+    type:
+      ATTACHMENT_TYPE_BY_CONTENT_TYPE[attachment.contentType] ?? CommunityAttachmentType.DOCUMENT,
     mimeType: attachment.contentType,
     size: attachment.size,
     originalName: attachment.originalName,
@@ -41,7 +42,15 @@ export function attachmentsCreateInput(attachments: CommunityAttachmentInputDto[
  */
 export function toAttachmentDto(
   storage: StorageService,
-  attachment: { id: string; type: CommunityAttachmentType; bucket: string; storageKey: string; mimeType: string; size: number; originalName: string },
+  attachment: {
+    id: string;
+    type: CommunityAttachmentType;
+    bucket: string;
+    storageKey: string;
+    mimeType: string;
+    size: number;
+    originalName: string;
+  },
 ) {
   return {
     id: attachment.id,

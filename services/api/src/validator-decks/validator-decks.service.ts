@@ -83,7 +83,9 @@ export class ValidatorDecksService {
         where: { id: dto.dialectVariantId },
       });
       if (!variant || variant.dialectId !== dto.dialectId || !variant.active) {
-        throw new UnprocessableEntityException('Select an active sub-dialect for the given dialect');
+        throw new UnprocessableEntityException(
+          'Select an active sub-dialect for the given dialect',
+        );
       }
     }
 
@@ -168,7 +170,12 @@ export class ValidatorDecksService {
     return { ...deck, expectedEarning: (validCount * rate).toString() };
   }
 
-  async update(deckId: string, callerUserId: string, callerRole: string, dto: UpdateValidatorDeckDto) {
+  async update(
+    deckId: string,
+    callerUserId: string,
+    callerRole: string,
+    dto: UpdateValidatorDeckDto,
+  ) {
     const deck = await this.assertEditable(deckId, callerUserId, callerRole);
     return this.prisma.validatorDeck.update({
       where: { id: deck.id },
@@ -208,10 +215,10 @@ export class ValidatorDecksService {
     if (deck.dialectId) {
       const deckDialect = await this.prisma.dialect.findUnique({ where: { id: deck.dialectId } });
       if (!deckDialect || recording.dialectTag !== deckDialect.tag) {
-        throw new UnprocessableEntityException('This recording is not in the deck\'s dialect');
+        throw new UnprocessableEntityException("This recording is not in the deck's dialect");
       }
       if (deck.dialectVariantId && recording.dialectVariantId !== deck.dialectVariantId) {
-        throw new UnprocessableEntityException('This recording is not in the deck\'s sub-dialect');
+        throw new UnprocessableEntityException("This recording is not in the deck's sub-dialect");
       }
     }
 
@@ -222,7 +229,9 @@ export class ValidatorDecksService {
 
     const maxItems = await this.settings.getValidatorDeckMaxItems();
     if (maxItems > 0) {
-      const currentCount = await this.prisma.validatorDeckItem.count({ where: { deckId: deck.id } });
+      const currentCount = await this.prisma.validatorDeckItem.count({
+        where: { deckId: deck.id },
+      });
       if (currentCount >= maxItems) {
         throw new ForbiddenException(`This deck already has the maximum of ${maxItems} recordings`);
       }
@@ -395,7 +404,9 @@ export class ValidatorDecksService {
         data: { status: toStatus },
       });
       if (result.count !== 1) {
-        throw new ConflictException('This deck was changed by someone else -- reload and try again');
+        throw new ConflictException(
+          'This deck was changed by someone else -- reload and try again',
+        );
       }
 
       if (!isResubmission) {
@@ -418,7 +429,9 @@ export class ValidatorDecksService {
       await tx.validatorDeckAuditLog.create({
         data: {
           deckId,
-          action: isResubmission ? ValidatorDeckAuditAction.RESUBMITTED : ValidatorDeckAuditAction.SUBMITTED,
+          action: isResubmission
+            ? ValidatorDeckAuditAction.RESUBMITTED
+            : ValidatorDeckAuditAction.SUBMITTED,
           actorUserId: callerUserId,
           fromStatus,
           toStatus,
@@ -501,7 +514,9 @@ export class ValidatorDecksService {
         data: { status: toStatus },
       });
       if (result.count !== 1) {
-        throw new ConflictException('This deck was changed by someone else -- reload and try again');
+        throw new ConflictException(
+          'This deck was changed by someone else -- reload and try again',
+        );
       }
       await tx.validatorDeckAuditLog.create({
         data: { deckId, action, actorUserId: callerUserId, fromStatus, toStatus },
@@ -541,7 +556,9 @@ export class ValidatorDecksService {
             ? ValidatorLevel.L3
             : null;
       if (requiredLevel === null || callerLevel !== requiredLevel) {
-        throw new ForbiddenException('You are not authorized to reject this deck at its current stage');
+        throw new ForbiddenException(
+          'You are not authorized to reject this deck at its current stage',
+        );
       }
     }
 
@@ -551,7 +568,9 @@ export class ValidatorDecksService {
         data: { status: ValidatorDeckStatus.REJECTED },
       });
       if (result.count !== 1) {
-        throw new ConflictException('This deck was changed by someone else -- reload and try again');
+        throw new ConflictException(
+          'This deck was changed by someone else -- reload and try again',
+        );
       }
       await tx.validatorDeckAuditLog.create({
         data: {
@@ -606,7 +625,10 @@ export class ValidatorDecksService {
 
   /** Full audit trail for a deck, newest-first. */
   async getAuditLog(deckId: string) {
-    const deck = await this.prisma.validatorDeck.findUnique({ where: { id: deckId }, select: { id: true } });
+    const deck = await this.prisma.validatorDeck.findUnique({
+      where: { id: deckId },
+      select: { id: true },
+    });
     if (!deck) throw new NotFoundException('Validator deck not found');
     return this.prisma.validatorDeckAuditLog.findMany({
       where: { deckId },
@@ -626,10 +648,18 @@ export class ValidatorDecksService {
    * later change to the global setting never retroactively alters this
    * reassignment's eventual publish-time payout split.
    */
-  async reassign(deckId: string, adminUserId: string, newOwnerUserId: string, penaltyPercent?: number) {
+  async reassign(
+    deckId: string,
+    adminUserId: string,
+    newOwnerUserId: string,
+    penaltyPercent?: number,
+  ) {
     const deck = await this.prisma.validatorDeck.findUnique({ where: { id: deckId } });
     if (!deck) throw new NotFoundException('Validator deck not found');
-    if (deck.status === ValidatorDeckStatus.PUBLISHED || deck.status === ValidatorDeckStatus.ARCHIVED) {
+    if (
+      deck.status === ValidatorDeckStatus.PUBLISHED ||
+      deck.status === ValidatorDeckStatus.ARCHIVED
+    ) {
       throw new BadRequestException('A published or archived deck cannot be reassigned');
     }
     if (newOwnerUserId === deck.ownerUserId) {
@@ -760,7 +790,9 @@ export class ValidatorDecksService {
         },
       });
       if (result.count !== 1) {
-        throw new ConflictException('This deck was changed by someone else -- reload and try again');
+        throw new ConflictException(
+          'This deck was changed by someone else -- reload and try again',
+        );
       }
 
       await tx.validatorDeckAuditLog.create({
@@ -801,7 +833,10 @@ export class ValidatorDecksService {
   async archive(deckId: string, adminUserId: string) {
     const deck = await this.prisma.validatorDeck.findUnique({ where: { id: deckId } });
     if (!deck) throw new NotFoundException('Validator deck not found');
-    if (deck.status === ValidatorDeckStatus.PUBLISHED || deck.status === ValidatorDeckStatus.ARCHIVED) {
+    if (
+      deck.status === ValidatorDeckStatus.PUBLISHED ||
+      deck.status === ValidatorDeckStatus.ARCHIVED
+    ) {
       throw new BadRequestException('A published or already-archived deck cannot be archived');
     }
     const fromStatus = deck.status;
@@ -836,7 +871,11 @@ export class ValidatorDecksService {
    * scope to add here per the plan's "use judgment" allowance), so
    * provenance is recorded in the CLONED audit log's metadata instead.
    */
-  async adminCloneFromStreamDeck(streamDeckId: string, targetOwnerUserId: string, adminUserId: string) {
+  async adminCloneFromStreamDeck(
+    streamDeckId: string,
+    targetOwnerUserId: string,
+    adminUserId: string,
+  ) {
     const streamDeck = await this.prisma.streamDeck.findUnique({
       where: { id: streamDeckId },
       include: { items: true },

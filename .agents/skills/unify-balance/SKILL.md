@@ -1,6 +1,6 @@
 ---
 name: unify-balance
-description: "Build unified cross-chain USDC balance management with Circle Unified Balance Kit SDK via App Kit (`@circle-fin/app-kit`) or standalone (`@circle-fin/unified-balance-kit`). Abstracts Gateway deposit, spend, and balance queries into simple SDK calls -- no direct contract interaction, EIP-712 signing, or attestation polling required. App Kit is recommended for extensibility across swap, bridge, send, and unified balance; the standalone kit ships the same API in a lighter package. Neither requires a kit key. Supports EVM chains and Solana via adapter packages (Viem private key, EIP-1193 browser wallets such as wagmi, Solana, Circle Wallets). Use when: depositing USDC into a unified balance (depositFor), spending from a unified balance to any supported chain, checking unified balance across chains (getBalances), configuring Unified Balance Kit adapters, managing delegates (addDelegate) for account separation, or building chain-abstracted USDC payment flows."
+description: 'Build unified cross-chain USDC balance management with Circle Unified Balance Kit SDK via App Kit (`@circle-fin/app-kit`) or standalone (`@circle-fin/unified-balance-kit`). Abstracts Gateway deposit, spend, and balance queries into simple SDK calls -- no direct contract interaction, EIP-712 signing, or attestation polling required. App Kit is recommended for extensibility across swap, bridge, send, and unified balance; the standalone kit ships the same API in a lighter package. Neither requires a kit key. Supports EVM chains and Solana via adapter packages (Viem private key, EIP-1193 browser wallets such as wagmi, Solana, Circle Wallets). Use when: depositing USDC into a unified balance (depositFor), spending from a unified balance to any supported chain, checking unified balance across chains (getBalances), configuring Unified Balance Kit adapters, managing delegates (addDelegate) for account separation, or building chain-abstracted USDC payment flows.'
 ---
 
 ## Overview
@@ -63,7 +63,7 @@ No `KIT_KEY` is needed for unified balance operations. A kit key is only require
 **App Kit** (recommended):
 
 ```ts
-import { AppKit } from "@circle-fin/app-kit";
+import { AppKit } from '@circle-fin/app-kit';
 
 const kit = new AppKit();
 // Use kit.unifiedBalance.deposit(), kit.unifiedBalance.spend(), kit.unifiedBalance.getBalances()
@@ -72,7 +72,7 @@ const kit = new AppKit();
 **Unified Balance Kit** (standalone):
 
 ```ts
-import { UnifiedBalanceKit } from "@circle-fin/unified-balance-kit";
+import { UnifiedBalanceKit } from '@circle-fin/unified-balance-kit';
 
 const kit = new UnifiedBalanceKit();
 // Use kit.deposit(), kit.spend(), kit.getBalances()
@@ -85,17 +85,20 @@ ALWAYS walk through these questions with the user before writing any code. Do no
 ### SDK Choice
 
 **Question 1 -- Will you need swap, bridge, or send functionality in the future?**
+
 - Yes, or unsure -> **App Kit** (recommended) -- single SDK covers unified balance + swap + bridge + send, easier to extend later
 - No, unified-balance-only and will never need swap, bridge, or send -> **Unified Balance Kit** -- standalone, lighter package for unified-balance-only use cases
 
 ### Wallet / Adapter Choice
 
 **Question 2 -- How do you manage your wallet/keys?**
+
 - Managing your own private key (self-custodied, stored in env var or secrets manager) -> Question 3
 - Using browser wallets (wagmi, ConnectKit, RainbowKit, or any EIP-1193 provider) -> Use the EIP-1193 provider adapter. READ `references/adapter-eip1193.md`
 - Using Circle developer-controlled wallets (Circle manages key storage and signing) -> Use Circle Wallets adapter. READ `references/adapter-circle-wallets.md`
 
 **Question 3 -- Which chain ecosystem are you using?**
+
 - EVM chains only (Ethereum, Base, Arbitrum, etc.) -> Use Viem adapter. READ `references/adapter-viem.md`
 - Solana only -> Use Solana adapter. READ `references/adapter-solana.md`
 - Both EVM and Solana -> Use multichain adapters. READ `references/adapter-multichain.md`
@@ -110,11 +113,11 @@ If the user needs delegate functionality (smart contract account depositor with 
   - `'authorize'` (default) -- uses EIP-3009 `transferWithAuthorization()`. Single-step, no separate approval transaction.
   - `'permit'` -- uses EIP-2612 gasless off-chain signature, submitted on-chain with the transfer. Single-step.
   - `'approve'` -- traditional ERC-20 two-step approve + transfer. Higher gas cost due to separate approval transaction.
-  For `depositFor()`, the strategy is always `'approve'` and cannot be changed (the parameter is not available on `depositFor` params).
+    For `depositFor()`, the strategy is always `'approve'` and cannot be changed (the parameter is not available on `depositFor` params).
 - **Spend** burns USDC from a source chain in the unified balance and mints it on a destination chain. The destination (`to`) must be one of two shapes -- a bare `{ chain, recipientAddress }` type-checks against neither:
   - **Destination adapter** -- `{ adapter, chain, recipientAddress? }`. The destination adapter submits the mint and pays gas on the destination chain. Omit `recipientAddress` to mint to the adapter's own resolved address, or set it to override (use that exact property name -- do not abbreviate to `recipient` or `address`). Requires an adapter that supports the destination chain, so it fits same-ecosystem spends (e.g., EVM source -> EVM destination).
   - **Forwarding Service** -- `{ chain, recipientAddress, useForwarder: true }`, no destination adapter (see the Forwarding Service concept below).
-  The SDK handles burn intent construction, signing, attestation, and minting automatically.
+    The SDK handles burn intent construction, signing, attestation, and minting automatically.
 - **getBalances()** returns the aggregated unified balance and per-chain breakdown for a given depositor address.
 - **Delegates** allow a different signer to move funds out of an account owner's unified balance. Use `addDelegate()` to grant spending rights to another address, `removeDelegate()` to revoke, and `getDelegateStatus()` to check readiness. Use `depositFor()` to deposit USDC into another account's unified balance (not the caller's). A common use case is SCA (smart contract account) depositors that cannot produce ECDSA signatures directly -- an EOA delegate signs burn intents on their behalf. However, delegation is not limited to SCAs; any account owner can authorize a delegate for operational separation (e.g., a service EOA spending from a treasury EOA's balance).
 - **Remove fund** withdraws USDC from the unified balance back to the owner's wallet on a specific chain. This is a two-step process: `initiateRemoveFund()` starts a mandatory **7-day delayed withdrawal**, then `removeFund()` completes it after the activation period. Only one removal may be pending per chain at a time. Initiating a second removal on the same chain adds to the existing pending amount and restarts the timer.
@@ -127,38 +130,38 @@ If the user needs delegate functionality (smart contract account depositor with 
 
 **Mainnet chains** (use these exact string identifiers in the SDK):
 
-| Chain | Identifier |
-|-------|-----------|
-| Ethereum | `"Ethereum"` |
-| Avalanche | `"Avalanche"` |
-| Optimism | `"Optimism"` |
-| Arbitrum | `"Arbitrum"` |
-| Solana | `"Solana"` |
-| Base | `"Base"` |
-| Polygon PoS | `"Polygon"` |
-| Unichain | `"Unichain"` |
-| Sonic | `"Sonic"` |
+| Chain       | Identifier      |
+| ----------- | --------------- |
+| Ethereum    | `"Ethereum"`    |
+| Avalanche   | `"Avalanche"`   |
+| Optimism    | `"Optimism"`    |
+| Arbitrum    | `"Arbitrum"`    |
+| Solana      | `"Solana"`      |
+| Base        | `"Base"`        |
+| Polygon PoS | `"Polygon"`     |
+| Unichain    | `"Unichain"`    |
+| Sonic       | `"Sonic"`       |
 | World Chain | `"World_Chain"` |
-| Sei | `"Sei"` |
-| HyperEVM | `"HyperEVM"` |
+| Sei         | `"Sei"`         |
+| HyperEVM    | `"HyperEVM"`    |
 
 **Testnet chains**:
 
-| Chain | Identifier |
-|-------|-----------|
-| Ethereum Sepolia | `"Ethereum_Sepolia"` |
-| Avalanche Fuji | `"Avalanche_Fuji"` |
-| OP Sepolia | `"Optimism_Sepolia"` |
-| Arbitrum Sepolia | `"Arbitrum_Sepolia"` |
-| Solana Devnet | `"Solana_Devnet"` |
-| Base Sepolia | `"Base_Sepolia"` |
-| Polygon Amoy | `"Polygon_Amoy_Testnet"` |
-| Unichain Sepolia | `"Unichain_Sepolia"` |
-| Sonic Testnet | `"Sonic_Testnet"` |
-| World Chain Sepolia | `"World_Chain_Sepolia"` |
-| Sei Testnet | `"Sei_Testnet"` |
-| HyperEVM Testnet | `"HyperEVM_Testnet"` |
-| Arc Testnet | `"Arc_Testnet"` |
+| Chain               | Identifier               |
+| ------------------- | ------------------------ |
+| Ethereum Sepolia    | `"Ethereum_Sepolia"`     |
+| Avalanche Fuji      | `"Avalanche_Fuji"`       |
+| OP Sepolia          | `"Optimism_Sepolia"`     |
+| Arbitrum Sepolia    | `"Arbitrum_Sepolia"`     |
+| Solana Devnet       | `"Solana_Devnet"`        |
+| Base Sepolia        | `"Base_Sepolia"`         |
+| Polygon Amoy        | `"Polygon_Amoy_Testnet"` |
+| Unichain Sepolia    | `"Unichain_Sepolia"`     |
+| Sonic Testnet       | `"Sonic_Testnet"`        |
+| World Chain Sepolia | `"World_Chain_Sepolia"`  |
+| Sei Testnet         | `"Sei_Testnet"`          |
+| HyperEVM Testnet    | `"HyperEVM_Testnet"`     |
+| Arc Testnet         | `"Arc_Testnet"`          |
 
 ## Implementation Patterns
 
@@ -198,9 +201,7 @@ This response shape is the same for both App Kit (`kit.unifiedBalance.deposit()`
   "txHash": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
   "explorerUrl": "https://testnet.arcscan.app/tx/0xabcdef...",
   "transferId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "allocations": [
-    { "chain": "Base_Sepolia", "amount": "5.0" }
-  ]
+  "allocations": [{ "chain": "Base_Sepolia", "amount": "5.0" }]
 }
 ```
 
@@ -231,14 +232,14 @@ Wrap all unified balance operations in try/catch and inspect the result for fail
 ```ts
 try {
   const result = await kit.unifiedBalance.deposit({
-    from: { adapter, chain: "Arc_Testnet" },
-    amount: "10.00",
+    from: { adapter, chain: 'Arc_Testnet' },
+    amount: '10.00',
   });
 
-  console.log("Deposit completed:", result.txHash);
-  console.log("Explorer:", result.explorerUrl);
+  console.log('Deposit completed:', result.txHash);
+  console.log('Explorer:', result.explorerUrl);
 } catch (err) {
-  console.error("Deposit failed:", err);
+  console.error('Deposit failed:', err);
 }
 ```
 
@@ -277,14 +278,17 @@ try {
 ## Alternatives
 
 Trigger the `use-gateway` skill instead when:
+
 - You need direct contract-level Gateway integration without an SDK abstraction layer.
 - You need custom control over individual CCTP steps (approve, burn, fetchAttestation, mint).
 
 Trigger the `bridge-stablecoin` skill instead when:
+
 - You need simple point-to-point USDC transfers without maintaining a unified balance.
 - You want CCTP-native bridging with retry/recovery support via Bridge Kit.
 
 Trigger the `swap-tokens` skill instead when:
+
 - You need to swap non-USDC tokens before depositing into a unified balance.
 - You need same-chain token exchanges.
 

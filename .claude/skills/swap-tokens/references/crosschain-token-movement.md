@@ -22,16 +22,16 @@ Swap tokenX to USDC on the source chain, then bridge USDC to the destination cha
 Example: USDT on Ethereum -> USDC on Base
 
 ```ts
-import { AppKit } from "@circle-fin/app-kit";
-import { createViemAdapterFromPrivateKey } from "@circle-fin/adapter-viem-v2";
-import { inspect } from "util";
+import { AppKit } from '@circle-fin/app-kit';
+import { createViemAdapterFromPrivateKey } from '@circle-fin/adapter-viem-v2';
+import { inspect } from 'util';
 
 const kit = new AppKit();
 
 const crosschainMovement = async (): Promise<void> => {
   const privateKey = process.env.PRIVATE_KEY;
-  if (!privateKey || !privateKey.startsWith("0x")) {
-    throw new Error("PRIVATE_KEY env var must be set and 0x-prefixed");
+  if (!privateKey || !privateKey.startsWith('0x')) {
+    throw new Error('PRIVATE_KEY env var must be set and 0x-prefixed');
   }
 
   const adapter = createViemAdapterFromPrivateKey({
@@ -42,22 +42,22 @@ const crosschainMovement = async (): Promise<void> => {
   let swapResult;
   try {
     swapResult = await kit.swap({
-      from: { adapter, chain: "Ethereum" },
-      tokenIn: "USDT",
-      tokenOut: "USDC",
-      amountIn: "100.00",
+      from: { adapter, chain: 'Ethereum' },
+      tokenIn: 'USDT',
+      tokenOut: 'USDC',
+      amountIn: '100.00',
       config: {
         kitKey: process.env.KIT_KEY as string,
       },
     });
-    console.log("Swap completed:", inspect(swapResult, false, null, true));
+    console.log('Swap completed:', inspect(swapResult, false, null, true));
   } catch (err) {
-    console.error("Swap failed:", err instanceof Error ? err.message : "Unknown error");
-    console.error("No funds were moved. Your USDT remains on Ethereum.");
+    console.error('Swap failed:', err instanceof Error ? err.message : 'Unknown error');
+    console.error('No funds were moved. Your USDT remains on Ethereum.');
     return;
   }
 
-  const bridgeAmount = swapResult.amountOut || "0";
+  const bridgeAmount = swapResult.amountOut || '0';
 
   // Step 2: Bridge USDC from Ethereum to Base
   // useForwarder: true lets Circle's Forwarding Service handle attestation
@@ -65,15 +65,15 @@ const crosschainMovement = async (): Promise<void> => {
   // See: https://docs.arc.network/app-kit/tutorials/bridge/use-forwarding-service
   try {
     const bridgeResult = await kit.bridge({
-      from: { adapter, chain: "Ethereum" },
-      to: { adapter, chain: "Base", useForwarder: true },
+      from: { adapter, chain: 'Ethereum' },
+      to: { adapter, chain: 'Base', useForwarder: true },
       amount: bridgeAmount,
     });
-    console.log("Bridge completed:", inspect(bridgeResult, false, null, true));
+    console.log('Bridge completed:', inspect(bridgeResult, false, null, true));
   } catch (err) {
-    console.error("Bridge failed:", err instanceof Error ? err.message : "Unknown error");
+    console.error('Bridge failed:', err instanceof Error ? err.message : 'Unknown error');
     console.error(
-      `Your ${bridgeAmount} USDC remains on Ethereum. Retry the bridge or swap back to USDT.`
+      `Your ${bridgeAmount} USDC remains on Ethereum. Retry the bridge or swap back to USDT.`,
     );
     return;
   }
@@ -89,16 +89,16 @@ Bridge USDC to the destination chain, then swap USDC to the target token.
 Example: USDC on Ethereum -> USDT on Base
 
 ```ts
-import { AppKit } from "@circle-fin/app-kit";
-import { createViemAdapterFromPrivateKey } from "@circle-fin/adapter-viem-v2";
-import { inspect } from "util";
+import { AppKit } from '@circle-fin/app-kit';
+import { createViemAdapterFromPrivateKey } from '@circle-fin/adapter-viem-v2';
+import { inspect } from 'util';
 
 const kit = new AppKit();
 
 const crosschainMovement = async (): Promise<void> => {
   const privateKey = process.env.PRIVATE_KEY;
-  if (!privateKey || !privateKey.startsWith("0x")) {
-    throw new Error("PRIVATE_KEY env var must be set and 0x-prefixed");
+  if (!privateKey || !privateKey.startsWith('0x')) {
+    throw new Error('PRIVATE_KEY env var must be set and 0x-prefixed');
   }
 
   const adapter = createViemAdapterFromPrivateKey({
@@ -112,33 +112,33 @@ const crosschainMovement = async (): Promise<void> => {
   let bridgeResult;
   try {
     bridgeResult = await kit.bridge({
-      from: { adapter, chain: "Ethereum" },
-      to: { adapter, chain: "Base", useForwarder: true },
-      amount: "100.00",
+      from: { adapter, chain: 'Ethereum' },
+      to: { adapter, chain: 'Base', useForwarder: true },
+      amount: '100.00',
     });
-    console.log("Bridge completed:", inspect(bridgeResult, false, null, true));
+    console.log('Bridge completed:', inspect(bridgeResult, false, null, true));
   } catch (err) {
-    console.error("Bridge failed:", err instanceof Error ? err.message : "Unknown error");
-    console.error("Your USDC remains on Ethereum.");
+    console.error('Bridge failed:', err instanceof Error ? err.message : 'Unknown error');
+    console.error('Your USDC remains on Ethereum.');
     return;
   }
 
   // Step 2: Swap USDC to USDT on Base
   try {
     const swapResult = await kit.swap({
-      from: { adapter, chain: "Base" },
-      tokenIn: "USDC",
-      tokenOut: "USDT",
+      from: { adapter, chain: 'Base' },
+      tokenIn: 'USDC',
+      tokenOut: 'USDT',
       amountIn: bridgeResult.amount,
       config: {
         kitKey: process.env.KIT_KEY as string,
       },
     });
-    console.log("Swap completed:", inspect(swapResult, false, null, true));
+    console.log('Swap completed:', inspect(swapResult, false, null, true));
   } catch (err) {
-    console.error("Swap failed:", err instanceof Error ? err.message : "Unknown error");
+    console.error('Swap failed:', err instanceof Error ? err.message : 'Unknown error');
     console.error(
-      `Your ${bridgeResult.amount} USDC arrived on Base but the swap failed. Retry the swap on Base.`
+      `Your ${bridgeResult.amount} USDC arrived on Base but the swap failed. Retry the swap on Base.`,
     );
     return;
   }
@@ -154,16 +154,16 @@ Full three-step pattern: swap tokenX to USDC on source, bridge USDC, swap USDC t
 Example: USDT on Ethereum -> DAI on Base
 
 ```ts
-import { AppKit } from "@circle-fin/app-kit";
-import { createViemAdapterFromPrivateKey } from "@circle-fin/adapter-viem-v2";
-import { inspect } from "util";
+import { AppKit } from '@circle-fin/app-kit';
+import { createViemAdapterFromPrivateKey } from '@circle-fin/adapter-viem-v2';
+import { inspect } from 'util';
 
 const kit = new AppKit();
 
 const crosschainMovement = async (): Promise<void> => {
   const privateKey = process.env.PRIVATE_KEY;
-  if (!privateKey || !privateKey.startsWith("0x")) {
-    throw new Error("PRIVATE_KEY env var must be set and 0x-prefixed");
+  if (!privateKey || !privateKey.startsWith('0x')) {
+    throw new Error('PRIVATE_KEY env var must be set and 0x-prefixed');
   }
 
   const adapter = createViemAdapterFromPrivateKey({
@@ -174,22 +174,22 @@ const crosschainMovement = async (): Promise<void> => {
   let swapResult1;
   try {
     swapResult1 = await kit.swap({
-      from: { adapter, chain: "Ethereum" },
-      tokenIn: "USDT",
-      tokenOut: "USDC",
-      amountIn: "100.00",
+      from: { adapter, chain: 'Ethereum' },
+      tokenIn: 'USDT',
+      tokenOut: 'USDC',
+      amountIn: '100.00',
       config: {
         kitKey: process.env.KIT_KEY as string,
       },
     });
-    console.log("Swap 1 completed:", inspect(swapResult1, false, null, true));
+    console.log('Swap 1 completed:', inspect(swapResult1, false, null, true));
   } catch (err) {
-    console.error("Swap 1 failed:", err instanceof Error ? err.message : "Unknown error");
-    console.error("No funds were moved. Your USDT remains on Ethereum.");
+    console.error('Swap 1 failed:', err instanceof Error ? err.message : 'Unknown error');
+    console.error('No funds were moved. Your USDT remains on Ethereum.');
     return;
   }
 
-  const bridgeAmount = swapResult1.amountOut || "0";
+  const bridgeAmount = swapResult1.amountOut || '0';
 
   // Step 2: Bridge USDC from Ethereum to Base
   // useForwarder: true lets Circle's Forwarding Service handle attestation
@@ -198,15 +198,15 @@ const crosschainMovement = async (): Promise<void> => {
   let bridgeResult;
   try {
     bridgeResult = await kit.bridge({
-      from: { adapter, chain: "Ethereum" },
-      to: { adapter, chain: "Base", useForwarder: true },
+      from: { adapter, chain: 'Ethereum' },
+      to: { adapter, chain: 'Base', useForwarder: true },
       amount: bridgeAmount,
     });
-    console.log("Bridge completed:", inspect(bridgeResult, false, null, true));
+    console.log('Bridge completed:', inspect(bridgeResult, false, null, true));
   } catch (err) {
-    console.error("Bridge failed:", err instanceof Error ? err.message : "Unknown error");
+    console.error('Bridge failed:', err instanceof Error ? err.message : 'Unknown error');
     console.error(
-      `Your ${bridgeAmount} USDC remains on Ethereum. Retry the bridge or swap back to USDT.`
+      `Your ${bridgeAmount} USDC remains on Ethereum. Retry the bridge or swap back to USDT.`,
     );
     return;
   }
@@ -214,19 +214,19 @@ const crosschainMovement = async (): Promise<void> => {
   // Step 3: Swap USDC to DAI on Base
   try {
     const swapResult2 = await kit.swap({
-      from: { adapter, chain: "Base" },
-      tokenIn: "USDC",
-      tokenOut: "DAI",
+      from: { adapter, chain: 'Base' },
+      tokenIn: 'USDC',
+      tokenOut: 'DAI',
       amountIn: bridgeResult.amount,
       config: {
         kitKey: process.env.KIT_KEY as string,
       },
     });
-    console.log("Swap 2 completed:", inspect(swapResult2, false, null, true));
+    console.log('Swap 2 completed:', inspect(swapResult2, false, null, true));
   } catch (err) {
-    console.error("Swap 2 failed:", err instanceof Error ? err.message : "Unknown error");
+    console.error('Swap 2 failed:', err instanceof Error ? err.message : 'Unknown error');
     console.error(
-      `Your ${bridgeResult.amount} USDC arrived on Base but the swap failed. Retry the swap on Base.`
+      `Your ${bridgeResult.amount} USDC arrived on Base but the swap failed. Retry the swap on Base.`,
     );
     return;
   }

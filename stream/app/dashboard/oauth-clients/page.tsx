@@ -29,7 +29,13 @@ const ALL_SCOPES: { value: StreamKeyScope; label: string }[] = [
   { value: 'USAGE_READ', label: 'Read usage' },
 ];
 
-function RevealedSecretBanner({ created, onDismiss }: { created: CreatedOAuthClient; onDismiss: () => void }) {
+function RevealedSecretBanner({
+  created,
+  onDismiss,
+}: {
+  created: CreatedOAuthClient;
+  onDismiss: () => void;
+}) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -63,7 +69,8 @@ function RevealedSecretBanner({ created, onDismiss }: { created: CreatedOAuthCli
         </div>
       </div>
       <p className="mb-3 text-xs text-muted">
-        Exchange these for a short-lived access token: <code className="rounded bg-white px-1 py-0.5">POST /stream/v1/oauth/token</code> with{' '}
+        Exchange these for a short-lived access token:{' '}
+        <code className="rounded bg-white px-1 py-0.5">POST /stream/v1/oauth/token</code> with{' '}
         <code className="rounded bg-white px-1 py-0.5">grant_type=client_credentials</code>.
       </p>
       <SecondaryButton onClick={onDismiss} type="button">
@@ -248,8 +255,8 @@ export default function OAuthClientsPage() {
         </div>
       ) : (
         <Card className="p-8 text-center text-sm text-muted">
-          No OAuth clients yet. Create one to give an external client
-          client_credentials-based access to your Stream Decks.
+          No OAuth clients yet. Create one to give an external client client_credentials-based
+          access to your Stream Decks.
         </Card>
       )}
     </div>

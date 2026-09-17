@@ -41,7 +41,10 @@ export class WebhookSubscriptionsController {
   @Delete(':id')
   @UseGuards(SubscriberRolesGuard)
   @SubscriberRoles(...CAN_MANAGE_WEBHOOKS)
-  async remove(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims, @Param('id') id: string) {
+  async remove(
+    @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,
+    @Param('id') id: string,
+  ) {
     await this.webhooks.remove(subscriber.organizationId, id);
     return { removed: true };
   }

@@ -49,8 +49,8 @@ export default function ForgotPasswordPage() {
             className="rounded-[7px] border border-success/30 bg-success/10 px-3.5 py-3 text-center text-sm font-bold text-success"
             role="status"
           >
-            If an account exists for <span className="font-extrabold">{email}</span>, a reset
-            link is on its way.
+            If an account exists for <span className="font-extrabold">{email}</span>, a reset link
+            is on its way.
           </p>
         ) : (
           <form className="grid min-w-0 gap-4" onSubmit={submit}>

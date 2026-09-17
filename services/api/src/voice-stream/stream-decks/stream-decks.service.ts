@@ -21,7 +21,11 @@ import { OrgActivityService } from '../org-activity/org-activity.service';
  * Smart-Deck rule that intentionally spans multiple subdialects (never
  * generated here, only documented as a valid future value).
  */
-function generateDeckKey(countryCode?: string, dialectTag?: string, subdialectTag?: string): string {
+function generateDeckKey(
+  countryCode?: string,
+  dialectTag?: string,
+  subdialectTag?: string,
+): string {
   const country = (countryCode ?? 'GEN').toUpperCase();
   const dialect = (dialectTag ?? 'GEN').toUpperCase();
   const subdialect = (subdialectTag ?? 'GEN').toUpperCase();
@@ -146,9 +150,7 @@ export class StreamDecksService {
   async addItem(organizationId: string, deckId: string, userId: string, recordingId: string) {
     const deck = await this.get(organizationId, deckId);
     if (deck.type === StreamDeckType.SMART) {
-      throw new BadRequestException(
-        'Smart Deck membership is rule-driven; edit the rule instead',
-      );
+      throw new BadRequestException('Smart Deck membership is rule-driven; edit the rule instead');
     }
 
     const eligible = await this.catalogue.isEligible(recordingId);
@@ -182,9 +184,7 @@ export class StreamDecksService {
   async removeItem(organizationId: string, deckId: string, actorUserId: string, itemId: string) {
     const deck = await this.get(organizationId, deckId);
     if (deck.type === StreamDeckType.SMART) {
-      throw new BadRequestException(
-        'Smart Deck membership is rule-driven; edit the rule instead',
-      );
+      throw new BadRequestException('Smart Deck membership is rule-driven; edit the rule instead');
     }
 
     const item = await this.prisma.streamDeckItem.findUnique({ where: { id: itemId } });

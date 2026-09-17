@@ -56,7 +56,11 @@ export class AnomalyDetectionService {
     return rows.map((r) => r.organizationId);
   }
 
-  private async checkOrganization(organizationId: string, windowStart: Date, windowEnd: Date): Promise<void> {
+  private async checkOrganization(
+    organizationId: string,
+    windowStart: Date,
+    windowEnd: Date,
+  ): Promise<void> {
     const breaches = await this.evaluateRules(organizationId, windowStart, windowEnd);
     for (const breach of breaches) {
       const alreadyFired = await this.prisma.anomalyEvent.findFirst({
@@ -79,11 +83,17 @@ export class AnomalyDetectionService {
     }
   }
 
-  private async evaluateRules(organizationId: string, windowStart: Date, windowEnd: Date): Promise<RuleBreach[]> {
+  private async evaluateRules(
+    organizationId: string,
+    windowStart: Date,
+    windowEnd: Date,
+  ): Promise<RuleBreach[]> {
     const breaches: RuleBreach[] = [];
 
     const [totalRequests, deniedRequests] = await Promise.all([
-      this.prisma.streamAccessLog.count({ where: { organizationId, createdAt: { gte: windowStart, lt: windowEnd } } }),
+      this.prisma.streamAccessLog.count({
+        where: { organizationId, createdAt: { gte: windowStart, lt: windowEnd } },
+      }),
       this.prisma.streamAccessLog.count({
         where: {
           organizationId,
@@ -98,20 +108,35 @@ export class AnomalyDetectionService {
       if (denialRate > DENIAL_RATE_THRESHOLD) {
         breaches.push({
           ruleKey: 'denial_rate_spike',
-          details: { totalRequests, deniedRequests, denialRate: Number(denialRate.toFixed(4)), threshold: DENIAL_RATE_THRESHOLD },
+          details: {
+            totalRequests,
+            deniedRequests,
+            denialRate: Number(denialRate.toFixed(4)),
+            threshold: DENIAL_RATE_THRESHOLD,
+          },
         });
       }
     }
 
-    const baselineStart = new Date(windowStart.getTime() - BASELINE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+    const baselineStart = new Date(
+      windowStart.getTime() - BASELINE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000,
+    );
     const [recentIps, priorIps] = await Promise.all([
       this.prisma.streamAccessLog.findMany({
-        where: { organizationId, createdAt: { gte: windowStart, lt: windowEnd }, ipAddress: { not: null } },
+        where: {
+          organizationId,
+          createdAt: { gte: windowStart, lt: windowEnd },
+          ipAddress: { not: null },
+        },
         select: { ipAddress: true },
         distinct: ['ipAddress'],
       }),
       this.prisma.streamAccessLog.findMany({
-        where: { organizationId, createdAt: { gte: baselineStart, lt: windowStart }, ipAddress: { not: null } },
+        where: {
+          organizationId,
+          createdAt: { gte: baselineStart, lt: windowStart },
+          ipAddress: { not: null },
+        },
         select: { ipAddress: true },
         distinct: ['ipAddress'],
       }),
@@ -155,7 +180,9 @@ export class AnomalyDetectionService {
     windowEnd: Date,
   ): Promise<void> {
     try {
-      const org = await this.prisma.subscriberOrganization.findUnique({ where: { id: organizationId } });
+      const org = await this.prisma.subscriberOrganization.findUnique({
+        where: { id: organizationId },
+      });
       const admins = await this.prisma.subscriberMembership.findMany({
         where: {
           organizationId,

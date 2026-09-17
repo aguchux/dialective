@@ -37,9 +37,9 @@ describe('ValidatorDecksService (Phase 3: publish/reassign/archive/clone)', () =
         create: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn(),
-        findUniqueOrThrow: jest.fn().mockImplementation(({ where: { id } }: any) =>
-          Promise.resolve(baseDeck({ id })),
-        ),
+        findUniqueOrThrow: jest
+          .fn()
+          .mockImplementation(({ where: { id } }: any) => Promise.resolve(baseDeck({ id }))),
         update: jest.fn().mockImplementation(({ data }: any) => Promise.resolve(baseDeck(data))),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
@@ -55,7 +55,9 @@ describe('ValidatorDecksService (Phase 3: publish/reassign/archive/clone)', () =
         findUnique: jest.fn().mockResolvedValue({ id: 'new-owner-1', role: 'VALIDATOR' }),
       },
       streamDeck: {
-        create: jest.fn().mockResolvedValue({ id: 'stream-deck-1', deckKey: 'DLSD-GEN-GEN-GEN-ABC123' }),
+        create: jest
+          .fn()
+          .mockResolvedValue({ id: 'stream-deck-1', deckKey: 'DLSD-GEN-GEN-GEN-ABC123' }),
         findUnique: jest.fn(),
       },
       streamDeckItem: {
@@ -63,9 +65,11 @@ describe('ValidatorDecksService (Phase 3: publish/reassign/archive/clone)', () =
       },
       wallet: {
         findUnique: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockImplementation(({ data }: any) =>
-          Promise.resolve({ id: `wallet-${data.userId}`, userId: data.userId, balance: 0 }),
-        ),
+        create: jest
+          .fn()
+          .mockImplementation(({ data }: any) =>
+            Promise.resolve({ id: `wallet-${data.userId}`, userId: data.userId, balance: 0 }),
+          ),
         update: jest.fn().mockResolvedValue({}),
       },
       ledgerEntry: {
@@ -153,7 +157,9 @@ describe('ValidatorDecksService (Phase 3: publish/reassign/archive/clone)', () =
     });
 
     it('credits the creator wallet with base reward via a VALIDATION_REWARD ledger entry', async () => {
-      prisma.validatorDeck.findUnique.mockResolvedValue(baseDeck({ status: 'APPROVED', createdByUserId: 'creator-1' }));
+      prisma.validatorDeck.findUnique.mockResolvedValue(
+        baseDeck({ status: 'APPROVED', createdByUserId: 'creator-1' }),
+      );
       prisma.validatorDeckItem.findMany.mockResolvedValue([{ recordingId: 'rec-1' }]);
 
       await service.publish('deck-1', 'admin-1');
@@ -195,7 +201,9 @@ describe('ValidatorDecksService (Phase 3: publish/reassign/archive/clone)', () =
 
       await service.publish('deck-1', 'admin-1');
 
-      const references = prisma.ledgerEntry.create.mock.calls.map((call: any) => call[0].data.reference);
+      const references = prisma.ledgerEntry.create.mock.calls.map(
+        (call: any) => call[0].data.reference,
+      );
       expect(references).toContain('validator-deck:deck-1:creator');
       expect(references).toContain('validator-deck:deck-1:reassigned-owner');
     });
@@ -219,7 +227,9 @@ describe('ValidatorDecksService (Phase 3: publish/reassign/archive/clone)', () =
     });
 
     it('rejects reassigning to the deck current owner', async () => {
-      prisma.validatorDeck.findUnique.mockResolvedValue(baseDeck({ status: 'DRAFT', ownerUserId: 'owner-1' }));
+      prisma.validatorDeck.findUnique.mockResolvedValue(
+        baseDeck({ status: 'DRAFT', ownerUserId: 'owner-1' }),
+      );
 
       await expect(service.reassign('deck-1', 'admin-1', 'owner-1')).rejects.toThrow(
         'This deck is already owned by that validator',
@@ -264,7 +274,9 @@ describe('ValidatorDecksService (Phase 3: publish/reassign/archive/clone)', () =
 
     it('falls back to the global default penalty percent when none is explicitly given', async () => {
       settings.getValidatorReassignmentPenaltyPercent.mockResolvedValue(15);
-      prisma.validatorDeck.findUnique.mockResolvedValue(baseDeck({ status: 'DRAFT', ownerUserId: 'owner-1' }));
+      prisma.validatorDeck.findUnique.mockResolvedValue(
+        baseDeck({ status: 'DRAFT', ownerUserId: 'owner-1' }),
+      );
 
       await service.reassign('deck-1', 'admin-1', 'new-owner-1');
 
@@ -304,7 +316,11 @@ describe('ValidatorDecksService (Phase 3: publish/reassign/archive/clone)', () =
       });
       expect(prisma.validatorDeckAuditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ action: 'ARCHIVED', fromStatus: 'DRAFT', toStatus: 'ARCHIVED' }),
+          data: expect.objectContaining({
+            action: 'ARCHIVED',
+            fromStatus: 'DRAFT',
+            toStatus: 'ARCHIVED',
+          }),
         }),
       );
     });
@@ -320,7 +336,12 @@ describe('ValidatorDecksService (Phase 3: publish/reassign/archive/clone)', () =
     });
 
     it('rejects a target owner who is not a validator', async () => {
-      prisma.streamDeck.findUnique.mockResolvedValue({ id: 'sd-1', name: 'B2B Deck', deckKey: 'DLSD-1', items: [] });
+      prisma.streamDeck.findUnique.mockResolvedValue({
+        id: 'sd-1',
+        name: 'B2B Deck',
+        deckKey: 'DLSD-1',
+        items: [],
+      });
       prisma.user.findUnique.mockResolvedValue({ id: 'trainer-1', role: 'TRAINER' });
 
       await expect(
@@ -335,7 +356,9 @@ describe('ValidatorDecksService (Phase 3: publish/reassign/archive/clone)', () =
         deckKey: 'DLSD-1',
         items: [{ recordingId: 'rec-1' }, { recordingId: 'rec-2' }],
       });
-      prisma.validatorDeck.create.mockResolvedValue(baseDeck({ id: 'new-deck-1', status: 'DRAFT' }));
+      prisma.validatorDeck.create.mockResolvedValue(
+        baseDeck({ id: 'new-deck-1', status: 'DRAFT' }),
+      );
 
       const result = await service.adminCloneFromStreamDeck('sd-1', 'new-owner-1', 'admin-1');
 

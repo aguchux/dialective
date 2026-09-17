@@ -5,7 +5,7 @@
 **Working name:** DLKYC  
 **Primary purpose:** Trainer identity verification and payout-account protection  
 **Frontend:** Next.js App Router, Tailwind CSS and Radix UI  
-**AI providers available:** OpenAI, Anthropic and DeepSeek  
+**AI providers available:** OpenAI, Anthropic and DeepSeek
 
 ---
 
@@ -112,16 +112,16 @@ Avoid claims such as "government certified," "bank-grade," "fraud-proof" or "com
 
 ### 6.1 Components
 
-| Component | Responsibility | Recommended technology |
-|---|---|---|
-| DL web application | Capture journey, status and reviewer UI | Next.js App Router, TypeScript, Tailwind CSS, Radix UI |
-| KYC orchestration API | Sessions, authorisation, uploads, decisions and audit | Existing NestJS API or dedicated internal API |
-| Vision service | OCR, face processing, quality and liveness inference | Python, FastAPI, OpenCV and ONNX Runtime |
-| Background workers | CPU/GPU analysis outside web requests | RabbitMQ consumers or BullMQ workers |
-| Relational store | Session metadata, fields, scores and audit events | PostgreSQL and Prisma |
-| Evidence store | Encrypted document images and short selfie videos | Private S3-compatible object storage |
-| Cache/locks | Session expiry, replay prevention and idempotency | Redis |
-| Monitoring | Metrics, traces and operational alerts | Prometheus, Grafana and structured logs |
+| Component             | Responsibility                                        | Recommended technology                                 |
+| --------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
+| DL web application    | Capture journey, status and reviewer UI               | Next.js App Router, TypeScript, Tailwind CSS, Radix UI |
+| KYC orchestration API | Sessions, authorisation, uploads, decisions and audit | Existing NestJS API or dedicated internal API          |
+| Vision service        | OCR, face processing, quality and liveness inference  | Python, FastAPI, OpenCV and ONNX Runtime               |
+| Background workers    | CPU/GPU analysis outside web requests                 | RabbitMQ consumers or BullMQ workers                   |
+| Relational store      | Session metadata, fields, scores and audit events     | PostgreSQL and Prisma                                  |
+| Evidence store        | Encrypted document images and short selfie videos     | Private S3-compatible object storage                   |
+| Cache/locks           | Session expiry, replay prevention and idempotency     | Redis                                                  |
+| Monitoring            | Metrics, traces and operational alerts                | Prometheus, Grafana and structured logs                |
 
 ### 6.2 Logical flow
 
@@ -327,12 +327,12 @@ No single signal should be called conclusive liveness. The policy engine should 
 
 ### 11.2 Decision bands
 
-| Decision | Meaning | User experience |
-|---|---|---|
-| `VERIFIED` | Evidence exceeds calibrated low-risk requirements | Verification complete |
-| `MANUAL_REVIEW` | Evidence is plausible but uncertain | Verification under review |
-| `RETRY_REQUIRED` | Capture quality or recoverable check failed | Repeat a specific step |
-| `REJECTED` | Strong mismatch, invalid evidence or policy failure | Verification unsuccessful; appeal route shown where applicable |
+| Decision         | Meaning                                             | User experience                                                |
+| ---------------- | --------------------------------------------------- | -------------------------------------------------------------- |
+| `VERIFIED`       | Evidence exceeds calibrated low-risk requirements   | Verification complete                                          |
+| `MANUAL_REVIEW`  | Evidence is plausible but uncertain                 | Verification under review                                      |
+| `RETRY_REQUIRED` | Capture quality or recoverable check failed         | Repeat a specific step                                         |
+| `REJECTED`       | Strong mismatch, invalid evidence or policy failure | Verification unsuccessful; appeal route shown where applicable |
 
 ### 11.3 Policy requirements
 
@@ -828,4 +828,3 @@ Before treating DLKYC as regulated financial KYC, obtain jurisdiction-specific l
 - NIST — Digital Identity Guidelines, Enrollment and Identity Proofing (SP 800-63A-4): <https://csrc.nist.gov/pubs/sp/800/63/a/4/final>
 - FATF — Guidance on Digital Identity: <https://www.fatf-gafi.org/en/publications/Financialinclusionandnpoissues/Digital-identity-guidance.html>
 - ICAO — Machine Readable Travel Documents (Doc 9303): <https://www.icao.int/publications/pages/publication.aspx?docnum=9303>
-

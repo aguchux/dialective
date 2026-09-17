@@ -143,7 +143,9 @@ export class IntegrationsService implements OnModuleInit {
   // --- Admin -----------------------------------------------------------------
 
   async listAllForAdmin() {
-    const rows = await this.prisma.integration.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] });
+    const rows = await this.prisma.integration.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
     return rows.map((row) => this.toAdminPublic(row));
   }
 

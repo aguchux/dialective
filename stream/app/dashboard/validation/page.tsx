@@ -12,7 +12,14 @@ import {
 } from '@/store/api';
 import type { SubscriberOrgRole } from '@/lib/api-client';
 import type { ValidationReviewStatus } from '@/store/api';
-import { Card, ErrorText, PageHeading, PrimaryButton, SecondaryButton, TextInput } from '@/components/ui';
+import {
+  Card,
+  ErrorText,
+  PageHeading,
+  PrimaryButton,
+  SecondaryButton,
+  TextInput,
+} from '@/components/ui';
 
 const CAN_REVIEW: SubscriberOrgRole[] = ['OWNER', 'ADMIN', 'DATASET_MANAGER'];
 
@@ -26,9 +33,16 @@ function StatCard({ label, value }: { label: string; value: string }) {
 }
 
 function StatusBadge({ status }: { status: ValidationReviewStatus }) {
-  const shapes: Record<ValidationReviewStatus, { icon: typeof Clock; label: string; className: string }> = {
+  const shapes: Record<
+    ValidationReviewStatus,
+    { icon: typeof Clock; label: string; className: string }
+  > = {
     PENDING: { icon: Clock, label: 'Pending review', className: 'bg-amber-50 text-amber-700' },
-    APPROVED: { icon: CheckCircle2, label: 'Approved', className: 'bg-emerald-50 text-emerald-700' },
+    APPROVED: {
+      icon: CheckCircle2,
+      label: 'Approved',
+      className: 'bg-emerald-50 text-emerald-700',
+    },
     REJECTED: { icon: XCircle, label: 'Rejected', className: 'bg-rose-50 text-rose-700' },
   };
   const { icon: Icon, label, className } = shapes[status];
@@ -81,8 +95,8 @@ function ReviewQueue() {
                 <div>
                   <p className="font-mono text-sm text-ink">{v.recordingId}</p>
                   <p className="text-xs text-muted">
-                    Submitted by {v.user ? `${v.user.firstName} ${v.user.lastName}` : 'a teammate'} ·{' '}
-                    {new Date(v.createdAt).toLocaleDateString()}
+                    Submitted by {v.user ? `${v.user.firstName} ${v.user.lastName}` : 'a teammate'}{' '}
+                    · {new Date(v.createdAt).toLocaleDateString()}
                   </p>
                   {v.notes && <p className="mt-1 text-xs text-muted">&ldquo;{v.notes}&rdquo;</p>}
                   <p className="mt-1 text-sm font-bold text-ink">Overall: {v.overallScore}</p>
@@ -91,7 +105,10 @@ function ReviewQueue() {
                   <PrimaryButton onClick={() => void approveValidation(v.id)} type="button">
                     Approve
                   </PrimaryButton>
-                  <SecondaryButton onClick={() => setRejectingId(rejectingId === v.id ? null : v.id)} type="button">
+                  <SecondaryButton
+                    onClick={() => setRejectingId(rejectingId === v.id ? null : v.id)}
+                    type="button"
+                  >
                     Reject
                   </SecondaryButton>
                 </div>
@@ -138,7 +155,10 @@ export default function ValidationPage() {
       />
 
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard label="Recordings Validated" value={String(contribution?.recordingsValidated ?? 0)} />
+        <StatCard
+          label="Recordings Validated"
+          value={String(contribution?.recordingsValidated ?? 0)}
+        />
         <StatCard label="Total Validations" value={String(contribution?.totalValidations ?? 0)} />
       </div>
 
@@ -159,7 +179,9 @@ export default function ValidationPage() {
                   </p>
                   {v.notes && <p className="mt-1 text-xs text-muted">&ldquo;{v.notes}&rdquo;</p>}
                   {v.status === 'REJECTED' && v.rejectionReason && (
-                    <p className="mt-1 text-xs font-semibold text-rose-700">Rejected: {v.rejectionReason}</p>
+                    <p className="mt-1 text-xs font-semibold text-rose-700">
+                      Rejected: {v.rejectionReason}
+                    </p>
                   )}
                 </div>
                 <div className="flex items-center gap-3 md:justify-end">

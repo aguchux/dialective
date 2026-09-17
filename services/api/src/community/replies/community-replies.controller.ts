@@ -1,7 +1,21 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthenticatedRequest, JwtAuthGuard } from '../../auth/strategies/jwt-auth.guard';
-import { OptionalJwtAuthGuard, OptionallyAuthenticatedRequest } from '../../auth/strategies/optional-jwt-auth.guard';
+import {
+  OptionalJwtAuthGuard,
+  OptionallyAuthenticatedRequest,
+} from '../../auth/strategies/optional-jwt-auth.guard';
 import { UserThrottlerGuard } from '../../common/guards/user-throttler.guard';
 import { CreateCommunityReplyDto } from '../dto/create-community-reply.dto';
 import { ListCommunityRepliesDto } from '../dto/list-community-replies.dto';

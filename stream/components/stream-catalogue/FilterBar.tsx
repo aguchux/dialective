@@ -29,7 +29,7 @@ function isFilterLocked(key: FilterKey, filters: CatalogueFilters): boolean {
 
 function prerequisiteLabel(key: FilterKey): string {
   const prerequisite = PREREQUISITE[key];
-  return prerequisite ? FILTERS.find((filter) => filter.key === prerequisite)?.label ?? '' : '';
+  return prerequisite ? (FILTERS.find((filter) => filter.key === prerequisite)?.label ?? '') : '';
 }
 
 export function FilterBar({
@@ -154,7 +154,10 @@ function FilterButton({
         type="button"
       >
         {value ?? filter.label}
-        <ChevronDown aria-hidden="true" className={`size-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown
+          aria-hidden="true"
+          className={`size-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+        />
       </button>
       {isOpen && (
         <div

@@ -68,9 +68,9 @@ describe('DomainPromptGeneratorService', () => {
       'MALE',
       'NEUTRAL',
     ]);
-    expect(inserted.every((row: { scenarioKey: string }) => row.scenarioKey === 'market-buy-rice')).toBe(
-      true,
-    );
+    expect(
+      inserted.every((row: { scenarioKey: string }) => row.scenarioKey === 'market-buy-rice'),
+    ).toBe(true);
     expect(inserted.every((row: { source: string }) => row.source === 'llm')).toBe(true);
   });
 

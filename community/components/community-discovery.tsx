@@ -228,4 +228,3 @@ export function PopularTags({ tags }: { tags: { id: string; name: string; slug: 
     </Card>
   );
 }
-

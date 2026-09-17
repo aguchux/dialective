@@ -38,8 +38,8 @@ export function AvailableReserveSection({ status }: { status: TokenomicsStatus }
 
       {neverPolled && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-          No balance has been polled yet -- the reserve-balance-poll CronJob hasn&apos;t completed
-          a successful run. The DL/USD rate is currently based on $0 reserve.
+          No balance has been polled yet -- the reserve-balance-poll CronJob hasn&apos;t completed a
+          successful run. The DL/USD rate is currently based on $0 reserve.
         </p>
       )}
       {!neverPolled && isStale && (
@@ -70,7 +70,10 @@ export function AvailableReserveSection({ status }: { status: TokenomicsStatus }
               </tr>
             )}
             {status.reserveBalances.map((row) => (
-              <tr key={`${row.provider}:${row.currency}`} className="border-b border-line last:border-0">
+              <tr
+                key={`${row.provider}:${row.currency}`}
+                className="border-b border-line last:border-0"
+              >
                 <td className="px-4 py-3">{PROVIDER_LABELS[row.provider] ?? row.provider}</td>
                 <td className="px-4 py-3">{row.currency}</td>
                 <td className="px-4 py-3">

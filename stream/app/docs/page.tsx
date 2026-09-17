@@ -60,7 +60,10 @@ export default function DocsPage() {
           {sections.map((section) => {
             const Icon = section.icon;
             return (
-              <article className="grid gap-4 rounded-xl border border-line bg-white p-6" key={section.title}>
+              <article
+                className="grid gap-4 rounded-xl border border-line bg-white p-6"
+                key={section.title}
+              >
                 <span className="flex size-10 items-center justify-center rounded-lg bg-accent-soft text-accent-dark">
                   <Icon aria-hidden="true" className="size-5" />
                 </span>

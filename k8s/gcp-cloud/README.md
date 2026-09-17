@@ -184,7 +184,7 @@ kubectl apply -k k8s/gcp-cloud/overlays/prod/
 
 - **External LB reachability + allowlist enforcement**: from a GCP node
   (or anywhere sharing its egress IP), `redis-cli -h <IP> -p 6380 --tls -a
-  <password> PING` returns `PONG`; from any other IP, the LB refuses the
+<password> PING` returns `PONG`; from any other IP, the LB refuses the
   connection.
 - **Shared-queue proof**: submit enough real word recordings to need
   multiple workers, then `XINFO CONSUMERS asr-jobs-vosk asr-workers-vosk`

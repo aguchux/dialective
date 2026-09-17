@@ -66,7 +66,10 @@ export function fingerprintKycDocument(value: string): string {
   if (!passphrase) {
     throw new Error('KYC_DOCUMENT_ENCRYPTION_KEY is not set');
   }
-  const normalized = value.normalize('NFKC').replace(/[^\p{L}\p{N}]/gu, '').toUpperCase();
+  const normalized = value
+    .normalize('NFKC')
+    .replace(/[^\p{L}\p{N}]/gu, '')
+    .toUpperCase();
   if (!normalized) {
     throw new Error('KYC document number is empty after normalization');
   }

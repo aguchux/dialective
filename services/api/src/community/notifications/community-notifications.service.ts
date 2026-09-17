@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { CommunityNotificationType } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AUTHOR_SUMMARY_SELECT, AuthorSummarySource, toAuthorSummary } from '../profiles/community-profiles.service';
+import {
+  AUTHOR_SUMMARY_SELECT,
+  AuthorSummarySource,
+  toAuthorSummary,
+} from '../profiles/community-profiles.service';
 
 const PAGE_SIZE = 30;
 

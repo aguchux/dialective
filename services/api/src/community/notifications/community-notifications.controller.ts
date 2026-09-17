@@ -8,7 +8,10 @@ export class CommunityNotificationsController {
   constructor(private readonly notifications: CommunityNotificationsService) {}
 
   @Get()
-  list(@Req() req: AuthenticatedRequest, @Query('tab') tab?: 'replies' | 'mentions' | 'announcements') {
+  list(
+    @Req() req: AuthenticatedRequest,
+    @Query('tab') tab?: 'replies' | 'mentions' | 'announcements',
+  ) {
     return this.notifications.list(req.user.sub, tab);
   }
 

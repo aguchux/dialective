@@ -89,7 +89,15 @@ export class WebhookDeliveryConsumerService implements OnModuleInit {
   ): Promise<boolean> {
     const secret = await this.subscriptions.getDecryptedSecret(subscription.id);
     if (!secret) {
-      await this.logDelivery(subscription.id, eventType, payload, attemptNumber, null, false, 'Signing secret not found');
+      await this.logDelivery(
+        subscription.id,
+        eventType,
+        payload,
+        attemptNumber,
+        null,
+        false,
+        'Signing secret not found',
+      );
       return false;
     }
 
@@ -100,7 +108,15 @@ export class WebhookDeliveryConsumerService implements OnModuleInit {
     try {
       await assertPublicHostname(new URL(subscription.url).hostname);
     } catch {
-      await this.logDelivery(subscription.id, eventType, payload, attemptNumber, null, false, 'Delivery blocked: endpoint not reachable');
+      await this.logDelivery(
+        subscription.id,
+        eventType,
+        payload,
+        attemptNumber,
+        null,
+        false,
+        'Delivery blocked: endpoint not reachable',
+      );
       return false;
     }
 

@@ -247,10 +247,10 @@ export function TestimonySettingsPanel() {
               <span>
                 <span className="block font-bold">Float testimonials up the landing page</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  Shows one short quote at a time drifting up from the bottom of the landing
-                  page, dissolving near the top. Uses the same approved testimonials as the
-                  carousel, so it needs the setting above to be on as well. Visitors who ask
-                  for reduced motion never see it.
+                  Shows one short quote at a time drifting up from the bottom of the landing page,
+                  dissolving near the top. Uses the same approved testimonials as the carousel, so
+                  it needs the setting above to be on as well. Visitors who ask for reduced motion
+                  never see it.
                 </span>
               </span>
             </label>
@@ -272,8 +272,8 @@ export function TestimonySettingsPanel() {
               value={bubbleInterval}
             />
             <p className="text-xs leading-relaxed text-muted">
-              Measured from one quote fading out to the next appearing, so a larger number
-              means a calmer page. Between 3 and 120 seconds.
+              Measured from one quote fading out to the next appearing, so a larger number means a
+              calmer page. Between 3 and 120 seconds.
             </p>
           </div>
 

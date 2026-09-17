@@ -10,7 +10,8 @@ import { GoogleAnalyticsService } from './google-analytics.service';
 
 function row(date: string, dimensionValue: string | null, metrics: string[]) {
   return {
-    dimensionValues: dimensionValue !== null ? [{ value: date }, { value: dimensionValue }] : [{ value: date }],
+    dimensionValues:
+      dimensionValue !== null ? [{ value: date }, { value: dimensionValue }] : [{ value: date }],
     metricValues: metrics.map((value) => ({ value })),
   };
 }

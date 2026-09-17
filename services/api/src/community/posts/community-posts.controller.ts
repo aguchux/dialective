@@ -1,7 +1,21 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { AuthenticatedRequest, JwtAuthGuard } from '../../auth/strategies/jwt-auth.guard';
-import { OptionalJwtAuthGuard, OptionallyAuthenticatedRequest } from '../../auth/strategies/optional-jwt-auth.guard';
+import {
+  OptionalJwtAuthGuard,
+  OptionallyAuthenticatedRequest,
+} from '../../auth/strategies/optional-jwt-auth.guard';
 import { UserThrottlerGuard } from '../../common/guards/user-throttler.guard';
 import { CreateCommunityPostDto } from '../dto/create-community-post.dto';
 import { UpdateCommunityPostDto } from '../dto/update-community-post.dto';
@@ -44,7 +58,11 @@ export class CommunityPostsController {
 
   @Patch(':id')
   @UseGuards(JwtAuthGuard)
-  update(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() dto: UpdateCommunityPostDto) {
+  update(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: UpdateCommunityPostDto,
+  ) {
     return this.posts.update(req.user.sub, id, dto);
   }
 

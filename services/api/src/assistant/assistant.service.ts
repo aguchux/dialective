@@ -188,7 +188,11 @@ export class AssistantService implements OnModuleDestroy {
           select: {
             id: true,
             user: { select: { id: true, firstName: true, lastName: true, role: true } },
-            messages: { orderBy: { createdAt: 'asc' }, take: 500, select: { role: true, content: true, createdAt: true } },
+            messages: {
+              orderBy: { createdAt: 'asc' },
+              take: 500,
+              select: { role: true, content: true, createdAt: true },
+            },
           },
         },
       },
@@ -209,28 +213,38 @@ export class AssistantService implements OnModuleDestroy {
       throw new ServiceUnavailableException('Git backlog integration is not configured');
     }
     const repositoryParts = repository.split('/').filter(Boolean);
-    if (repositoryParts.length !== 2 || repositoryParts.some((part) => !/^[A-Za-z0-9_.-]+$/.test(part))) {
+    if (
+      repositoryParts.length !== 2 ||
+      repositoryParts.some((part) => !/^[A-Za-z0-9_.-]+$/.test(part))
+    ) {
       throw new BadRequestException('GITHUB_REPOSITORY must use the owner/repository format');
     }
 
     const { conversation } = message;
-    const displayName = [conversation.user.firstName, conversation.user.lastName].filter(Boolean).join(' ') || conversation.user.role;
+    const displayName =
+      [conversation.user.firstName, conversation.user.lastName].filter(Boolean).join(' ') ||
+      conversation.user.role;
     const title = input.title?.trim() || `AI assistant question: ${displayName}`;
     const body = input.body?.trim() || buildGithubIssueBody(message, conversation);
     let response: Response;
     try {
-      response = await fetch(`https://api.github.com/repos/${repositoryParts[0]}/${repositoryParts[1]}/issues`, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/vnd.github+json',
-          Authorization: `Bearer ${token}`,
-          'X-GitHub-Api-Version': '2022-11-28',
-          'Content-Type': 'application/json',
+      response = await fetch(
+        `https://api.github.com/repos/${repositoryParts[0]}/${repositoryParts[1]}/issues`,
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'application/vnd.github+json',
+            Authorization: `Bearer ${token}`,
+            'X-GitHub-Api-Version': '2022-11-28',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ title, body }),
         },
-        body: JSON.stringify({ title, body }),
-      });
+      );
     } catch (error) {
-      this.logger.error(`Git backlog request failed: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Git backlog request failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw new BadGatewayException('Git backlog is temporarily unavailable');
     }
     if (!response.ok) {
@@ -238,11 +252,16 @@ export class AssistantService implements OnModuleDestroy {
       throw new BadGatewayException('Git backlog rejected the issue');
     }
     const result = (await response.json()) as { number?: number; html_url?: string };
-    if (!result.number || !result.html_url) throw new BadGatewayException('Git backlog returned an invalid issue');
+    if (!result.number || !result.html_url)
+      throw new BadGatewayException('Git backlog returned an invalid issue');
     const createdAt = new Date();
     await this.prisma.assistantMessage.update({
       where: { id: messageId },
-      data: { githubIssueNumber: result.number, githubIssueUrl: result.html_url, githubIssueCreatedAt: createdAt },
+      data: {
+        githubIssueNumber: result.number,
+        githubIssueUrl: result.html_url,
+        githubIssueCreatedAt: createdAt,
+      },
     });
     return { created: true, issueNumber: result.number, issueUrl: result.html_url, createdAt };
   }

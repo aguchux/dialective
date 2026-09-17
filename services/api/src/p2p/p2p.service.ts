@@ -1042,7 +1042,9 @@ export class P2PService {
       // red (defaulter) / green (reporter) distinction instead of two
       // unlabeled emails.
       const defaulter =
-        dispute.trade.buyerId === dispute.raisedByUserId ? dispute.trade.seller : dispute.trade.buyer;
+        dispute.trade.buyerId === dispute.raisedByUserId
+          ? dispute.trade.seller
+          : dispute.trade.buyer;
       return {
         id: dispute.id,
         status: dispute.status,

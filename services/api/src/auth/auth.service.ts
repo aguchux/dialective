@@ -234,10 +234,7 @@ export class AuthService {
    * check for authMaintenanceBlockSessions, so the same admin/partner stays
    * able to sign in during maintenance that stays signed in during it.
    */
-  private async assertNotInAuthMaintenance(
-    scope: 'login' | 'signup',
-    role?: Role,
-  ): Promise<void> {
+  private async assertNotInAuthMaintenance(scope: 'login' | 'signup', role?: Role): Promise<void> {
     const status = await this.platformSettings.getAuthMaintenanceStatus();
     const blocked = scope === 'login' ? status.blockLogin : status.blockSignup;
     if (!status.enabled || !blocked) {

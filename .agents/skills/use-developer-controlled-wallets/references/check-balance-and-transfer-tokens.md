@@ -8,7 +8,7 @@ Use the [Get Token Balance for a Wallet](https://developers.circle.com/api-refer
 
 ```ts
 const balanceResponse = await circleDeveloperSdk.getWalletTokenBalance({
-  id: "<source-wallet-id>",
+  id: '<source-wallet-id>',
 });
 
 const tokenBalances = balanceResponse.data?.tokenBalances ?? [];
@@ -20,13 +20,13 @@ Find the token you want to transfer and capture its `tokenAddress`.
 
 ```ts
 const transferResponse = await circleDeveloperSdk.createTransaction({
-  walletId: "<source-wallet-id>",
-  tokenAddress: "<token-address>",
-  destinationAddress: "<destination-wallet-address>",
-  amounts: ["0.01"],
+  walletId: '<source-wallet-id>',
+  tokenAddress: '<token-address>',
+  destinationAddress: '<destination-wallet-address>',
+  amounts: ['0.01'],
   fee: {
-    type: "level",
-    config: { feeLevel: "MEDIUM" },
+    type: 'level',
+    config: { feeLevel: 'MEDIUM' },
   },
 });
 
@@ -39,7 +39,7 @@ Creates an outbound transfer transaction and returns a transaction ID for tracki
 
 ```ts
 const txResponse = await circleDeveloperSdk.getTransaction({
-  id: "<transaction-id>",
+  id: '<transaction-id>',
 });
 
 const tx = txResponse.data?.transaction;
@@ -53,10 +53,10 @@ Use `state` to determine completion and `txHash` for chain explorer links.
 
 ```ts
 const feeEstimate = await circleDeveloperSdk.estimateTransferFee({
-  walletId: "<source-wallet-id>",
-  tokenAddress: "<token-address>",
-  destinationAddress: "<destination-wallet-address>",
-  amounts: ["0.01"],
+  walletId: '<source-wallet-id>',
+  tokenAddress: '<token-address>',
+  destinationAddress: '<destination-wallet-address>',
+  amounts: ['0.01'],
 });
 
 const { low, medium, high } = feeEstimate.data ?? {};
@@ -69,7 +69,7 @@ Estimate fees before transferring to choose an appropriate fee level or set cust
 
 ```ts
 const accelerateResponse = await circleDeveloperSdk.accelerateTransaction({
-  id: "<transaction-id>",
+  id: '<transaction-id>',
 });
 ```
 
@@ -79,7 +79,7 @@ Speeds up a `SENT` transaction by resubmitting with higher gas. Additional gas f
 
 ```ts
 const cancelResponse = await circleDeveloperSdk.cancelTransaction({
-  id: "<transaction-id>",
+  id: '<transaction-id>',
 });
 
 const state = cancelResponse.data?.state;

@@ -468,7 +468,13 @@ export interface OverflowMenuItem {
  * mobile and desktop, matching how the design mockups show it identically
  * on every card regardless of breakpoint.
  */
-export function OverflowMenu({ items, label = 'More actions' }: { items: OverflowMenuItem[]; label?: string }) {
+export function OverflowMenu({
+  items,
+  label = 'More actions',
+}: {
+  items: OverflowMenuItem[];
+  label?: string;
+}) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const visibleItems = items.filter((item) => !item.hidden);

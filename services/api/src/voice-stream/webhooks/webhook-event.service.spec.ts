@@ -25,8 +25,6 @@ describe('WebhookEventService.emit', () => {
     const { service, streams } = setup();
     streams.publish.mockRejectedValue(new Error('redis down'));
 
-    await expect(
-      service.emit('org-1', WebhookEventType.DECK_CREATED, {}),
-    ).resolves.toBeUndefined();
+    await expect(service.emit('org-1', WebhookEventType.DECK_CREATED, {})).resolves.toBeUndefined();
   });
 });

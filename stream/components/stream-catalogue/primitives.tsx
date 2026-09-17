@@ -40,14 +40,7 @@ export function CoverImage({
   width: number;
 }) {
   return (
-    <Image
-      alt={alt}
-      className={className}
-      height={height}
-      loading="lazy"
-      src={src}
-      width={width}
-    />
+    <Image alt={alt} className={className} height={height} loading="lazy" src={src} width={width} />
   );
 }
 
@@ -86,13 +79,7 @@ export function Waveform({
   );
 }
 
-export function ScoreBadge({
-  size = 'md',
-  score,
-}: {
-  size?: 'sm' | 'md';
-  score: number;
-}) {
+export function ScoreBadge({ size = 'md', score }: { size?: 'sm' | 'md'; score: number }) {
   if (size === 'sm') {
     return (
       <span className="inline-flex items-center rounded-full bg-catalogue-blue/70 px-1.5 py-0.5 text-[9px] font-bold text-white opacity-80 shadow-sm backdrop-blur-sm transition-opacity duration-150 group-hover:opacity-100">
@@ -208,9 +195,12 @@ export function CarouselRow({
   rows?: number;
 }) {
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const dragState = useRef<{ pointerId: number; startX: number; startScrollLeft: number; moved: boolean } | null>(
-    null,
-  );
+  const dragState = useRef<{
+    pointerId: number;
+    startX: number;
+    startScrollLeft: number;
+    moved: boolean;
+  } | null>(null);
   const suppressNextClick = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
 

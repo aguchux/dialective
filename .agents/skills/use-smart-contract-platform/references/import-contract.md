@@ -30,8 +30,8 @@ If `importContract()` returns a duplicate/already-exists error, fall back to lis
 
 ```ts
 const listRes = await scpClient.listContracts({ blockchain: 'ARC-TESTNET' });
-const existing = listRes.data?.contracts?.find(c =>
-  c.contractAddress.toLowerCase() === contractAddress.toLowerCase()
+const existing = listRes.data?.contracts?.find(
+  (c) => c.contractAddress.toLowerCase() === contractAddress.toLowerCase(),
 );
 const contractId = existing?.id;
 ```

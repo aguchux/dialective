@@ -19,7 +19,9 @@ def test_resilient_connection_reconnects_on_cursor_interface_error():
     second_conn = MagicMock(name="second_conn")
     with patch("db.psycopg2.connect", side_effect=[first_conn, second_conn]):
         conn = ResilientConnection()
-        first_conn.cursor.side_effect = psycopg2.InterfaceError("connection already closed")
+        first_conn.cursor.side_effect = psycopg2.InterfaceError(
+            "connection already closed"
+        )
 
         result = conn.cursor()
 
@@ -34,7 +36,9 @@ def test_resilient_connection_reconnects_on_commit_operational_error():
     second_conn = MagicMock(name="second_conn")
     with patch("db.psycopg2.connect", side_effect=[first_conn, second_conn]):
         conn = ResilientConnection()
-        first_conn.commit.side_effect = psycopg2.OperationalError("server closed the connection")
+        first_conn.commit.side_effect = psycopg2.OperationalError(
+            "server closed the connection"
+        )
 
         conn.commit()
 

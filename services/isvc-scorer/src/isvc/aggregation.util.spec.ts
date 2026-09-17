@@ -1,5 +1,11 @@
 import { IsvcConfidence } from '@dialectiva/db';
-import { computeAgreement, computeConfidence, countOutliers, mean, stdDev } from './aggregation.util';
+import {
+  computeAgreement,
+  computeConfidence,
+  countOutliers,
+  mean,
+  stdDev,
+} from './aggregation.util';
 
 describe('mean / stdDev', () => {
   it('mean of an empty array is 0', () => {

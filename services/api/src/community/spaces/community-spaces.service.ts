@@ -27,7 +27,11 @@ export class CommunitySpacesService {
       const { _count, memberships, ...rest } = space as typeof space & {
         memberships?: unknown[];
       };
-      return { ...rest, postCount: _count.posts, joined: userId ? (memberships?.length ?? 0) > 0 : false };
+      return {
+        ...rest,
+        postCount: _count.posts,
+        joined: userId ? (memberships?.length ?? 0) > 0 : false,
+      };
     });
   }
 
@@ -102,7 +106,9 @@ export class CommunitySpacesService {
       (await this.prisma.communitySpace.findMany({ select: { id: true } })).map((s) => s.id),
     );
     if (orderedIds.length !== existingIds.size || orderedIds.some((id) => !existingIds.has(id))) {
-      throw new UnprocessableEntityException('orderedIds must include every existing space exactly once');
+      throw new UnprocessableEntityException(
+        'orderedIds must include every existing space exactly once',
+      );
     }
     await this.prisma.$transaction(
       orderedIds.map((id, index) =>

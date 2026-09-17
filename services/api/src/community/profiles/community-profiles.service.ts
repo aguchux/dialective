@@ -18,7 +18,8 @@ export type CommunityBadge = 'VERIFIED_TRAINER' | 'DISTRIBUTOR' | null;
  * see AUTHOR_SUMMARY_SELECT-shaped selects in those services.
  */
 export function deriveBadge(user: { role: Role; kycStatus: KycStatus }): CommunityBadge {
-  if (user.role === Role.TRAINER && user.kycStatus === KycStatus.APPROVED) return 'VERIFIED_TRAINER';
+  if (user.role === Role.TRAINER && user.kycStatus === KycStatus.APPROVED)
+    return 'VERIFIED_TRAINER';
   if (user.role === Role.DISTRIBUTOR) return 'DISTRIBUTOR';
   return null;
 }

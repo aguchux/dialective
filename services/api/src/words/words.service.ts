@@ -252,7 +252,11 @@ export class WordsService {
       const sentenceSource = await this.pickSentenceSource(userId);
       if (sentenceSource) {
         const assignment = await this.prisma.wordTrainingAssignment.create({
-          data: { sessionId, sentenceId: sentenceSource.sentenceId, direction: 'ENGLISH_TO_DIALECT' },
+          data: {
+            sessionId,
+            sentenceId: sentenceSource.sentenceId,
+            direction: 'ENGLISH_TO_DIALECT',
+          },
         });
         return {
           assignmentId: assignment.id,
@@ -281,7 +285,11 @@ export class WordsService {
         const anySentence = await this.pickSentenceSource(userId);
         if (anySentence) {
           const assignment = await this.prisma.wordTrainingAssignment.create({
-            data: { sessionId, sentenceId: anySentence.sentenceId, direction: 'ENGLISH_TO_DIALECT' },
+            data: {
+              sessionId,
+              sentenceId: anySentence.sentenceId,
+              direction: 'ENGLISH_TO_DIALECT',
+            },
           });
           return {
             assignmentId: assignment.id,
@@ -824,7 +832,12 @@ export class WordsService {
     const user = await this.prisma.user.update({
       where: { id: userId },
       data: { auditHoldAt: new Date() },
-      select: { email: true, phoneNumber: true, phoneVerifiedAt: true, smsNotificationsEnabled: true },
+      select: {
+        email: true,
+        phoneNumber: true,
+        phoneVerifiedAt: true,
+        smsNotificationsEnabled: true,
+      },
     });
 
     try {
@@ -955,7 +968,9 @@ export class WordsService {
       orderBy: { createdAt: 'desc' },
       select: { wordId: true },
     });
-    const cycleExcludedIds = [...new Set([...bannedIds, ...(lastAssigned?.wordId ? [lastAssigned.wordId] : [])])];
+    const cycleExcludedIds = [
+      ...new Set([...bannedIds, ...(lastAssigned?.wordId ? [lastAssigned.wordId] : [])]),
+    ];
     const cycleWhere = { id: { notIn: cycleExcludedIds }, isDisabled: false };
     const cycleCount = await this.prisma.word.count({ where: cycleWhere });
     if (cycleCount <= 0) return null;

@@ -1,10 +1,19 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
 import { renderCommunityBody } from '../community-content.util';
 import { attachmentsCreateInput, toAttachmentDto } from '../community-attachments.util';
 import { CreateCommunityReplyDto } from '../dto/create-community-reply.dto';
-import { AUTHOR_SUMMARY_SELECT, AuthorSummarySource, toAuthorSummary } from '../profiles/community-profiles.service';
+import {
+  AUTHOR_SUMMARY_SELECT,
+  AuthorSummarySource,
+  toAuthorSummary,
+} from '../profiles/community-profiles.service';
 import { CommunityProfilesService } from '../profiles/community-profiles.service';
 import { CommunityNotificationsService } from '../notifications/community-notifications.service';
 import { CommunitySettingsService } from '../settings/community-settings.service';
@@ -77,7 +86,10 @@ export class CommunityRepliesService {
         },
         include: replyInclude(userId),
       }),
-      this.prisma.communityPost.update({ where: { id: postId }, data: { replyCount: { increment: 1 } } }),
+      this.prisma.communityPost.update({
+        where: { id: postId },
+        data: { replyCount: { increment: 1 } },
+      }),
       this.prisma.communityProfile.update({
         where: { userId },
         data: { replyCount: { increment: 1 } },
@@ -124,7 +136,8 @@ export class CommunityRepliesService {
   async delete(userId: string, replyId: string) {
     const reply = await this.prisma.communityReply.findUnique({ where: { id: replyId } });
     if (!reply || reply.status === 'DELETED') throw new NotFoundException('Reply not found');
-    if (reply.authorId !== userId) throw new ForbiddenException('You can only delete your own reply');
+    if (reply.authorId !== userId)
+      throw new ForbiddenException('You can only delete your own reply');
     await this.prisma.$transaction([
       this.prisma.communityReply.update({
         where: { id: replyId },
@@ -155,7 +168,9 @@ export class CommunityRepliesService {
     return {
       ...rest,
       author: toAuthorSummary(author),
-      attachments: (attachments ?? []).map((attachment) => toAttachmentDto(this.storage, attachment)),
+      attachments: (attachments ?? []).map((attachment) =>
+        toAttachmentDto(this.storage, attachment),
+      ),
       likedByMe: reactions !== undefined ? reactions.length > 0 : undefined,
     };
   }

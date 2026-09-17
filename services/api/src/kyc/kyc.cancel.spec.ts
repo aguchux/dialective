@@ -35,7 +35,10 @@ describe('KycService.createVerificationSession', () => {
   it('resets an existing row back to IN_PROGRESS when Didit replays a session_id from a since-cancelled attempt', async () => {
     const { service, prisma, didit } = setup();
     prisma.user.findUniqueOrThrow.mockResolvedValue({ kycStatus: 'ABANDONED' });
-    didit.createSession.mockResolvedValue({ sessionId: 'sess-1', url: 'https://verify.didit.me/sess-1' });
+    didit.createSession.mockResolvedValue({
+      sessionId: 'sess-1',
+      url: 'https://verify.didit.me/sess-1',
+    });
 
     await service.createVerificationSession('user-1', 'https://app/callback');
 

@@ -9,7 +9,14 @@ import {
   useCreateStreamDeckMutation,
   useListStreamDecksQuery,
 } from '@/store/api';
-import { Card, ErrorText, FieldLabel, PageHeading, PrimaryButton, TextInput } from '@/components/ui';
+import {
+  Card,
+  ErrorText,
+  FieldLabel,
+  PageHeading,
+  PrimaryButton,
+  TextInput,
+} from '@/components/ui';
 
 const CONFIDENCE_OPTIONS: IsvcConfidence[] = ['EMERGING', 'ESTABLISHED', 'HIGH', 'VERY_HIGH'];
 
@@ -100,7 +107,9 @@ export default function StreamDecksPage() {
               <div className="flex gap-2">
                 <button
                   className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-bold transition-colors ${
-                    type === 'MANUAL' ? 'border-accent bg-accent/10 text-accent-dark' : 'border-line bg-white text-ink'
+                    type === 'MANUAL'
+                      ? 'border-accent bg-accent/10 text-accent-dark'
+                      : 'border-line bg-white text-ink'
                   }`}
                   onClick={() => setType('MANUAL')}
                   type="button"
@@ -109,7 +118,9 @@ export default function StreamDecksPage() {
                 </button>
                 <button
                   className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-bold transition-colors ${
-                    type === 'SMART' ? 'border-accent bg-accent/10 text-accent-dark' : 'border-line bg-white text-ink'
+                    type === 'SMART'
+                      ? 'border-accent bg-accent/10 text-accent-dark'
+                      : 'border-line bg-white text-ink'
                   }`}
                   onClick={() => setType('SMART')}
                   type="button"
@@ -254,8 +265,8 @@ export default function StreamDecksPage() {
       ) : (
         <Card className="p-8 text-center">
           <p className="text-sm text-muted">
-            You haven&apos;t created a Stream Deck yet. Create one, then add recordings from
-            Explore Voice Data.
+            You haven&apos;t created a Stream Deck yet. Create one, then add recordings from Explore
+            Voice Data.
           </p>
         </Card>
       )}

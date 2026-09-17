@@ -3,6 +3,7 @@
 This example burns from Solana Devnet and mints on Arc Testnet. The same pattern applies to other supported Solana Gateway environments and EVM destination chains after substituting the correct config, contract addresses, domain IDs, and recipient address.
 
 Canonical runnable references:
+
 - Transfer unified USDC balance: https://developers.circle.com/gateway/howtos/transfer-unified-usdc-balance.md
 - Unified balance EVM quickstart: https://developers.circle.com/gateway/quickstarts/unified-balance-evm.md
 - Unified balance Solana quickstart: https://developers.circle.com/gateway/quickstarts/unified-balance-solana.md
@@ -21,40 +22,27 @@ This script:
 ## Runnable example
 
 ```ts
-import { randomBytes, sign } from "node:crypto";
-import { Buffer } from "buffer";
+import { randomBytes, sign } from 'node:crypto';
+import { Buffer } from 'buffer';
 
-import {
-  Layout,
-  blob,
-  offset,
-  struct,
-  u32be,
-} from "@solana/buffer-layout";
-import {
-  createPublicClient,
-  createWalletClient,
-  getContract,
-  http,
-  pad,
-  type Hex,
-} from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import { arcTestnet } from "viem/chains";
+import { Layout, blob, offset, struct, u32be } from '@solana/buffer-layout';
+import { createPublicClient, createWalletClient, getContract, http, pad, type Hex } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { arcTestnet } from 'viem/chains';
 
-const GATEWAY_API_URL = "https://gateway-api-testnet.circle.com/v1/transfer";
+const GATEWAY_API_URL = 'https://gateway-api-testnet.circle.com/v1/transfer';
 
 const SOLANA_CONFIG = {
   domain: 5,
-  gatewayWallet: "GATEwdfmYNELfp5wDmmR6noSr2vHnAfBPMm2PvCzX5vu",
-  usdc: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU",
+  gatewayWallet: 'GATEwdfmYNELfp5wDmmR6noSr2vHnAfBPMm2PvCzX5vu',
+  usdc: '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU',
 };
 
 const DESTINATION_CHAIN = {
   chain: arcTestnet,
   domain: 26,
-  gatewayMinter: "0x0022222ABE238Cc2C7Bb1f21003F0a260052475B",
-  usdc: "0x3600000000000000000000000000000000000000",
+  gatewayMinter: '0x0022222ABE238Cc2C7Bb1f21003F0a260052475B',
+  usdc: '0x3600000000000000000000000000000000000000',
 };
 
 const TRANSFER_AMOUNT = 5_000_000n; // 5 USDC (6 decimals)
@@ -66,14 +54,14 @@ const BURN_INTENT_MAGIC = 0x070afbc2;
 
 const gatewayMinterAbi = [
   {
-    type: "function",
-    name: "gatewayMint",
+    type: 'function',
+    name: 'gatewayMint',
     inputs: [
-      { name: "attestationPayload", type: "bytes" },
-      { name: "signature", type: "bytes" },
+      { name: 'attestationPayload', type: 'bytes' },
+      { name: 'signature', type: 'bytes' },
     ],
     outputs: [],
-    stateMutability: "nonpayable",
+    stateMutability: 'nonpayable',
   },
 ] as const;
 
@@ -113,54 +101,50 @@ const publicKey = (property: string) => new PublicKeyLayout(property);
 const uint256be = (property: string) => new UInt256BELayout(property);
 
 const BurnIntentLayout = struct([
-  u32be("magic"),
-  uint256be("maxBlockHeight"),
-  uint256be("maxFee"),
-  u32be("transferSpecLength"),
+  u32be('magic'),
+  uint256be('maxBlockHeight'),
+  uint256be('maxFee'),
+  u32be('transferSpecLength'),
   struct(
     [
-      u32be("magic"),
-      u32be("version"),
-      u32be("sourceDomain"),
-      u32be("destinationDomain"),
-      publicKey("sourceContract"),
-      publicKey("destinationContract"),
-      publicKey("sourceToken"),
-      publicKey("destinationToken"),
-      publicKey("sourceDepositor"),
-      publicKey("destinationRecipient"),
-      publicKey("sourceSigner"),
-      publicKey("destinationCaller"),
-      uint256be("value"),
-      blob(32, "salt"),
-      u32be("hookDataLength"),
-      blob(offset(u32be(), -4), "hookData"),
+      u32be('magic'),
+      u32be('version'),
+      u32be('sourceDomain'),
+      u32be('destinationDomain'),
+      publicKey('sourceContract'),
+      publicKey('destinationContract'),
+      publicKey('sourceToken'),
+      publicKey('destinationToken'),
+      publicKey('sourceDepositor'),
+      publicKey('destinationRecipient'),
+      publicKey('sourceSigner'),
+      publicKey('destinationCaller'),
+      uint256be('value'),
+      blob(32, 'salt'),
+      u32be('hookDataLength'),
+      blob(offset(u32be(), -4), 'hookData'),
     ] as never,
-    "spec",
+    'spec',
   ),
 ] as never);
 
 if (!process.env.SOLANA_PRIVATE_KEYPAIR) {
-  throw new Error("SOLANA_PRIVATE_KEYPAIR not set");
+  throw new Error('SOLANA_PRIVATE_KEYPAIR not set');
 }
 
 if (!process.env.EVM_PRIVATE_KEY) {
-  throw new Error("EVM_PRIVATE_KEY not set");
+  throw new Error('EVM_PRIVATE_KEY not set');
 }
 
-const solanaSecretKey = Uint8Array.from(
-  JSON.parse(process.env.SOLANA_PRIVATE_KEYPAIR),
-);
-const evmAccount = privateKeyToAccount(
-  process.env.EVM_PRIVATE_KEY as `0x${string}`,
-);
+const solanaSecretKey = Uint8Array.from(JSON.parse(process.env.SOLANA_PRIVATE_KEYPAIR));
+const evmAccount = privateKeyToAccount(process.env.EVM_PRIVATE_KEY as `0x${string}`);
 
 function randomHex32(): Hex {
-  return `0x${randomBytes(32).toString("hex")}` as Hex;
+  return `0x${randomBytes(32).toString('hex')}` as Hex;
 }
 
 function solanaAddressToBytes32(addressBytes: Uint8Array): Hex {
-  return `0x${Buffer.from(addressBytes).toString("hex")}` as Hex;
+  return `0x${Buffer.from(addressBytes).toString('hex')}` as Hex;
 }
 
 function evmAddressToBytes32(address: Hex): Hex {
@@ -168,7 +152,7 @@ function evmAddressToBytes32(address: Hex): Hex {
 }
 
 function hexToSolanaBuffer(address: Hex): Buffer {
-  return Buffer.from(address.slice(2), "hex");
+  return Buffer.from(address.slice(2), 'hex');
 }
 
 function encodeSolanaBurnIntent(burnIntent: {
@@ -191,7 +175,7 @@ function encodeSolanaBurnIntent(burnIntent: {
     hookData: Hex;
   };
 }): Buffer {
-  const hookData = Buffer.from(burnIntent.spec.hookData.slice(2), "hex");
+  const hookData = Buffer.from(burnIntent.spec.hookData.slice(2), 'hex');
   const prepared = {
     magic: BURN_INTENT_MAGIC,
     maxBlockHeight: burnIntent.maxBlockHeight,
@@ -211,7 +195,7 @@ function encodeSolanaBurnIntent(burnIntent: {
       sourceSigner: hexToSolanaBuffer(burnIntent.spec.sourceSigner),
       destinationCaller: hexToSolanaBuffer(burnIntent.spec.destinationCaller),
       value: burnIntent.spec.value,
-      salt: Buffer.from(burnIntent.spec.salt.slice(2), "hex"),
+      salt: Buffer.from(burnIntent.spec.salt.slice(2), 'hex'),
       hookDataLength: hookData.length,
       hookData,
     },
@@ -234,13 +218,13 @@ function signSolanaBurnIntent(secretKey: Uint8Array, encodedBurnIntent: Uint8Arr
 
   const signature = sign(null, Buffer.from(prefixed), {
     key: Buffer.concat([
-      Buffer.from("302e020100300506032b657004220420", "hex"),
+      Buffer.from('302e020100300506032b657004220420', 'hex'),
       privateKey.subarray(0, 32),
     ]),
-    dsaEncoding: "ieee-p1363",
+    dsaEncoding: 'ieee-p1363',
   });
 
-  return `0x${signature.toString("hex")}` as Hex;
+  return `0x${signature.toString('hex')}` as Hex;
 }
 
 async function main() {
@@ -261,22 +245,16 @@ async function main() {
       sourceDomain: SOLANA_CONFIG.domain,
       destinationDomain: DESTINATION_CHAIN.domain,
       sourceContract: sourceGatewayWalletBytes,
-      destinationContract: evmAddressToBytes32(
-        DESTINATION_CHAIN.gatewayMinter as `0x${string}`,
-      ),
+      destinationContract: evmAddressToBytes32(DESTINATION_CHAIN.gatewayMinter as `0x${string}`),
       sourceToken: sourceUsdcBytes,
-      destinationToken: evmAddressToBytes32(
-        DESTINATION_CHAIN.usdc as `0x${string}`,
-      ),
+      destinationToken: evmAddressToBytes32(DESTINATION_CHAIN.usdc as `0x${string}`),
       sourceDepositor: solanaAddressToBytes32(solanaPublicKey),
       destinationRecipient: evmAddressToBytes32(recipient),
       sourceSigner: solanaAddressToBytes32(solanaPublicKey),
-      destinationCaller: evmAddressToBytes32(
-        "0x0000000000000000000000000000000000000000",
-      ),
+      destinationCaller: evmAddressToBytes32('0x0000000000000000000000000000000000000000'),
       value: TRANSFER_AMOUNT,
       salt: randomHex32(),
-      hookData: "0x" as Hex,
+      hookData: '0x' as Hex,
     },
   };
 
@@ -284,24 +262,22 @@ async function main() {
   const burnSignature = signSolanaBurnIntent(solanaSecretKey, encoded);
 
   const transferResponse = await fetch(GATEWAY_API_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(
-      [
-        {
-          burnIntent: {
-            ...burnIntent,
-            maxBlockHeight: burnIntent.maxBlockHeight.toString(),
-            maxFee: burnIntent.maxFee.toString(),
-            spec: {
-              ...burnIntent.spec,
-              value: burnIntent.spec.value.toString(),
-            },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify([
+      {
+        burnIntent: {
+          ...burnIntent,
+          maxBlockHeight: burnIntent.maxBlockHeight.toString(),
+          maxFee: burnIntent.maxFee.toString(),
+          spec: {
+            ...burnIntent.spec,
+            value: burnIntent.spec.value.toString(),
           },
-          signature: burnSignature,
         },
-      ],
-    ),
+        signature: burnSignature,
+      },
+    ]),
   });
 
   if (!transferResponse.ok) {
@@ -346,4 +322,3 @@ main().catch((error) => {
   process.exit(1);
 });
 ```
-

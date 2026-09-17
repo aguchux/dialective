@@ -185,7 +185,13 @@ describe('SettlementService.settleDomainConversationRecordings', () => {
     const service = buildService(prisma);
 
     // @ts-expect-error -- private method under test
-    await service.settleDomainConversationRecordings(1, { noise: 40, quality: 30, liveness: 30 }, 50, 0, false);
+    await service.settleDomainConversationRecordings(
+      1,
+      { noise: 40, quality: 30, liveness: 30 },
+      50,
+      0,
+      false,
+    );
 
     const [[{ data }]] = prisma.domainConversationRecording.updateMany.mock.calls;
     expect(data.status).toBe('EXPIRED');
@@ -213,7 +219,13 @@ describe('SettlementService.settleDomainConversationRecordings', () => {
     const service = buildService(prisma);
 
     // @ts-expect-error -- private method under test
-    const result = await service.settleDomainConversationRecordings(1, { noise: 40, quality: 30, liveness: 30 }, 50, 0, false);
+    const result = await service.settleDomainConversationRecordings(
+      1,
+      { noise: 40, quality: 30, liveness: 30 },
+      50,
+      0,
+      false,
+    );
 
     expect(result.settledCount).toBe(0);
     expect(prisma.wallet.updateMany).not.toHaveBeenCalled();
@@ -237,9 +249,11 @@ describe('SettlementService.refundRejectedDomainConversationRecordings', () => {
       ledgerEntry: {
         // Type-aware: a TASK_LOCK exists but no TASK_REFUND, i.e. the stake
         // is still held -- isStakeStillLocked() -> true.
-        findFirst: jest.fn().mockImplementation(({ where }: any) =>
-          Promise.resolve(where?.type === 'TASK_REFUND' ? null : { id: 'lock-1' }),
-        ),
+        findFirst: jest
+          .fn()
+          .mockImplementation(({ where }: any) =>
+            Promise.resolve(where?.type === 'TASK_REFUND' ? null : { id: 'lock-1' }),
+          ),
         create: jest.fn().mockResolvedValue({}),
       },
       wallet: {
@@ -253,9 +267,13 @@ describe('SettlementService.refundRejectedDomainConversationRecordings', () => {
       ),
     };
     const storage = { deleteObject: jest.fn().mockResolvedValue(undefined) };
-    const service = new SettlementService(prisma as never, storage as never, {
-      notifyReferralPayoutBonus: jest.fn(),
-    } as never);
+    const service = new SettlementService(
+      prisma as never,
+      storage as never,
+      {
+        notifyReferralPayoutBonus: jest.fn(),
+      } as never,
+    );
 
     // @ts-expect-error -- private method under test
     const refundedCount = await service.refundRejectedDomainConversationRecordings();

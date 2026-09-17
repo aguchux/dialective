@@ -3,7 +3,11 @@
 import { Copy } from 'lucide-react';
 import { FormEvent, useEffect, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { useGetOrganizationQuery, useListMembersQuery, useUpdateOrganizationMutation } from '@/store/api';
+import {
+  useGetOrganizationQuery,
+  useListMembersQuery,
+  useUpdateOrganizationMutation,
+} from '@/store/api';
 import type { SubscriberOrgRole } from '@/lib/api-client';
 import { Skeleton } from '../primitives';
 import {
@@ -103,7 +107,10 @@ function OrganizationProfileForm() {
   }
 
   return (
-    <SettingsCard description="Manage your organization's public profile and contact details." title="Organization Profile">
+    <SettingsCard
+      description="Manage your organization's public profile and contact details."
+      title="Organization Profile"
+    >
       <form className="grid gap-4" onSubmit={submit}>
         <div className="grid gap-4 sm:grid-cols-2">
           <SettingsField htmlFor="org-name" label="Organization Name">
@@ -132,7 +139,11 @@ function OrganizationProfileForm() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <SettingsField hint="Your organization's official website." htmlFor="org-website" label="Website">
+          <SettingsField
+            hint="Your organization's official website."
+            htmlFor="org-website"
+            label="Website"
+          >
             <input
               className={settingsInputClassName}
               disabled={!canManage}
@@ -191,7 +202,11 @@ function OrganizationProfileForm() {
               value={supportEmail}
             />
           </SettingsField>
-          <SettingsField hint="Helps us tailor your experience." htmlFor="org-company-size" label="Company Size">
+          <SettingsField
+            hint="Helps us tailor your experience."
+            htmlFor="org-company-size"
+            label="Company Size"
+          >
             <select
               className={settingsInputClassName}
               disabled={!canManage}
@@ -240,7 +255,10 @@ export function OrganizationSettingsView() {
           <Skeleton className="h-6 w-full" />
         </SettingsCard>
       ) : (
-        <SettingsCard description="Overview of your organization and workspace." title="Workspace Details">
+        <SettingsCard
+          description="Overview of your organization and workspace."
+          title="Workspace Details"
+        >
           <Row label="Organization ID">
             {org ? <CopyableId value={org.id} /> : <Skeleton className="h-5 w-24" />}
           </Row>
@@ -248,7 +266,9 @@ export function OrganizationSettingsView() {
             <code className="text-sm font-semibold text-catalogue-ink">{org?.slug}</code>
           </Row>
           <Row label="Plan">
-            <span className="text-sm font-semibold text-catalogue-ink">{plan?.name ?? 'No active plan'}</span>
+            <span className="text-sm font-semibold text-catalogue-ink">
+              {plan?.name ?? 'No active plan'}
+            </span>
           </Row>
           <Row label="Subscription Status">
             <span
@@ -264,10 +284,7 @@ export function OrganizationSettingsView() {
         </SettingsCard>
       )}
 
-      <SettingsCard
-        description="Team seat usage against your plan's limit."
-        title="Team & Seats"
-      >
+      <SettingsCard description="Team seat usage against your plan's limit." title="Team & Seats">
         <Row label="Members used">
           {membersLoading ? (
             <Skeleton className="h-5 w-16" />

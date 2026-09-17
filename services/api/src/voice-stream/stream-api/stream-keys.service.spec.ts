@@ -17,7 +17,11 @@ function setup() {
   };
   const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
   const orgActivity = { record: jest.fn().mockResolvedValue(undefined) };
-  const service = new StreamKeysService(prisma as never, webhookEvents as never, orgActivity as never);
+  const service = new StreamKeysService(
+    prisma as never,
+    webhookEvents as never,
+    orgActivity as never,
+  );
   return { service, prisma, webhookEvents, orgActivity };
 }
 

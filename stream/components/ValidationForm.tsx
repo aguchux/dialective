@@ -2,9 +2,19 @@
 
 import { FormEvent, useState } from 'react';
 import { useSubmitValidationMutation, type ValidationDimensions } from '@/store/api';
-import { Card, ErrorText, FieldLabel, PrimaryButton, SecondaryButton, TextInput } from '@/components/ui';
+import {
+  Card,
+  ErrorText,
+  FieldLabel,
+  PrimaryButton,
+  SecondaryButton,
+  TextInput,
+} from '@/components/ui';
 
-const DIMENSIONS: { key: keyof Omit<ValidationDimensions, 'overallScore' | 'notes'>; label: string }[] = [
+const DIMENSIONS: {
+  key: keyof Omit<ValidationDimensions, 'overallScore' | 'notes'>;
+  label: string;
+}[] = [
   { key: 'transcriptAccuracy', label: 'Transcript accuracy' },
   { key: 'pronunciationAccuracy', label: 'Pronunciation accuracy' },
   { key: 'dialectAuthenticity', label: 'Dialect authenticity' },

@@ -113,14 +113,12 @@ function setup(
           },
     ),
     getStartupBonusAmount: jest.fn().mockResolvedValue(0),
-    getManualPhoneVerificationSettings: jest
-      .fn()
-      .mockResolvedValue({
-        enabled: true,
-        feeTokens: 1,
-        whatsappNumber: '1234567890',
-        expiryMinutes: 30,
-      }),
+    getManualPhoneVerificationSettings: jest.fn().mockResolvedValue({
+      enabled: true,
+      feeTokens: 1,
+      whatsappNumber: '1234567890',
+      expiryMinutes: 30,
+    }),
     isAdminPayoutOtpEnabled: jest.fn().mockResolvedValue(false),
     getOtpChannel: jest.fn().mockResolvedValue('sms'),
     isWhatsappOtpEnabled: jest.fn().mockResolvedValue(false),
@@ -1170,7 +1168,10 @@ describe('AuthService.login 2FA gating', () => {
     const result = await service.login('a@b.com', 'password123');
 
     expect(otp.issueWithTicket).not.toHaveBeenCalled();
-    expect(result).toMatchObject({ accessToken: expect.any(String), refreshToken: expect.any(String) });
+    expect(result).toMatchObject({
+      accessToken: expect.any(String),
+      refreshToken: expect.any(String),
+    });
     expect(prisma.refreshToken.create).toHaveBeenCalled();
   });
 
@@ -1239,9 +1240,9 @@ describe('AuthService.changePassword', () => {
     const passwordHash = await bcrypt.hash('correct-password', 4);
     prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'user-1', passwordHash });
 
-    await expect(service.changePassword('user-1', 'wrong-password', 'new-password-123')).rejects.toThrow(
-      UnauthorizedException,
-    );
+    await expect(
+      service.changePassword('user-1', 'wrong-password', 'new-password-123'),
+    ).rejects.toThrow(UnauthorizedException);
     expect(prisma.user.update).not.toHaveBeenCalled();
   });
 
@@ -1250,7 +1251,12 @@ describe('AuthService.changePassword', () => {
     const passwordHash = await bcrypt.hash('correct-password', 4);
     prisma.user.findUniqueOrThrow.mockResolvedValue({ id: 'user-1', passwordHash });
 
-    await service.changePassword('user-1', 'correct-password', 'new-password-123', 'current-refresh');
+    await service.changePassword(
+      'user-1',
+      'correct-password',
+      'new-password-123',
+      'current-refresh',
+    );
 
     expect(prisma.user.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1338,7 +1344,7 @@ describe('AuthService.updateTwoFactorSettings', () => {
 });
 
 describe('AuthService account closure', () => {
-  it('requestAccountCloseOtp issues an OTP to the user\'s own email when no verified phone exists', async () => {
+  it("requestAccountCloseOtp issues an OTP to the user's own email when no verified phone exists", async () => {
     const { service, prisma, otp } = setup();
     prisma.user.findUniqueOrThrow.mockResolvedValue({
       id: 'user-1',

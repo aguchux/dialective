@@ -379,7 +379,10 @@ export function KycSettingsPanel() {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1 text-sm font-bold" htmlFor="dlkyc-max-face-match-decline">
+              <label
+                className="grid gap-1 text-sm font-bold"
+                htmlFor="dlkyc-max-face-match-decline"
+              >
                 Decline ceiling: face match (%)
                 <input
                   className={inputClass}
@@ -425,7 +428,9 @@ export function KycSettingsPanel() {
                 type="checkbox"
               />
               <span>
-                <span className="block font-bold">Require a face on the ID (&quot;ID found&quot;)</span>
+                <span className="block font-bold">
+                  Require a face on the ID (&quot;ID found&quot;)
+                </span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
                   On by default -- if no face can be detected on the submitted document photo at
                   all, the submission fails outright (auto-decline, or review when &quot;Do not

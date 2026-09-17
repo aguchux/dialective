@@ -70,7 +70,12 @@ export default function AdminIntegrationsPage() {
         </div>
       ),
     },
-    { key: 'category', header: 'Category', sortValue: (row) => row.category, render: (row) => row.category },
+    {
+      key: 'category',
+      header: 'Category',
+      sortValue: (row) => row.category,
+      render: (row) => row.category,
+    },
     {
       key: 'fee',
       header: 'Fee (DL)',
@@ -160,10 +165,10 @@ export default function AdminIntegrationsPage() {
         <div>
           <h1 className="text-2xl font-black">Integrations</h1>
           <p className="text-sm text-muted">
-            Gate each peer-fulfilled product's enablement, fee, how many claims a single member
-            may hold at once, and how long an issued code stays valid -- independently. New
-            integrations are added by implementing them in code, not from this page -- they
-            appear here automatically once shipped.
+            Gate each peer-fulfilled product's enablement, fee, how many claims a single member may
+            hold at once, and how long an issued code stays valid -- independently. New integrations
+            are added by implementing them in code, not from this page -- they appear here
+            automatically once shipped.
           </p>
         </div>
 

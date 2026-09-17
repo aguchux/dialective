@@ -57,9 +57,11 @@ function setup(overrides?: { payoutAccount?: Record<string, unknown> | null }) {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     withdrawalRequest: {
-      create: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) =>
-        Promise.resolve({ id: 'withdrawal-1', ...data }),
-      ),
+      create: jest
+        .fn()
+        .mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve({ id: 'withdrawal-1', ...data }),
+        ),
     },
     ledgerEntry: { create: jest.fn().mockResolvedValue({}) },
     otpCode: { update: jest.fn().mockResolvedValue({}) },
@@ -129,7 +131,13 @@ describe('WalletController.createWithdrawal CRYPTO_SAVED', () => {
 
   it('rejects when the referenced account is not a STABLECOIN_WALLET', async () => {
     const { controller, prisma } = setup({
-      payoutAccount: { id: ACCOUNT_ID, userId: OWNER_ID, type: 'BANK', currency: 'NGN', country: 'NG' },
+      payoutAccount: {
+        id: ACCOUNT_ID,
+        userId: OWNER_ID,
+        type: 'BANK',
+        currency: 'NGN',
+        country: 'NG',
+      },
     });
 
     await expect(controller.createWithdrawal(req, body as never)).rejects.toThrow();
@@ -156,7 +164,7 @@ describe('WalletController.createWithdrawal CRYPTO_SAVED', () => {
     expect(prisma.withdrawalRequest.create).not.toHaveBeenCalled();
   });
 
-  it('rejects a withdrawal referencing another trainer\'s wallet', async () => {
+  it("rejects a withdrawal referencing another trainer's wallet", async () => {
     const { controller, prisma } = setup({
       payoutAccount: {
         id: ACCOUNT_ID,

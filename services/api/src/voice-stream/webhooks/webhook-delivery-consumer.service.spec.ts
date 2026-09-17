@@ -57,7 +57,10 @@ describe('WebhookDeliveryConsumerService', () => {
     // through the same shape RedisStreamsService.consume would invoke it.
     await (service as unknown as { handle: (m: unknown) => Promise<void> }).handle(message());
 
-    expect(subscriptions.findActiveSubscribers).toHaveBeenCalledWith('org-1', WebhookEventType.DECK_CREATED);
+    expect(subscriptions.findActiveSubscribers).toHaveBeenCalledWith(
+      'org-1',
+      WebhookEventType.DECK_CREATED,
+    );
     expect(fetchMock).toHaveBeenCalledWith(
       'https://example.com/hook',
       expect.objectContaining({ method: 'POST' }),
@@ -108,7 +111,11 @@ describe('WebhookDeliveryConsumerService', () => {
 
     expect(prisma.webhookDeliveryLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ subscriptionId: 'sub-1', succeeded: true, resultCode: 200 }),
+        data: expect.objectContaining({
+          subscriptionId: 'sub-1',
+          succeeded: true,
+          resultCode: 200,
+        }),
       }),
     );
   });
@@ -126,7 +133,11 @@ describe('WebhookDeliveryConsumerService', () => {
 
     expect(prisma.webhookDeliveryLog.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ subscriptionId: 'sub-1', succeeded: false, resultCode: 500 }),
+        data: expect.objectContaining({
+          subscriptionId: 'sub-1',
+          succeeded: false,
+          resultCode: 500,
+        }),
       }),
     );
   });

@@ -39,10 +39,15 @@ export interface LivenessFrameResult {
 @Injectable()
 export class FaceMatchService {
   private readonly logger = new Logger(FaceMatchService.name);
-  private modulesLoadedPromise: Promise<{ canvas: typeof CanvasModule; faceapi: typeof FaceApiModule }> | null =
-    null;
+  private modulesLoadedPromise: Promise<{
+    canvas: typeof CanvasModule;
+    faceapi: typeof FaceApiModule;
+  }> | null = null;
 
-  private async ensureLoaded(): Promise<{ canvas: typeof CanvasModule; faceapi: typeof FaceApiModule }> {
+  private async ensureLoaded(): Promise<{
+    canvas: typeof CanvasModule;
+    faceapi: typeof FaceApiModule;
+  }> {
     if (!this.modulesLoadedPromise) {
       this.modulesLoadedPromise = (async () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -128,7 +133,10 @@ export class FaceMatchService {
     const results: LivenessFrameResult[] = [];
     for (const buffer of frameBuffers) {
       const detection = await this.detectSingleFace(buffer);
-      results.push({ descriptor: detection?.descriptor ?? null, landmarks: detection?.landmarks ?? null });
+      results.push({
+        descriptor: detection?.descriptor ?? null,
+        landmarks: detection?.landmarks ?? null,
+      });
     }
 
     const validIndexes = results
@@ -222,8 +230,16 @@ const MIN_YAW_SWING = 0.08;
  * testing with plain {x,y} landmark fixtures.
  */
 export function checkPoseCompliance(
-  firstLandmarks: { getLeftEye(): { x: number; y: number }[]; getRightEye(): { x: number; y: number }[]; getNose(): { x: number; y: number }[] },
-  lastLandmarks: { getLeftEye(): { x: number; y: number }[]; getRightEye(): { x: number; y: number }[]; getNose(): { x: number; y: number }[] },
+  firstLandmarks: {
+    getLeftEye(): { x: number; y: number }[];
+    getRightEye(): { x: number; y: number }[];
+    getNose(): { x: number; y: number }[];
+  },
+  lastLandmarks: {
+    getLeftEye(): { x: number; y: number }[];
+    getRightEye(): { x: number; y: number }[];
+    getNose(): { x: number; y: number }[];
+  },
   challengeType: 'TURN_LEFT' | 'TURN_RIGHT',
 ): boolean {
   const firstYaw = yawRatio(firstLandmarks as FaceApiModule.FaceLandmarks68);

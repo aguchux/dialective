@@ -105,7 +105,10 @@ describe('AdminSmsService', () => {
     prisma.adminSmsMessage.create.mockResolvedValue({ id: 'message-2' });
 
     await expect(
-      service.send('admin-1', { recipientId: 'recipient-1', message: 'Please update your profile.' }),
+      service.send('admin-1', {
+        recipientId: 'recipient-1',
+        message: 'Please update your profile.',
+      }),
     ).rejects.toThrow('All providers failed');
 
     expect(prisma.adminSmsMessage.create).toHaveBeenCalledWith({
@@ -120,9 +123,7 @@ describe('AdminSmsService', () => {
     it('throws NotFoundException when the contact does not exist', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
 
-      await expect(service.listMessages('missing-1', {})).rejects.toThrow(
-        'Contact was not found',
-      );
+      await expect(service.listMessages('missing-1', {})).rejects.toThrow('Contact was not found');
       expect(prisma.adminSmsMessage.findMany).not.toHaveBeenCalled();
     });
 

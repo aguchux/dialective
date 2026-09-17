@@ -170,7 +170,8 @@ export class SettlementService {
     const stuckDomainConversationRefundCount = await this.refundStuckDomainConversationRecordings();
 
     const settledCount = wordRecordingResult.settledCount + domainConversationResult.settledCount;
-    const eligibleCount = wordRecordingResult.eligibleCount + domainConversationResult.eligibleCount;
+    const eligibleCount =
+      wordRecordingResult.eligibleCount + domainConversationResult.eligibleCount;
     const totalPayout = wordRecordingResult.totalPayout + domainConversationResult.totalPayout;
 
     if (
@@ -606,9 +607,7 @@ export class SettlementService {
           : { balance: { increment: tokensSpent } },
       });
       if (moved.count === 0) {
-        this.logger.warn(
-          `Skipped refund for ${reference}: stake no longer held in lockedBalance`,
-        );
+        this.logger.warn(`Skipped refund for ${reference}: stake no longer held in lockedBalance`);
         return;
       }
       await tx.ledgerEntry.create({
@@ -960,8 +959,17 @@ export class SettlementService {
           continue;
         }
 
-        const payout = computeTrainingPayout(recording.tokensSpent, compositeScore, bonusCapMultiple);
-        const { ops, result } = await creditTrainingPayoutOps(this.prisma, userId, payout, recording.id);
+        const payout = computeTrainingPayout(
+          recording.tokensSpent,
+          compositeScore,
+          bonusCapMultiple,
+        );
+        const { ops, result } = await creditTrainingPayoutOps(
+          this.prisma,
+          userId,
+          payout,
+          recording.id,
+        );
         const mintOps = mintingPaused
           ? []
           : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;

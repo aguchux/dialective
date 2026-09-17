@@ -84,12 +84,13 @@ export class DedicatedCapacityGuard implements CanActivate, OnModuleDestroy {
    */
   private async isReservedFloorAtRisk(): Promise<boolean> {
     const bucket = Math.floor(Date.now() / 60_000);
-    const [totalConcurrent, enterpriseConcurrent, totalReqRate, enterpriseReqRate] = await Promise.all([
-      this.redis.get('dedicated-capacity:concurrent:total'),
-      this.redis.get('dedicated-capacity:concurrent:enterprise'),
-      this.redis.get(`dedicated-capacity:reqrate:${bucket}`),
-      this.redis.get(`dedicated-capacity:reqrate:enterprise:${bucket}`),
-    ]);
+    const [totalConcurrent, enterpriseConcurrent, totalReqRate, enterpriseReqRate] =
+      await Promise.all([
+        this.redis.get('dedicated-capacity:concurrent:total'),
+        this.redis.get('dedicated-capacity:concurrent:enterprise'),
+        this.redis.get(`dedicated-capacity:reqrate:${bucket}`),
+        this.redis.get(`dedicated-capacity:reqrate:enterprise:${bucket}`),
+      ]);
 
     const concurrentBlocked =
       FLEET_MAX_CONCURRENT_STREAMS > 0 &&

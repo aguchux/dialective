@@ -52,9 +52,7 @@ export class AnalyticsRealtimeService {
         }),
       ]);
 
-      const activeUsers = Number(
-        totalsResponse[0].rows?.[0]?.metricValues?.[0]?.value ?? '0',
-      );
+      const activeUsers = Number(totalsResponse[0].rows?.[0]?.metricValues?.[0]?.value ?? '0');
       return {
         configured: true as const,
         fetchedAt: new Date().toISOString(),
@@ -70,7 +68,13 @@ export class AnalyticsRealtimeService {
 }
 
 function extractRows(
-  rows: { dimensionValues?: { value?: string | null }[] | null; metricValues?: { value?: string | null }[] | null }[] | null | undefined,
+  rows:
+    | {
+        dimensionValues?: { value?: string | null }[] | null;
+        metricValues?: { value?: string | null }[] | null;
+      }[]
+    | null
+    | undefined,
 ) {
   return (rows ?? []).map((row) => ({
     value: row.dimensionValues?.[0]?.value ?? '(not set)',

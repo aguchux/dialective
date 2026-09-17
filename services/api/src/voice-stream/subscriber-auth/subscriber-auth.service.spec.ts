@@ -72,7 +72,12 @@ function setup() {
 
   const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
   const orgActivity = { record: jest.fn().mockResolvedValue(undefined) };
-  const service = new SubscriberAuthService(prisma as any, mail as any, webhookEvents as any, orgActivity as any);
+  const service = new SubscriberAuthService(
+    prisma as any,
+    mail as any,
+    webhookEvents as any,
+    orgActivity as any,
+  );
   return { prisma, mail, webhookEvents, orgActivity, service };
 }
 
@@ -82,9 +87,9 @@ describe('SubscriberAuthService', () => {
       const { prisma, service } = setup();
       prisma.subscriberUser.findUnique.mockResolvedValue({ id: 'existing' });
 
-      await expect(
-        service.register('a@b.com', 'password123', 'A', 'B', 'Acme'),
-      ).rejects.toThrow(ConflictException);
+      await expect(service.register('a@b.com', 'password123', 'A', 'B', 'Acme')).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('creates an organization, an OWNER user, and issues a verification OTP', async () => {
@@ -134,14 +139,7 @@ describe('SubscriberAuthService', () => {
       prisma.subscriberMembership.create.mockResolvedValue({});
       prisma.dataAccessLead.create.mockResolvedValue({});
 
-      await service.register(
-        'a@b.com',
-        'password123',
-        'A',
-        'B',
-        'Acme',
-        'https://acme.com',
-      );
+      await service.register('a@b.com', 'password123', 'A', 'B', 'Acme', 'https://acme.com');
 
       expect(prisma.dataAccessLead.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -328,9 +326,7 @@ describe('SubscriberAuthService', () => {
         maxAttempts: 5,
       });
 
-      await expect(service.verifyOtp('ticket-1', '111111')).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(service.verifyOtp('ticket-1', '111111')).rejects.toThrow(UnauthorizedException);
       expect(prisma.subscriberOtpCode.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: { attempts: { increment: 1 } } }),
       );
@@ -555,7 +551,10 @@ describe('SubscriberAuthService', () => {
 
       expect(prisma.subscriberMembership.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ organizationId: 'org-1', role: SubscriberOrgRole.VALIDATOR }),
+          data: expect.objectContaining({
+            organizationId: 'org-1',
+            role: SubscriberOrgRole.VALIDATOR,
+          }),
         }),
       );
       expect(prisma.subscriberInvite.update).toHaveBeenCalledWith(
@@ -629,7 +628,10 @@ describe('SubscriberAuthService', () => {
     it('sends the invite email and records a MEMBER_INVITED activity event', async () => {
       const { prisma, mail, orgActivity, service } = setup();
       prisma.subscriberMembership.findFirst.mockResolvedValue(null);
-      prisma.subscriberOrganization.findUniqueOrThrow.mockResolvedValue({ id: 'org-1', name: 'Acme' });
+      prisma.subscriberOrganization.findUniqueOrThrow.mockResolvedValue({
+        id: 'org-1',
+        name: 'Acme',
+      });
 
       await service.inviteMember('org-1', 'inviter-1', 'a@b.com', SubscriberOrgRole.VALIDATOR);
 
@@ -657,12 +659,17 @@ describe('SubscriberAuthService', () => {
       prisma.subscriberMembership.findFirst
         .mockResolvedValueOnce({ role: SubscriberOrgRole.OWNER })
         .mockResolvedValueOnce(null);
-      prisma.subscriberOrganization.findUniqueOrThrow.mockResolvedValue({ id: 'org-1', name: 'Acme' });
+      prisma.subscriberOrganization.findUniqueOrThrow.mockResolvedValue({
+        id: 'org-1',
+        name: 'Acme',
+      });
 
       await service.inviteMember('org-1', 'inviter-1', 'a@b.com', SubscriberOrgRole.OWNER);
 
       expect(prisma.subscriberInvite.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ role: SubscriberOrgRole.OWNER }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ role: SubscriberOrgRole.OWNER }),
+        }),
       );
       expect(mail.sendSubscriberInviteEmail).toHaveBeenCalled();
     });

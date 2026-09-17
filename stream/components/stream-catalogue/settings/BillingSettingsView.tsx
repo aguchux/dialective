@@ -29,7 +29,10 @@ export function BillingSettingsView() {
 
   return (
     <div className="grid gap-5">
-      <SettingsCard description="Your organization's active subscription plan." title="Current Plan">
+      <SettingsCard
+        description="Your organization's active subscription plan."
+        title="Current Plan"
+      >
         {plan ? (
           <div className="grid gap-3">
             <div className="flex items-center justify-between gap-3">
@@ -51,7 +54,10 @@ export function BillingSettingsView() {
               <ul className="grid gap-1.5 text-sm text-catalogue-muted">
                 {plan.features.map((feature) => (
                   <li className="flex items-center gap-2" key={feature}>
-                    <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-catalogue-blue" />
+                    <span
+                      aria-hidden="true"
+                      className="size-1.5 shrink-0 rounded-full bg-catalogue-blue"
+                    />
                     {feature}
                   </li>
                 ))}
@@ -80,7 +86,9 @@ export function BillingSettingsView() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-xs font-semibold text-catalogue-muted">Data Streamed</p>
-              <p className="mt-1 text-xl font-bold text-catalogue-ink">{formatBytes(usage.bytesUsed)}</p>
+              <p className="mt-1 text-xl font-bold text-catalogue-ink">
+                {formatBytes(usage.bytesUsed)}
+              </p>
             </div>
             <div>
               <p className="text-xs font-semibold text-catalogue-muted">API Requests</p>

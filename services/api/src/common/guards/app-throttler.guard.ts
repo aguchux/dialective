@@ -38,8 +38,7 @@ const DEDICATED_THROTTLER_GUARDS = [
 export class AppThrottlerGuard extends FriendlyThrottlerGuard {
   protected async shouldSkip(context: ExecutionContext): Promise<boolean> {
     const reflector = new Reflector();
-    const handlerGuards =
-      reflector.get<unknown[]>(GUARDS_METADATA, context.getHandler()) ?? [];
+    const handlerGuards = reflector.get<unknown[]>(GUARDS_METADATA, context.getHandler()) ?? [];
     const classGuards = reflector.get<unknown[]>(GUARDS_METADATA, context.getClass()) ?? [];
     const appliedGuards = [...handlerGuards, ...classGuards];
     return appliedGuards.some((guard) =>

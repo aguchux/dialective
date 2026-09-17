@@ -20,13 +20,15 @@ describe('TrainerReportService', () => {
       },
       wordRecording: { findMany: jest.fn().mockResolvedValue([]) },
       user: {
-        findUniqueOrThrow: jest.fn().mockResolvedValue({ createdAt: new Date('2026-01-01T00:00:00Z') }),
+        findUniqueOrThrow: jest
+          .fn()
+          .mockResolvedValue({ createdAt: new Date('2026-01-01T00:00:00Z') }),
       },
     };
     service = new TrainerReportService(prisma as never);
   });
 
-  it('resolves the trainer\'s own createdAt as the floor when no from is given', async () => {
+  it("resolves the trainer's own createdAt as the floor when no from is given", async () => {
     const report = await service.buildReport('user-1');
 
     expect(prisma.user.findUniqueOrThrow).toHaveBeenCalledWith({
@@ -60,7 +62,9 @@ describe('TrainerReportService', () => {
     const report = await service.buildReport('user-1', from, to);
 
     expect(report.daily.map((day) => day.date)).toEqual(['2026-08-01', '2026-08-02', '2026-08-03']);
-    expect(report.daily.every((day) => day.recordings === 0 && day.earningsTokens === '0')).toBe(true);
+    expect(report.daily.every((day) => day.recordings === 0 && day.earningsTokens === '0')).toBe(
+      true,
+    );
   });
 
   it('aggregates recordings, average score, and earnings across wordRecordings/ledger', async () => {
@@ -217,7 +221,9 @@ describe('TrainerReportService.buildProofAccountReport', () => {
   it('returns an empty-but-well-formed report when the account has no wallet yet', async () => {
     const prisma = {
       user: {
-        findUniqueOrThrow: jest.fn().mockResolvedValue({ createdAt: new Date('2026-01-01T00:00:00Z') }),
+        findUniqueOrThrow: jest
+          .fn()
+          .mockResolvedValue({ createdAt: new Date('2026-01-01T00:00:00Z') }),
       },
       wallet: { findUnique: jest.fn().mockResolvedValue(null) },
       ledgerEntry: { aggregate: jest.fn(), groupBy: jest.fn(), findMany: jest.fn() },
@@ -244,7 +250,9 @@ describe('TrainerReportService.buildProofAccountReport', () => {
   it('sums lifetime credits/withdrawals, breaks down every ledger type, and lists every entry oldest-first', async () => {
     const prisma = {
       user: {
-        findUniqueOrThrow: jest.fn().mockResolvedValue({ createdAt: new Date('2026-01-01T00:00:00Z') }),
+        findUniqueOrThrow: jest
+          .fn()
+          .mockResolvedValue({ createdAt: new Date('2026-01-01T00:00:00Z') }),
       },
       wallet: {
         findUnique: jest.fn().mockResolvedValue({
@@ -336,7 +344,7 @@ describe('TrainerReportService.getTotalTokensSinceJoin', () => {
     expect(prisma.ledgerEntry.aggregate).not.toHaveBeenCalled();
   });
 
-  it('sums only LIFETIME_CREDIT_ENTRY_TYPES for the wallet, matching buildReport\'s totalTokensSinceJoin', async () => {
+  it("sums only LIFETIME_CREDIT_ENTRY_TYPES for the wallet, matching buildReport's totalTokensSinceJoin", async () => {
     const prisma = {
       wallet: { findUnique: jest.fn().mockResolvedValue({ id: 'wallet-1' }) },
       ledgerEntry: { aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 49.4397 } }) },

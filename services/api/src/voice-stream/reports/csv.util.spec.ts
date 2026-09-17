@@ -21,12 +21,20 @@ describe('respondJsonOrCsv', () => {
 
   it('streams a CSV download with header row and attachment filename when format=csv', () => {
     const res = fakeRes();
-    const body = { rows: [{ id: 'rec-1', score: 90 }, { id: 'rec-2', score: 80 }] };
+    const body = {
+      rows: [
+        { id: 'rec-1', score: 90 },
+        { id: 'rec-2', score: 80 },
+      ],
+    };
 
     respondJsonOrCsv(res, 'report.csv', 'csv', body);
 
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv');
-    expect(res.setHeader).toHaveBeenCalledWith('Content-Disposition', 'attachment; filename="report.csv"');
+    expect(res.setHeader).toHaveBeenCalledWith(
+      'Content-Disposition',
+      'attachment; filename="report.csv"',
+    );
     expect(res.send).toHaveBeenCalledWith('id,score\nrec-1,90\nrec-2,80');
   });
 
@@ -82,7 +90,9 @@ describe('respondJsonOrCsv', () => {
     it('quotes a neutralized value that also contains a comma', () => {
       const res = fakeRes();
 
-      respondJsonOrCsv(res, 'report.csv', 'csv', { rows: [{ name: '=HYPERLINK("http://evil"),oops' }] });
+      respondJsonOrCsv(res, 'report.csv', 'csv', {
+        rows: [{ name: '=HYPERLINK("http://evil"),oops' }],
+      });
 
       expect(res.send).toHaveBeenCalledWith('name\n"\'=HYPERLINK(""http://evil""),oops"');
     });

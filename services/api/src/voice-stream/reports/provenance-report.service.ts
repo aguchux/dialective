@@ -43,7 +43,9 @@ export class ProvenanceReportService {
       select: {
         id: true,
         createdAt: true,
-        dialectVariant: { select: { dialect: { select: { country: { select: { code: true } } } } } },
+        dialectVariant: {
+          select: { dialect: { select: { country: { select: { code: true } } } } },
+        },
       },
     });
     const recordingById = new Map(recordings.map((r) => [r.id, r]));

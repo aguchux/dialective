@@ -64,15 +64,26 @@ describe('CommunityRepliesService', () => {
         { id: 'reply-1', author: fakeAuthor(), reactions: [{ id: 'r1' }] },
       ]);
       const [reply] = await service.list('post-1', undefined, 'viewer-1');
-      expect(reply.author).toEqual({ id: 'author-1', displayName: 'Ada O.', badge: 'VERIFIED_TRAINER' });
+      expect(reply.author).toEqual({
+        id: 'author-1',
+        displayName: 'Ada O.',
+        badge: 'VERIFIED_TRAINER',
+      });
       expect(reply.likedByMe).toBe(true);
     });
   });
 
   describe('create', () => {
     it('rejects a reply nested more than one level deep', async () => {
-      prisma.communityPost.findUnique.mockResolvedValue({ id: 'post-1', status: 'PUBLISHED', isLocked: false });
-      prisma.communityReply.findUnique.mockResolvedValue({ id: 'reply-1', parentReplyId: 'reply-0' });
+      prisma.communityPost.findUnique.mockResolvedValue({
+        id: 'post-1',
+        status: 'PUBLISHED',
+        isLocked: false,
+      });
+      prisma.communityReply.findUnique.mockResolvedValue({
+        id: 'reply-1',
+        parentReplyId: 'reply-0',
+      });
 
       await expect(
         service.create('user-1', 'post-1', { body: 'hi', parentReplyId: 'reply-1' } as any),
@@ -80,9 +91,15 @@ describe('CommunityRepliesService', () => {
     });
 
     it('rejects a reply on a locked post', async () => {
-      prisma.communityPost.findUnique.mockResolvedValue({ id: 'post-1', status: 'PUBLISHED', isLocked: true });
+      prisma.communityPost.findUnique.mockResolvedValue({
+        id: 'post-1',
+        status: 'PUBLISHED',
+        isLocked: true,
+      });
 
-      await expect(service.create('user-1', 'post-1', { body: 'hi' } as any)).rejects.toThrow('locked');
+      await expect(service.create('user-1', 'post-1', { body: 'hi' } as any)).rejects.toThrow(
+        'locked',
+      );
     });
 
     it('refuses to create a reply when replies are disabled', async () => {

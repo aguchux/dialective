@@ -5,7 +5,7 @@ Use these TypeScript snippets to read contract metadata, query read-only methods
 ## Get contract details and ABI functions
 
 ```ts
-const contractId = "YOUR_CONTRACT_ID";
+const contractId = 'YOUR_CONTRACT_ID';
 const contractRes = await scpClient.getContract({ id: contractId });
 
 console.log(contractRes.data?.contract?.contractAddress);
@@ -18,16 +18,16 @@ console.log(contractRes.data?.contract?.functions ?? []);
 
 ```ts
 const queryRes = await scpClient.queryContract({
-  address: "YOUR_CONTRACT_ADDRESS",
-  blockchain: "ARC-TESTNET",
-  abiFunctionSignature: "owner()",
+  address: 'YOUR_CONTRACT_ADDRESS',
+  blockchain: 'ARC-TESTNET',
+  abiFunctionSignature: 'owner()',
   abiJson: JSON.stringify([
     {
-      name: "owner",
-      type: "function",
-      stateMutability: "view",
+      name: 'owner',
+      type: 'function',
+      stateMutability: 'view',
       inputs: [],
-      outputs: [{ type: "address", name: "" }],
+      outputs: [{ type: 'address', name: '' }],
     },
   ]),
 });
@@ -41,13 +41,13 @@ Write calls require `walletId` and gas fee settings.
 
 ```ts
 const executeRes = await walletsClient.createContractExecutionTransaction({
-  walletId: "YOUR_WALLET_ID",
-  contractAddress: "YOUR_CONTRACT_ADDRESS",
-  abiFunctionSignature: "safeMint(address,uint256)",
-  abiParameters: ["0xRecipientAddress", "1"],
+  walletId: 'YOUR_WALLET_ID',
+  contractAddress: 'YOUR_CONTRACT_ADDRESS',
+  abiFunctionSignature: 'safeMint(address,uint256)',
+  abiParameters: ['0xRecipientAddress', '1'],
   fee: {
-    type: "level",
-    config: { feeLevel: "MEDIUM" },
+    type: 'level',
+    config: { feeLevel: 'MEDIUM' },
   },
 });
 

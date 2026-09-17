@@ -49,7 +49,9 @@ export class BillingService {
   private async getStripe(): Promise<Stripe> {
     const secretKey = await this.apiAccessTokens.getDecrypted('stripe_secret_key');
     if (!secretKey) {
-      throw new Error('Stripe secret key is not configured (Admin -> Settings -> Stripe & Subscriptions)');
+      throw new Error(
+        'Stripe secret key is not configured (Admin -> Settings -> Stripe & Subscriptions)',
+      );
     }
     return new Stripe(secretKey);
   }
@@ -146,7 +148,10 @@ export class BillingService {
     // serialize it, so convert before this reaches the controller.
     return {
       ...subscription,
-      plan: { ...subscription.plan, monthlyByteQuota: subscription.plan.monthlyByteQuota?.toString() ?? null },
+      plan: {
+        ...subscription.plan,
+        monthlyByteQuota: subscription.plan.monthlyByteQuota?.toString() ?? null,
+      },
     };
   }
 
@@ -159,7 +164,9 @@ export class BillingService {
   async handleWebhook(rawBody: Buffer, signature: string | undefined): Promise<void> {
     const webhookSecret = await this.apiAccessTokens.getDecrypted('stripe_webhook_secret');
     if (!webhookSecret) {
-      throw new Error('Stripe webhook secret is not configured (Admin -> Settings -> Stripe & Subscriptions)');
+      throw new Error(
+        'Stripe webhook secret is not configured (Admin -> Settings -> Stripe & Subscriptions)',
+      );
     }
     if (!signature) {
       throw new BadRequestException('Missing Stripe signature header');
@@ -212,7 +219,9 @@ export class BillingService {
         const organizationId = session.client_reference_id ?? session.metadata?.organizationId;
         const planKey = session.metadata?.planKey;
         const stripeSubscriptionId =
-          typeof session.subscription === 'string' ? session.subscription : session.subscription?.id;
+          typeof session.subscription === 'string'
+            ? session.subscription
+            : session.subscription?.id;
         if (!organizationId || !planKey || !stripeSubscriptionId) {
           this.logger.warn(`checkout.session.completed missing metadata, session=${session.id}`);
           return;

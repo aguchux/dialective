@@ -4,11 +4,11 @@
 
 ```ts
 const deriveResponse = await circleDeveloperSdk.deriveWallet({
-  id: "<wallet-id>",
-  blockchain: "ARB-TESTNET",
+  id: '<wallet-id>',
+  blockchain: 'ARB-TESTNET',
   metadata: {
-    name: "Arbitrum Wallet",
-    refId: "internal-ref-001",
+    name: 'Arbitrum Wallet',
+    refId: 'internal-ref-001',
   },
 });
 
@@ -21,9 +21,9 @@ Derives an EOA or SCA wallet on a new EVM blockchain from an existing wallet to 
 
 ```ts
 const updateResponse = await circleDeveloperSdk.updateWallet({
-  id: "<wallet-id>",
-  name: "Updated Wallet Name",
-  refId: "new-ref-id",
+  id: '<wallet-id>',
+  name: 'Updated Wallet Name',
+  refId: 'new-ref-id',
 });
 ```
 

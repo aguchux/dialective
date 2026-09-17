@@ -204,7 +204,8 @@ export default function AdminKycDetailPage() {
             {isLoading
               ? 'Loading...'
               : row
-                ? [row.user.firstName, row.user.lastName].filter(Boolean).join(' ') || row.user.email
+                ? [row.user.firstName, row.user.lastName].filter(Boolean).join(' ') ||
+                  row.user.email
                 : 'Verification not found'}
           </h1>
           {row && (
@@ -277,7 +278,10 @@ export default function AdminKycDetailPage() {
             </section>
 
             {error && (
-              <p className="rounded-lg bg-red-50 px-4 py-3 text-sm font-bold text-danger" role="alert">
+              <p
+                className="rounded-lg bg-red-50 px-4 py-3 text-sm font-bold text-danger"
+                role="alert"
+              >
                 {error}
               </p>
             )}
@@ -572,11 +576,19 @@ function BotFindingsPanel({
     plausibilityScore: number | null;
     flags: string[];
     summary: string | null;
-    extractedFields: { fullName: string | null; dateOfBirth: string | null; documentNumber: string | null } | null;
+    extractedFields: {
+      fullName: string | null;
+      dateOfBirth: string | null;
+      documentNumber: string | null;
+    } | null;
   } | null;
 }) {
   if (!botFindings) {
-    return <p className="text-sm text-muted">No AI-assisted findings were recorded for this verification.</p>;
+    return (
+      <p className="text-sm text-muted">
+        No AI-assisted findings were recorded for this verification.
+      </p>
+    );
   }
   const { plausibilityScore, flags, summary, extractedFields } = botFindings;
   return (

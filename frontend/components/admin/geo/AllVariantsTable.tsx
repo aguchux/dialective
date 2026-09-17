@@ -31,7 +31,11 @@ export function AllVariantsTable() {
     setError(null);
     setPausingId(variant.id);
     try {
-      await updateVariant({ id: variant.id, dialectId: variant.dialect.id, body: { tasksPaused } }).unwrap();
+      await updateVariant({
+        id: variant.id,
+        dialectId: variant.dialect.id,
+        body: { tasksPaused },
+      }).unwrap();
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to update task availability.'));
     } finally {
@@ -97,7 +101,11 @@ export function AllVariantsTable() {
             type="checkbox"
           />
           <span
-            className={v.tasksPaused ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}
+            className={
+              v.tasksPaused
+                ? 'text-amber-700 dark:text-amber-400'
+                : 'text-emerald-700 dark:text-emerald-400'
+            }
           >
             {v.tasksPaused ? 'Paused' : 'Running'}
           </span>

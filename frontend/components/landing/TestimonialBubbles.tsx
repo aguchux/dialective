@@ -51,10 +51,7 @@ export function TestimonialBubbles({
 }) {
   // VIDEO testimonies have no text to show, so they can't be bubbles. Filtering
   // here rather than at the fetch keeps the carousel's data untouched.
-  const quotes = useMemo(
-    () => testimonials.filter((t) => excerpt(t) !== null),
-    [testimonials],
-  );
+  const quotes = useMemo(() => testimonials.filter((t) => excerpt(t) !== null), [testimonials]);
 
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(false);
@@ -69,8 +66,7 @@ export function TestimonialBubbles({
     return () => query.removeEventListener('change', apply);
   }, []);
 
-  const gapMs =
-    Math.min(Math.max(intervalSeconds, MIN_INTERVAL_S), MAX_INTERVAL_S) * 1000;
+  const gapMs = Math.min(Math.max(intervalSeconds, MIN_INTERVAL_S), MAX_INTERVAL_S) * 1000;
 
   useEffect(() => {
     if (reducedMotion || quotes.length === 0) return;
@@ -115,10 +111,7 @@ export function TestimonialBubbles({
   if (!body) return null;
 
   return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none fixed inset-0 z-20 overflow-hidden"
-    >
+    <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-20 overflow-hidden">
       {visible && (
         <figure
           className="testimonial-bubble pointer-events-none absolute bottom-0 w-[15rem] max-w-[72vw] rounded-2xl border border-white/60 bg-white/80 p-3 shadow-[0_8px_24px_rgba(15,23,42,0.12)] backdrop-blur-sm sm:w-[17rem]"
@@ -129,9 +122,7 @@ export function TestimonialBubbles({
           }}
         >
           <Quote aria-hidden="true" className="size-3.5 text-accent" />
-          <blockquote className="mt-1 text-[0.8rem] leading-snug text-[#101a34]">
-            {body}
-          </blockquote>
+          <blockquote className="mt-1 text-[0.8rem] leading-snug text-[#101a34]">{body}</blockquote>
           <figcaption className="mt-1.5 text-[0.7rem] font-semibold text-muted">
             {attribution(testimonial)}
           </figcaption>

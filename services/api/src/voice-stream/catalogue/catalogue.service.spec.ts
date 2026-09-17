@@ -181,7 +181,10 @@ describe('CatalogueService', () => {
       });
       prisma.wordRecording.findMany.mockResolvedValue([row('rec-1')]);
       prisma.isvcCurrent.findMany.mockResolvedValueOnce([
-        { recordingId: 'rec-1', aggregation: { isvs: 98, confidence: 'VERY_HIGH', organizationCount: 2, agreement: 96 } },
+        {
+          recordingId: 'rec-1',
+          aggregation: { isvs: 98, confidence: 'VERY_HIGH', organizationCount: 2, agreement: 96 },
+        },
       ]);
 
       const result = await service.search({ page: 1, pageSize: 20 });
@@ -194,11 +197,22 @@ describe('CatalogueService', () => {
       prisma.wordRecording.count.mockResolvedValue(0);
       prisma.wordRecording.findMany.mockResolvedValue([]);
       prisma.isvcCurrent.findMany.mockResolvedValue([
-        { recordingId: 'rec-1', aggregation: { isvs: 92, confidence: 'HIGH', organizationCount: 6, agreement: 85 } },
-        { recordingId: 'rec-2', aggregation: { isvs: 96, confidence: 'VERY_HIGH', organizationCount: 6, agreement: 85 } },
+        {
+          recordingId: 'rec-1',
+          aggregation: { isvs: 92, confidence: 'HIGH', organizationCount: 6, agreement: 85 },
+        },
+        {
+          recordingId: 'rec-2',
+          aggregation: { isvs: 96, confidence: 'VERY_HIGH', organizationCount: 6, agreement: 85 },
+        },
       ]);
 
-      await service.search({ minConfidence: 'ESTABLISHED', planMinConfidence: 'VERY_HIGH', page: 1, pageSize: 20 });
+      await service.search({
+        minConfidence: 'ESTABLISHED',
+        planMinConfidence: 'VERY_HIGH',
+        page: 1,
+        pageSize: 20,
+      });
 
       expect(prisma.wordRecording.count).toHaveBeenCalledWith({
         where: expect.objectContaining({ id: { in: ['rec-2'] } }),
@@ -208,12 +222,42 @@ describe('CatalogueService', () => {
     it('sortBy=isvs_desc orders and paginates by ISVS instead of createdAt', async () => {
       const { prisma, service } = setup();
       prisma.isvcCurrent.findMany.mockResolvedValue([
-        { recordingId: 'rec-low', aggregation: { isvs: 60, confidence: 'ESTABLISHED', organizationCount: 2, agreement: 80 } },
-        { recordingId: 'rec-high', aggregation: { isvs: 95, confidence: 'VERY_HIGH', organizationCount: 5, agreement: 90 } },
+        {
+          recordingId: 'rec-low',
+          aggregation: { isvs: 60, confidence: 'ESTABLISHED', organizationCount: 2, agreement: 80 },
+        },
+        {
+          recordingId: 'rec-high',
+          aggregation: { isvs: 95, confidence: 'VERY_HIGH', organizationCount: 5, agreement: 90 },
+        },
       ]);
       prisma.wordRecording.findMany.mockResolvedValue([
-        { id: 'rec-high', dialectTag: 'igbo', durationMs: 1000, score: 90, rawScore: 90, compositeScore: 90, noiseScore: 10, qualityScore: 95, livenessScore: 99, createdAt: new Date('2026-01-01'), dialectVariant: null },
-        { id: 'rec-low', dialectTag: 'igbo', durationMs: 1000, score: 90, rawScore: 90, compositeScore: 90, noiseScore: 10, qualityScore: 95, livenessScore: 99, createdAt: new Date('2026-01-02'), dialectVariant: null },
+        {
+          id: 'rec-high',
+          dialectTag: 'igbo',
+          durationMs: 1000,
+          score: 90,
+          rawScore: 90,
+          compositeScore: 90,
+          noiseScore: 10,
+          qualityScore: 95,
+          livenessScore: 99,
+          createdAt: new Date('2026-01-01'),
+          dialectVariant: null,
+        },
+        {
+          id: 'rec-low',
+          dialectTag: 'igbo',
+          durationMs: 1000,
+          score: 90,
+          rawScore: 90,
+          compositeScore: 90,
+          noiseScore: 10,
+          qualityScore: 95,
+          livenessScore: 99,
+          createdAt: new Date('2026-01-02'),
+          dialectVariant: null,
+        },
       ]);
 
       const result = await service.search({ sortBy: 'isvs_desc', page: 1, pageSize: 20 });
@@ -225,26 +269,36 @@ describe('CatalogueService', () => {
     it('sortBy=isvs_desc slices the correct page window without dropping or duplicating items', async () => {
       const { prisma, service } = setup();
       prisma.isvcCurrent.findMany.mockResolvedValue([
-        { recordingId: 'rec-a', aggregation: { isvs: 90, confidence: 'HIGH', organizationCount: 2, agreement: 80 } },
-        { recordingId: 'rec-b', aggregation: { isvs: 80, confidence: 'HIGH', organizationCount: 2, agreement: 80 } },
-        { recordingId: 'rec-c', aggregation: { isvs: 70, confidence: 'HIGH', organizationCount: 2, agreement: 80 } },
+        {
+          recordingId: 'rec-a',
+          aggregation: { isvs: 90, confidence: 'HIGH', organizationCount: 2, agreement: 80 },
+        },
+        {
+          recordingId: 'rec-b',
+          aggregation: { isvs: 80, confidence: 'HIGH', organizationCount: 2, agreement: 80 },
+        },
+        {
+          recordingId: 'rec-c',
+          aggregation: { isvs: 70, confidence: 'HIGH', organizationCount: 2, agreement: 80 },
+        },
       ]);
-      prisma.wordRecording.findMany.mockImplementation(({ where }: { where: { id: { in: string[] } } }) =>
-        Promise.resolve(
-          where.id.in.map((id) => ({
-            id,
-            dialectTag: 'igbo',
-            durationMs: 1000,
-            score: 90,
-            rawScore: 90,
-            compositeScore: 90,
-            noiseScore: 10,
-            qualityScore: 95,
-            livenessScore: 99,
-            createdAt: new Date('2026-01-01'),
-            dialectVariant: null,
-          })),
-        ),
+      prisma.wordRecording.findMany.mockImplementation(
+        ({ where }: { where: { id: { in: string[] } } }) =>
+          Promise.resolve(
+            where.id.in.map((id) => ({
+              id,
+              dialectTag: 'igbo',
+              durationMs: 1000,
+              score: 90,
+              rawScore: 90,
+              compositeScore: 90,
+              noiseScore: 10,
+              qualityScore: 95,
+              livenessScore: 99,
+              createdAt: new Date('2026-01-01'),
+              dialectVariant: null,
+            })),
+          ),
       );
 
       const result = await service.search({ sortBy: 'isvs_desc', page: 2, pageSize: 2 });
@@ -260,9 +314,7 @@ describe('CatalogueService', () => {
       const { prisma, service } = setup();
       prisma.wordRecording.findFirst.mockResolvedValue(null);
 
-      await expect(service.preview('org-1', 'user-1', 'rec-1')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.preview('org-1', 'user-1', 'rec-1')).rejects.toThrow(NotFoundException);
       expect(prisma.cataloguePreviewLog.create).not.toHaveBeenCalled();
     });
 

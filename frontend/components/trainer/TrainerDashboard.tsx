@@ -2842,8 +2842,7 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
           <div>
             <h2 className="text-lg font-black">Verify your identity to submit a testimonial</h2>
             <p className="mt-1 text-sm leading-relaxed text-muted">
-              Testimonial rewards are available only after your identity verification is
-              approved.
+              Testimonial rewards are available only after your identity verification is approved.
             </p>
             {kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW' ? (
               <p className="mt-2 text-sm font-bold text-amber-700">
@@ -2911,8 +2910,8 @@ function TestimonialsView({ onGiveTestimony }: { onGiveTestimony: () => void }) 
             {kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW' ? (
               <>
                 <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm font-bold text-amber-800">
-                  Your ID is under review by the Dialect Admin. You can submit a testimonial
-                  once it is approved. If this is stuck, you can cancel it and try again.
+                  Your ID is under review by the Dialect Admin. You can submit a testimonial once it
+                  is approved. If this is stuck, you can cancel it and try again.
                 </p>
                 {verificationError && (
                   <p className="text-sm font-bold text-danger">{verificationError}</p>
@@ -3058,7 +3057,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
   const whatsAppValidationFeeTokens = whatsAppValidatorIntegration?.feeTokenAmount ?? '0';
   const activeWhatsAppValidationRequest =
     myWhatsAppValidationRequest &&
-    (myWhatsAppValidationRequest.status === 'PENDING' || myWhatsAppValidationRequest.status === 'CLAIMED')
+    (myWhatsAppValidationRequest.status === 'PENDING' ||
+      myWhatsAppValidationRequest.status === 'CLAIMED')
       ? myWhatsAppValidationRequest
       : null;
   // A peer (not this session) is the one who calls verify(), so this
@@ -3465,7 +3465,10 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                     Verify mobile
                   </ActionButton>
                 </DialogTrigger>
-                <DialogContent title="Verify mobile" description="Choose how you want to verify this number.">
+                <DialogContent
+                  title="Verify mobile"
+                  description="Choose how you want to verify this number."
+                >
                   <div className="grid gap-4">
                     <div className="rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm font-bold text-muted">
                       {normalizedPhoneNumber}
@@ -3568,7 +3571,9 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                                   className="grid size-10 shrink-0 place-items-center rounded-lg border border-line text-muted transition-colors hover:bg-surface-muted hover:text-ink"
                                   aria-label="Copy code"
                                   onClick={() => {
-                                    void navigator.clipboard.writeText(whatsAppValidationIssuedCode);
+                                    void navigator.clipboard.writeText(
+                                      whatsAppValidationIssuedCode,
+                                    );
                                     setManualPhoneCodeCopied(true);
                                     setTimeout(() => setManualPhoneCodeCopied(false), 1500);
                                   }}
@@ -3635,8 +3640,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
                                   </a>
                                 ) : (
                                   <p className="text-sm font-bold text-muted">
-                                    The member hasn&apos;t added a phone number yet -- wait for
-                                    them to message you.
+                                    The member hasn&apos;t added a phone number yet -- wait for them
+                                    to message you.
                                   </p>
                                 )}
                               </div>
@@ -3701,8 +3706,8 @@ function ProfileView({ session, update }: { session: Session; update: SessionUpd
           ) : kycStatus === 'IN_PROGRESS' || kycStatus === 'IN_REVIEW' ? (
             <>
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                Your ID is under review by the Dialect Admin. If this is stuck, you can cancel
-                it and try again.
+                Your ID is under review by the Dialect Admin. If this is stuck, you can cancel it
+                and try again.
               </p>
               {error && (
                 <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
@@ -5056,8 +5061,8 @@ function WithdrawTokensDialog({
                 <>
                   <p className="font-extrabold">Thanks -- we&apos;ve got your ID and selfie.</p>
                   <div className="w-full rounded-lg bg-emerald-50 px-3 py-2.5 text-sm font-bold text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                    Under review by the Dialect Admin. No action needed -- we&apos;ll notify you
-                    the moment it&apos;s done.
+                    Under review by the Dialect Admin. No action needed -- we&apos;ll notify you the
+                    moment it&apos;s done.
                   </div>
                   <p className="text-sm leading-relaxed text-muted">
                     This usually takes a few minutes -- feel free to check back shortly. If

@@ -38,7 +38,9 @@ export default function MyPostsPage() {
     try {
       await updatePost({ id: postId, status: 'PUBLISHED' }).unwrap();
     } catch (err) {
-      setPublishError(normalizeErrorMessage(err, 'Could not publish this draft. Please try again.'));
+      setPublishError(
+        normalizeErrorMessage(err, 'Could not publish this draft. Please try again.'),
+      );
     }
   }
 

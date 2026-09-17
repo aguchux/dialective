@@ -26,14 +26,14 @@ turns them on for a plan.
 Every subscriber organization already has per-org ceilings — concurrent
 stream limit, requests-per-minute, monthly quota (`SubscriptionPlan.
 maxConcurrentStreams`, `rateLimitPerMinute`, `monthlyByteQuota`/
-`monthlyRequestQuota`). Those ceilings only ever check "is *this* org over
-*its own* limit" — there was never a mechanism protecting one org's traffic
+`monthlyRequestQuota`). Those ceilings only ever check "is _this_ org over
+_its own_ limit" — there was never a mechanism protecting one org's traffic
 from being crowded out by everyone else's traffic on the same pod fleet.
 
 Dedicated Capacity adds that protection for Enterprise orgs. It is a
 **guaranteed throughput floor**, not physical isolation — Enterprise traffic
 still runs on the same `api` pods as everyone else. What changes is:
-when the whole fleet is saturated *and* an Enterprise org is actively using
+when the whole fleet is saturated _and_ an Enterprise org is actively using
 its reserved share of that capacity, a new request from a non-Enterprise org
 gets turned away (so the Enterprise org's in-flight traffic keeps flowing)
 instead of everyone degrading together.
@@ -61,11 +61,11 @@ are true for the resource it's competing for:
 If no Enterprise org is live, condition 2 never fires, and the guard is a
 complete no-op end-to-end — exactly today's behavior. Enterprise orgs
 themselves never hit this guard's block path; it only decides whether to let
-*other* orgs' traffic through when Enterprise headroom is at risk.
+_other_ orgs' traffic through when Enterprise headroom is at risk.
 
 A rejected request gets `503 Service Unavailable` (not `429`) with the
-message *"Platform is at capacity; dedicated-capacity subscribers are being
-prioritized. Please retry shortly."* — a capacity/priority signal, distinct
+message _"Platform is at capacity; dedicated-capacity subscribers are being
+prioritized. Please retry shortly."_ — a capacity/priority signal, distinct
 from a subscriber hitting their own quota.
 
 **Redis unavailable → fails open.** If Redis can't be reached, the guard
@@ -77,10 +77,10 @@ outage cause for the whole platform.
 Two environment variables on the `api` deployment define the fleet-wide
 ceilings this feature reasons about:
 
-| Variable | Meaning |
-| --- | --- |
-| `FLEET_MAX_CONCURRENT_STREAMS` | Total concurrent audio streams the fleet can serve before Enterprise protection engages. |
-| `FLEET_MAX_REQUESTS_PER_MINUTE` | Total requests/minute across the fleet before Enterprise protection engages. |
+| Variable                        | Meaning                                                                                  |
+| ------------------------------- | ---------------------------------------------------------------------------------------- |
+| `FLEET_MAX_CONCURRENT_STREAMS`  | Total concurrent audio streams the fleet can serve before Enterprise protection engages. |
+| `FLEET_MAX_REQUESTS_PER_MINUTE` | Total requests/minute across the fleet before Enterprise protection engages.             |
 
 Both default to `0` (unset), which disables the feature entirely — the
 guard's very first check is `if both are 0, return true immediately`, so it
@@ -121,12 +121,12 @@ Lets an Enterprise organization's OWNER or ADMIN configure four
 organization-wide rules that apply to every member, without needing a code
 change or platform-side intervention:
 
-| Policy | Effect |
-| --- | --- |
-| **Mandatory SSO** | Password login is disabled for everyone in the org **except the OWNER role**. |
-| **Refresh token TTL override** | Overrides the platform-wide 30-day refresh-token lifetime with a shorter (or longer) org-specific value. |
-| **Minimum role for API key creation** | Restricts which roles may create/rotate Stream Keys, narrower than the platform default. |
-| **Mandatory IP allowlist** | Every new or rotated Stream Key must have a non-empty IP allowlist — an empty allowlist is rejected. |
+| Policy                                | Effect                                                                                                   |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **Mandatory SSO**                     | Password login is disabled for everyone in the org **except the OWNER role**.                            |
+| **Refresh token TTL override**        | Overrides the platform-wide 30-day refresh-token lifetime with a shorter (or longer) org-specific value. |
+| **Minimum role for API key creation** | Restricts which roles may create/rotate Stream Keys, narrower than the platform default.                 |
+| **Mandatory IP allowlist**            | Every new or rotated Stream Key must have a non-empty IP allowlist — an empty allowlist is rejected.     |
 
 ### Why the OWNER always keeps password access
 
@@ -138,7 +138,7 @@ login as a break-glass path, so there's always one human who can fix a
 broken SSO integration on their own.
 
 An unauthenticated login attempt against an SSO-required org gets the exact
-same generic *"Invalid email or password"* response as a wrong password or a
+same generic _"Invalid email or password"_ response as a wrong password or a
 nonexistent account — the platform never reveals that an org requires SSO to
 an unauthenticated caller.
 
@@ -158,7 +158,7 @@ Enforcement happens at the exact point each rule matters:
   the hardcoded 30-day constant with the org's override when one exists.
 - **Minimum role for key creation** — a new guard,
   `ApiKeyRolePolicyGuard`, runs on the Stream Key create/rotate endpoints
-  alongside the existing role checks. It only ever *narrows* who can act,
+  alongside the existing role checks. It only ever _narrows_ who can act,
   never widens beyond the platform's own role floor.
 - **Mandatory IP allowlist** — checked in `StreamKeysService` on both
   `create()` and `rotate()`. Rotating an old key that predates the policy
@@ -175,11 +175,11 @@ to unlock the feature for orgs on that plan.
 
 Once entitled, an org's OWNER or ADMIN manages the policy via:
 
-| Endpoint | Effect |
-| --- | --- |
-| `GET /voice-stream/security-policy` | Read the org's current policy (or nothing, if unconfigured). |
-| `POST /voice-stream/security-policy` | Create or update the policy (upsert — send the full desired state). |
-| `DELETE /voice-stream/security-policy` | Remove the policy entirely, reverting to platform defaults. |
+| Endpoint                               | Effect                                                              |
+| -------------------------------------- | ------------------------------------------------------------------- |
+| `GET /voice-stream/security-policy`    | Read the org's current policy (or nothing, if unconfigured).        |
+| `POST /voice-stream/security-policy`   | Create or update the policy (upsert — send the full desired state). |
+| `DELETE /voice-stream/security-policy` | Remove the policy entirely, reverting to platform defaults.         |
 
 Every change is recorded on the organization's activity timeline
 (`SECURITY_POLICY_UPDATED` / `SECURITY_POLICY_REMOVED` events), visible
@@ -218,16 +218,16 @@ has a working SAML identity provider configured — see the separate SAML SSO
 module (`services/api/src/voice-stream/sso/`) for how that's set up. Turning
 on `requireSso` without a working `SsoIdpConfig` for the org would lock out
 every non-OWNER member with no way to actually sign in via SSO, so SSO
-should be configured and verified working *before* mandatory SSO is turned
+should be configured and verified working _before_ mandatory SSO is turned
 on.
 
 ---
 
 ## Files
 
-| Area | Path |
-| --- | --- |
-| Dedicated Capacity guard | `services/api/src/voice-stream/stream-api/dedicated-capacity.guard.ts` |
-| Security policy module | `services/api/src/voice-stream/security-policy/` |
-| Schema | `services/api/prisma/schema.prisma` — `SubscriptionPlan.reservedCapacityPercent`/`enterpriseSecurityPoliciesEnabled`, `SubscriberOrgSecurityPolicy` |
-| Migration | `services/api/prisma/migrations/20260901000000_add_voice_stream_phase4_dedicated_capacity_and_security_policies/` |
+| Area                     | Path                                                                                                                                                |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dedicated Capacity guard | `services/api/src/voice-stream/stream-api/dedicated-capacity.guard.ts`                                                                              |
+| Security policy module   | `services/api/src/voice-stream/security-policy/`                                                                                                    |
+| Schema                   | `services/api/prisma/schema.prisma` — `SubscriptionPlan.reservedCapacityPercent`/`enterpriseSecurityPoliciesEnabled`, `SubscriberOrgSecurityPolicy` |
+| Migration                | `services/api/prisma/migrations/20260901000000_add_voice_stream_phase4_dedicated_capacity_and_security_policies/`                                   |

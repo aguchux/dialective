@@ -69,7 +69,10 @@ export default function AdminValidatorDecksPage() {
       key: 'name',
       header: 'Name',
       render: (deck) => (
-        <Link className="font-bold text-accent hover:text-accent-dark" href={`/validator/decks/${deck.id}`}>
+        <Link
+          className="font-bold text-accent hover:text-accent-dark"
+          href={`/validator/decks/${deck.id}`}
+        >
           {deck.name}
         </Link>
       ),
@@ -118,9 +121,9 @@ export default function AdminValidatorDecksPage() {
           <h1 className="text-3xl font-black">Validator Decks</h1>
           <p className="leading-relaxed text-muted">
             Every validator-owned deck across the approval chain. Bypass-approve advances any
-            pending deck straight to APPROVED. Publish bridges an APPROVED deck into a public
-            Stream Deck and mints the VALIDATION_REWARD payout for its creator/approvers/any
-            reassignment split.
+            pending deck straight to APPROVED. Publish bridges an APPROVED deck into a public Stream
+            Deck and mints the VALIDATION_REWARD payout for its creator/approvers/any reassignment
+            split.
           </p>
         </div>
 
@@ -239,7 +242,11 @@ function PublishAction({ deck }: { deck: ValidatorDeckSummary }) {
 
   async function handlePublish() {
     setError(null);
-    if (!window.confirm(`Publish "${deck.name}"? This mints DL payouts and bridges it into a public Stream Deck. This cannot be undone.`)) {
+    if (
+      !window.confirm(
+        `Publish "${deck.name}"? This mints DL payouts and bridges it into a public Stream Deck. This cannot be undone.`,
+      )
+    ) {
       return;
     }
     try {
@@ -319,13 +326,20 @@ function ReassignDialog({ deck, onClose }: { deck: ValidatorDeckSummary; onClose
   }
 
   return (
-    <div className="fixed inset-0 z-40 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true">
-      <form className={`${cardClass} grid w-full max-w-sm gap-3 p-5`} onSubmit={(e) => void handleSubmit(e)}>
+    <div
+      className="fixed inset-0 z-40 grid place-items-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <form
+        className={`${cardClass} grid w-full max-w-sm gap-3 p-5`}
+        onSubmit={(e) => void handleSubmit(e)}
+      >
         <h2 className="text-lg font-black">Reassign &ldquo;{deck.name}&rdquo;</h2>
         <p className="text-sm text-muted">
           Moves ownership to another validator. The current owner keeps (100 &minus; penalty)% of
-          the eventual base payout; the new owner gets the penalty% share instead of any other
-          share of the base reward or bonuses.
+          the eventual base payout; the new owner gets the penalty% share instead of any other share
+          of the base reward or bonuses.
         </p>
         <label className="grid gap-1 text-sm font-bold">
           New owner user ID
@@ -351,7 +365,11 @@ function ReassignDialog({ deck, onClose }: { deck: ValidatorDeckSummary; onClose
         </label>
         {error && <p className="text-sm font-bold text-danger">{error}</p>}
         <div className="mt-1 flex justify-end gap-2">
-          <button className="min-h-10 rounded-lg border border-line px-3 font-bold" onClick={onClose} type="button">
+          <button
+            className="min-h-10 rounded-lg border border-line px-3 font-bold"
+            onClick={onClose}
+            type="button"
+          >
             Cancel
           </button>
           <button
@@ -431,7 +449,9 @@ function CloneFromStreamDeckPanel() {
         </button>
       </form>
       {error && <p className="text-sm font-bold text-danger">{error}</p>}
-      {success && <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">{success}</p>}
+      {success && (
+        <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">{success}</p>
+      )}
     </section>
   );
 }

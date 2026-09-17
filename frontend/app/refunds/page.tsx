@@ -5,8 +5,7 @@ import { ParallaxTopBackground } from '@/components/ParallaxTopBackground';
 
 export const metadata = {
   title: 'Refund Policy',
-  description:
-    'How refunds, reversals, and payment disputes are handled on Dialect Library.',
+  description: 'How refunds, reversals, and payment disputes are handled on Dialect Library.',
 };
 
 const LAST_UPDATED = 'September 9, 2026';
@@ -29,9 +28,9 @@ export default function RefundsPage() {
             <h2 className="text-xl font-black text-[#050505]">1. Scope</h2>
             <p>
               This policy explains how Dialect Library handles refunds and payment reversals for
-              platform funding, withdrawals, peer-to-peer trades, and Voice Stream subscriptions.
-              It should be read together with our Terms of Use. Where a third-party payment
-              provider is involved, its terms may also apply.
+              platform funding, withdrawals, peer-to-peer trades, and Voice Stream subscriptions. It
+              should be read together with our Terms of Use. Where a third-party payment provider is
+              involved, its terms may also apply.
             </p>
           </section>
 
@@ -46,9 +45,9 @@ export default function RefundsPage() {
               and correct the ledger where appropriate.
             </p>
             <p>
-              A payment that is still pending, expired, rejected, or cancelled has not been
-              credited as completed funding. Any provider-side refund for an unsuccessful payment
-              is handled through the payment provider&apos;s settlement process.
+              A payment that is still pending, expired, rejected, or cancelled has not been credited
+              as completed funding. Any provider-side refund for an unsuccessful payment is handled
+              through the payment provider&apos;s settlement process.
             </p>
           </section>
 
@@ -78,11 +77,11 @@ export default function RefundsPage() {
           <section className="grid gap-2">
             <h2 className="text-xl font-black text-[#050505]">5. Voice Stream subscriptions</h2>
             <p>
-              Voice Stream subscription fees are generally non-refundable after a billing period
-              has started or the subscribed access has been used. Where required by applicable law,
-              or where a charge was duplicated or made in error, we may issue a partial or full
-              refund after reviewing the account and payment record. Cancellation normally stops
-              the next renewal and does not automatically refund the current period.
+              Voice Stream subscription fees are generally non-refundable after a billing period has
+              started or the subscribed access has been used. Where required by applicable law, or
+              where a charge was duplicated or made in error, we may issue a partial or full refund
+              after reviewing the account and payment record. Cancellation normally stops the next
+              renewal and does not automatically refund the current period.
             </p>
           </section>
 
@@ -94,8 +93,8 @@ export default function RefundsPage() {
                 hello@dialectlibrary.com
               </a>{' '}
               with your account email, transaction or order reference, amount, date, and a short
-              explanation. Do not send passwords, private keys, or full payment-card details. We
-              may request additional information needed to verify the transaction.
+              explanation. Do not send passwords, private keys, or full payment-card details. We may
+              request additional information needed to verify the transaction.
             </p>
             <p>
               Approved refunds are returned through the original payment route where possible. The

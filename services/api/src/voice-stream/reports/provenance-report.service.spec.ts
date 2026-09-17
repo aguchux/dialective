@@ -74,14 +74,26 @@ describe('ProvenanceReportService.build', () => {
 
   it('leaves countryCode/recordingCreatedAt null for a recording that no longer resolves', async () => {
     const { prisma, service } = setup();
-    prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1', deckKey: 'DLSD-X' });
+    prisma.streamDeck.findUnique.mockResolvedValue({
+      id: 'deck-1',
+      organizationId: 'org-1',
+      deckKey: 'DLSD-X',
+    });
     prisma.streamDeckVersion.findUnique.mockResolvedValue({
       version: 1,
       itemCount: 1,
       createdAt: new Date(),
       createdReason: 'manual_add',
       items: [
-        { recordingId: 'rec-purged', durationMs: null, dialectTag: 'igbo', subdialectTag: null, dlCanonicalScore: null, isvs: null, isvcVersion: null },
+        {
+          recordingId: 'rec-purged',
+          durationMs: null,
+          dialectTag: 'igbo',
+          subdialectTag: null,
+          dlCanonicalScore: null,
+          isvs: null,
+          isvcVersion: null,
+        },
       ],
     });
 

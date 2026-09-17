@@ -323,10 +323,12 @@ export default function PayoutAccountsPage() {
         stripeEnabled={publicSettings?.isStripePayoutsEnabled ?? false}
         platformPayoutEnabled={publicSettings?.isPlatformPayoutEnabled ?? false}
         cryptoEnabled={publicSettings?.isCryptoWithdrawalsEnabled ?? false}
-        allowedAssets={parseCsvUpper(publicSettings?.allowedWithdrawalCurrencies) ?? STABLECOIN_ASSETS}
+        allowedAssets={
+          parseCsvUpper(publicSettings?.allowedWithdrawalCurrencies) ?? STABLECOIN_ASSETS
+        }
         allowedNetworks={
-          (parseCsvUpper(publicSettings?.allowedWithdrawalNetworks) as StablecoinNetwork[] | null) ??
-          STABLECOIN_NETWORKS
+          (parseCsvUpper(publicSettings?.allowedWithdrawalNetworks) as
+            StablecoinNetwork[] | null) ?? STABLECOIN_NETWORKS
         }
       />
       {deletingAccount && (
@@ -391,7 +393,8 @@ function AddPayoutAccountDialog({
   const [accountNumber, setAccountNumber] = useState('');
   const [mobileMoneyNetwork, setMobileMoneyNetwork] = useState(MOBILE_MONEY_NETWORKS[0]);
   const [mobileMoneyNumber, setMobileMoneyNumber] = useState('');
-  const [stablecoinAsset, setStablecoinAsset] = useState<(typeof STABLECOIN_ASSETS)[number]>('USDT');
+  const [stablecoinAsset, setStablecoinAsset] =
+    useState<(typeof STABLECOIN_ASSETS)[number]>('USDT');
   const [stablecoinNetwork, setStablecoinNetwork] = useState<StablecoinNetwork>('TRC20');
   const [walletAddress, setWalletAddress] = useState('');
   const [walletOtpRequestId, setWalletOtpRequestId] = useState<string | null>(null);
@@ -418,7 +421,8 @@ function AddPayoutAccountDialog({
 
   const selectableNetworks = STABLECOIN_NETWORKS.filter(
     (network) =>
-      allowedNetworks.includes(network) && VALID_STABLECOIN_PAIRS[stablecoinAsset].includes(network),
+      allowedNetworks.includes(network) &&
+      VALID_STABLECOIN_PAIRS[stablecoinAsset].includes(network),
   );
 
   function reset() {
@@ -444,7 +448,8 @@ function AddPayoutAccountDialog({
 
   function selectStablecoinAsset(asset: (typeof STABLECOIN_ASSETS)[number]) {
     setStablecoinAsset(asset);
-    const stillValid = VALID_STABLECOIN_PAIRS[asset].includes(stablecoinNetwork) &&
+    const stillValid =
+      VALID_STABLECOIN_PAIRS[asset].includes(stablecoinNetwork) &&
       allowedNetworks.includes(stablecoinNetwork);
     if (!stillValid) {
       const fallback = STABLECOIN_NETWORKS.find(
@@ -508,7 +513,9 @@ function AddPayoutAccountDialog({
       setError(
         normalizeErrorMessage(
           err,
-          walletOtpRequestId ? 'Unable to verify this code.' : 'Unable to send a confirmation code.',
+          walletOtpRequestId
+            ? 'Unable to verify this code.'
+            : 'Unable to send a confirmation code.',
         ),
       );
     }
@@ -635,7 +642,8 @@ function AddPayoutAccountDialog({
     'wallet-otp': 'Confirm your wallet',
   };
   const stepDescription: Record<WizardStep, string> = {
-    country: 'Start by telling us where you are -- this decides which payout providers we can offer.',
+    country:
+      'Start by telling us where you are -- this decides which payout providers we can offer.',
     provider: 'Choose how you want to receive your DL withdrawals.',
     details:
       provider === 'CRYPTO_WALLET'
@@ -730,11 +738,14 @@ function AddPayoutAccountDialog({
                 title="Bank Transfer"
               />
             )}
-            {!flutterwaveAvailable && !stripeEnabled && !cryptoEnabled && !platformPayoutEnabled && (
-              <p className="rounded-lg border border-line bg-surface-muted p-4 text-sm text-muted">
-                No payout provider is available for {countryName} yet. Contact support for help.
-              </p>
-            )}
+            {!flutterwaveAvailable &&
+              !stripeEnabled &&
+              !cryptoEnabled &&
+              !platformPayoutEnabled && (
+                <p className="rounded-lg border border-line bg-surface-muted p-4 text-sm text-muted">
+                  No payout provider is available for {countryName} yet. Contact support for help.
+                </p>
+              )}
           </div>
         )}
 
@@ -776,7 +787,11 @@ function AddPayoutAccountDialog({
                       onChange={() => setStablecoinNetwork(network)}
                       type="radio"
                     />
-                    <CryptoIcon alt={NETWORK_LABELS[network]} size={24} src={NETWORK_ICON_SRC[network]} />
+                    <CryptoIcon
+                      alt={NETWORK_LABELS[network]}
+                      size={24}
+                      src={NETWORK_ICON_SRC[network]}
+                    />
                     {NETWORK_LABELS[network]}
                   </label>
                 ))}
@@ -792,7 +807,13 @@ function AddPayoutAccountDialog({
               <input
                 className={inputClass}
                 onChange={(event) => setWalletAddress(event.target.value.trim())}
-                placeholder={stablecoinNetwork === 'TRC20' ? 'T...' : stablecoinNetwork === 'SOL' ? '' : '0x...'}
+                placeholder={
+                  stablecoinNetwork === 'TRC20'
+                    ? 'T...'
+                    : stablecoinNetwork === 'SOL'
+                      ? ''
+                      : '0x...'
+                }
                 required
                 type="text"
                 value={walletAddress}
@@ -958,7 +979,10 @@ function AddPayoutAccountDialog({
                         loading={isLoadingBanks}
                         loadingLabel="Loading banks..."
                         onChange={setBankCode}
-                        options={(banks ?? []).map((bank) => ({ value: bank.code, label: bank.name }))}
+                        options={(banks ?? []).map((bank) => ({
+                          value: bank.code,
+                          label: bank.name,
+                        }))}
                         placeholder="Search for a bank"
                         value={bankCode}
                       />

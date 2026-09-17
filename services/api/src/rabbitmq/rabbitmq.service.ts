@@ -46,7 +46,8 @@ export class RabbitMqService implements OnModuleDestroy {
   // isn't presenting a publicly-trusted certificate.
   private get url(): string {
     const host = process.env.RABBITMQ_HOST ?? 'rabbitmq';
-    const port = process.env.RABBITMQ_PORT ?? (process.env.RABBITMQ_TLS === 'true' ? '5671' : '5672');
+    const port =
+      process.env.RABBITMQ_PORT ?? (process.env.RABBITMQ_TLS === 'true' ? '5671' : '5672');
     const username = process.env.RABBITMQ_USERNAME;
     const password = process.env.RABBITMQ_PASSWORD;
     const vhost = encodeURIComponent(process.env.RABBITMQ_VHOST ?? '/dialectiva');

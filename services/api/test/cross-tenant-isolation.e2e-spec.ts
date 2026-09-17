@@ -148,7 +148,7 @@ describe('cross-tenant data isolation', () => {
   });
 
   describe('catalogue preview side', () => {
-    it("org B can preview the SAME shared-catalogue recording as org A (by design -- not deck-scoped)", async () => {
+    it('org B can preview the SAME shared-catalogue recording as org A (by design -- not deck-scoped)', async () => {
       const res = await request(app.getHttpServer())
         .get(apiPath(`voice-stream/catalogue/${recordingAId}/preview`))
         .set('Authorization', `Bearer ${orgB.subscriberJwt}`);

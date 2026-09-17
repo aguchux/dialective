@@ -18,13 +18,21 @@ import { ValidationsView } from '@/components/validator/views/ValidationsView';
 import { AuditView } from '@/components/validator/views/AuditView';
 import { EarningsView } from '@/components/validator/views/EarningsView';
 
-const allViewIds: ValidatorView[] = ['decks', 'tokens', 'earnings', 'validations', 'audit', 'profile'];
+const allViewIds: ValidatorView[] = [
+  'decks',
+  'tokens',
+  'earnings',
+  'validations',
+  'audit',
+  'profile',
+];
 
 export function ValidatorDashboard() {
   const { data: session, status } = useSession();
   const hasSeenSessionRef = useRef(false);
   if (status === 'authenticated') hasSeenSessionRef.current = true;
-  const effectiveStatus = status === 'loading' && hasSeenSessionRef.current ? 'authenticated' : status;
+  const effectiveStatus =
+    status === 'loading' && hasSeenSessionRef.current ? 'authenticated' : status;
   const router = useRouter();
   const searchParams = useSearchParams();
   const [themeRoot, setThemeRoot] = useState<HTMLDivElement | null>(null);

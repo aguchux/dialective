@@ -38,7 +38,11 @@ function setupWallet() {
         Promise.resolve(wallets.get(where.userId) ?? null),
       ),
       create: jest.fn(({ data }: { data: { userId: string } }) => {
-        const wallet = { id: `wallet-${data.userId}`, userId: data.userId, balance: new Decimal(0) };
+        const wallet = {
+          id: `wallet-${data.userId}`,
+          userId: data.userId,
+          balance: new Decimal(0),
+        };
         wallets.set(data.userId, wallet);
         return Promise.resolve(wallet);
       }),

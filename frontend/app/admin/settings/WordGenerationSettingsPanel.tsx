@@ -177,20 +177,63 @@ export function WordGenerationSettingsPanel() {
           </div>
 
           <div className="grid gap-3">
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="word-generation-enabled">
-              <input checked={wordGenerationEnabled} className="mt-0.5 size-5 accent-accent" id="word-generation-enabled" onChange={(event) => setWordGenerationEnabled(event.target.checked)} type="checkbox" />
-              <span><span className="block font-bold">Enable word generation</span><span className="mt-1 block text-sm leading-relaxed text-muted">Generate short, everyday English words for the Word bank.</span></span>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="word-generation-enabled"
+            >
+              <input
+                checked={wordGenerationEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="word-generation-enabled"
+                onChange={(event) => setWordGenerationEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Enable word generation</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Generate short, everyday English words for the Word bank.
+                </span>
+              </span>
             </label>
-            <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4" htmlFor="sentence-generation-enabled">
-              <input checked={sentenceGenerationEnabled} className="mt-0.5 size-5 accent-accent" id="sentence-generation-enabled" onChange={(event) => setSentenceGenerationEnabled(event.target.checked)} type="checkbox" />
-              <span><span className="block font-bold">Enable sentence generation</span><span className="mt-1 block text-sm leading-relaxed text-muted">Generate simple, everyday conversational English statements. Sentences are created independently and never composed from existing Word rows.</span></span>
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="sentence-generation-enabled"
+            >
+              <input
+                checked={sentenceGenerationEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="sentence-generation-enabled"
+                onChange={(event) => setSentenceGenerationEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Enable sentence generation</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Generate simple, everyday conversational English statements. Sentences are created
+                  independently and never composed from existing Word rows.
+                </span>
+              </span>
             </label>
           </div>
 
           <div className="grid gap-1">
-            <label className="font-bold" htmlFor="sentence-word-count">Words per sentence</label>
-            <p className="text-sm leading-relaxed text-muted">Target length for each generated sentence. Keep it short enough to translate and record naturally.</p>
-            <input className={inputClass} id="sentence-word-count" type="number" step="1" min="2" max="20" value={sentenceWordCount} onChange={(e) => setSentenceWordCount(e.target.value)} />
+            <label className="font-bold" htmlFor="sentence-word-count">
+              Words per sentence
+            </label>
+            <p className="text-sm leading-relaxed text-muted">
+              Target length for each generated sentence. Keep it short enough to translate and
+              record naturally.
+            </p>
+            <input
+              className={inputClass}
+              id="sentence-word-count"
+              type="number"
+              step="1"
+              min="2"
+              max="20"
+              value={sentenceWordCount}
+              onChange={(e) => setSentenceWordCount(e.target.value)}
+            />
           </div>
 
           <div className="grid gap-1">
@@ -317,7 +360,6 @@ export function WordGenerationSettingsPanel() {
               onChange={(e) => setKeyboardLayoutMaxLength(e.target.value)}
             />
           </div>
-
 
           <div>
             <ActionButton

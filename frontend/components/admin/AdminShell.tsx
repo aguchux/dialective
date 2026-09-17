@@ -847,7 +847,10 @@ function MessageIcon() {
       strokeWidth="2"
       aria-hidden="true"
     >
-      <path d="M5 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 3v-3.5A2 2 0 0 1 3 15V6a2 2 0 0 1 2-2Z" strokeLinejoin="round" />
+      <path
+        d="M5 4h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 3v-3.5A2 2 0 0 1 3 15V6a2 2 0 0 1 2-2Z"
+        strokeLinejoin="round"
+      />
       <path d="M8 9h8M8 13h5" strokeLinecap="round" />
     </svg>
   );

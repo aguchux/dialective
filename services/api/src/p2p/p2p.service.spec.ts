@@ -339,7 +339,7 @@ describe('P2PService.adminListTrades -- counterparty phone number reveal', () =>
       expect(result.defaulter.email).toBe('seller@example.com');
     });
 
-    it('includes the reporter\'s phone number for the admin WhatsApp deep-link', async () => {
+    it("includes the reporter's phone number for the admin WhatsApp deep-link", async () => {
       const prisma = {
         p2PDispute: { findMany: jest.fn().mockResolvedValue([makeDispute()]) },
       };
@@ -752,7 +752,9 @@ describe('P2PService.requestTradeOtp', () => {
 
   beforeEach(() => {
     prisma = { user: { findUniqueOrThrow: jest.fn() } };
-    otp = { issueForUser: jest.fn().mockResolvedValue({ otpRequestId: 'otp-1', expiresInSeconds: 600 }) };
+    otp = {
+      issueForUser: jest.fn().mockResolvedValue({ otpRequestId: 'otp-1', expiresInSeconds: 600 }),
+    };
     const platformSettings = {
       getOtpChannel: jest.fn().mockResolvedValue('sms'),
       isWhatsappOtpEnabled: jest.fn().mockResolvedValue(false),

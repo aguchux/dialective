@@ -199,7 +199,9 @@ export class DomainConversationsService {
       );
     }
     if (body.durationMs > maxMs + durationGraceMs) {
-      throw new UnprocessableEntityException(`Recording exceeds the ${maxSeconds}s limit for this task`);
+      throw new UnprocessableEntityException(
+        `Recording exceeds the ${maxSeconds}s limit for this task`,
+      );
     }
 
     const taskTokenCost = await this.settings.getDomainConversationTaskTokenCost();

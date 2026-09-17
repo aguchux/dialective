@@ -45,7 +45,10 @@ export class UsageCounterService {
    * the caller decides whether to reject based on the returned count, same
    * as QuotaGuard's existing >= comparison.
    */
-  async tryReserveRequest(organizationId: string, requestQuota: number): Promise<{ withinQuota: boolean }> {
+  async tryReserveRequest(
+    organizationId: string,
+    requestQuota: number,
+  ): Promise<{ withinQuota: boolean }> {
     const periodStart = currentPeriodStart();
     const rows = await this.prisma.$queryRaw<Array<{ requestsUsed: number }>>(Prisma.sql`
       INSERT INTO usage_counters (id, "organizationId", "periodStart", "bytesUsed", "requestsUsed")

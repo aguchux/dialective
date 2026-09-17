@@ -20,8 +20,8 @@ function setup() {
 describe('WebhookSubscriptionsService.create', () => {
   it('generates and encrypts a secret, returning plaintext exactly once', async () => {
     const { service, prisma } = setup();
-    prisma.webhookSubscription.create.mockImplementation(({ data }: { data: Record<string, unknown> }) =>
-      Promise.resolve({ id: 'sub-1', ...data }),
+    prisma.webhookSubscription.create.mockImplementation(
+      ({ data }: { data: Record<string, unknown> }) => Promise.resolve({ id: 'sub-1', ...data }),
     );
 
     const result = await service.create('org-1', 'user-1', {
@@ -40,7 +40,10 @@ describe('WebhookSubscriptionsService.create', () => {
 describe('WebhookSubscriptionsService.remove', () => {
   it('rejects a subscription belonging to another organization', async () => {
     const { service, prisma } = setup();
-    prisma.webhookSubscription.findUnique.mockResolvedValue({ id: 'sub-1', organizationId: 'other-org' });
+    prisma.webhookSubscription.findUnique.mockResolvedValue({
+      id: 'sub-1',
+      organizationId: 'other-org',
+    });
 
     await expect(service.remove('org-1', 'sub-1')).rejects.toThrow(NotFoundException);
     expect(prisma.webhookSubscription.delete).not.toHaveBeenCalled();
@@ -48,7 +51,10 @@ describe('WebhookSubscriptionsService.remove', () => {
 
   it('deletes a subscription belonging to the caller organization', async () => {
     const { service, prisma } = setup();
-    prisma.webhookSubscription.findUnique.mockResolvedValue({ id: 'sub-1', organizationId: 'org-1' });
+    prisma.webhookSubscription.findUnique.mockResolvedValue({
+      id: 'sub-1',
+      organizationId: 'org-1',
+    });
 
     await service.remove('org-1', 'sub-1');
 

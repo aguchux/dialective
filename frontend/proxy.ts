@@ -80,9 +80,7 @@ export default async function proxy(request: NextRequest) {
   const token = await getToken({ req: request });
 
   if (token?.authError === 'SessionExpired') {
-    return AUTH_PAGES.has(pathname)
-      ? next(request)
-      : redirect(request, '/login?reason=idle', true);
+    return AUTH_PAGES.has(pathname) ? next(request) : redirect(request, '/login?reason=idle', true);
   }
 
   if (!token || token.authError === 'RefreshTokenInvalid') {

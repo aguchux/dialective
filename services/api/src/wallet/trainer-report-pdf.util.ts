@@ -7,11 +7,17 @@ const INK = '#111111';
 
 function formatTokens(value: string): string {
   const number = Number(value);
-  return Number.isFinite(number) ? number.toLocaleString('en-US', { maximumFractionDigits: 2 }) : value;
+  return Number.isFinite(number)
+    ? number.toLocaleString('en-US', { maximumFractionDigits: 2 })
+    : value;
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 }
 
 /**
@@ -33,7 +39,11 @@ export function renderTrainerReportPdf(
     doc.on('error', reject);
 
     doc.fillColor(ACCENT).fontSize(20).font('Helvetica-Bold').text('Dialect Library');
-    doc.fillColor(INK).fontSize(14).font('Helvetica-Bold').text('Trainer account report', { paragraphGap: 4 });
+    doc
+      .fillColor(INK)
+      .fontSize(14)
+      .font('Helvetica-Bold')
+      .text('Trainer account report', { paragraphGap: 4 });
     doc
       .fillColor(MUTED)
       .fontSize(10)
@@ -61,9 +71,13 @@ export function renderTrainerReportPdf(
     let rowHeight = 0;
     for (const [label, value] of stats) {
       const x = doc.page.margins.left + column * colWidth;
-      doc.fillColor(MUTED).fontSize(8).font('Helvetica-Bold').text(label.toUpperCase(), x, rowTop, {
-        width: colWidth - 12,
-      });
+      doc
+        .fillColor(MUTED)
+        .fontSize(8)
+        .font('Helvetica-Bold')
+        .text(label.toUpperCase(), x, rowTop, {
+          width: colWidth - 12,
+        });
       doc
         .fillColor(INK)
         .fontSize(13)
@@ -104,7 +118,10 @@ export function renderTrainerReportPdf(
         .font(header ? 'Helvetica-Bold' : 'Helvetica')
         .text(date, tableX, y, { width: dateColWidth })
         .text(recordings, tableX + dateColWidth, y, { width: recColWidth, align: 'right' })
-        .text(earnings, tableX + dateColWidth + recColWidth, y, { width: earnColWidth, align: 'right' });
+        .text(earnings, tableX + dateColWidth + recColWidth, y, {
+          width: earnColWidth,
+          align: 'right',
+        });
       doc.moveDown(0.4);
     }
 

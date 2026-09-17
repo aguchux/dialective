@@ -311,7 +311,10 @@ function PlanForm({
   }
 
   return (
-    <form className="grid gap-3 rounded-lg border border-line bg-surface-muted p-4" onSubmit={handleSave}>
+    <form
+      className="grid gap-3 rounded-lg border border-line bg-surface-muted p-4"
+      onSubmit={handleSave}
+    >
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1 text-sm font-bold">
           Plan key
@@ -338,7 +341,11 @@ function PlanForm({
             className={inputClass}
             disabled={Number(form.monthlyUsdAmount) === 0}
             onChange={(e) => setForm({ ...form, stripePriceId: e.target.value })}
-            placeholder={Number(form.monthlyUsdAmount) === 0 ? 'Free plan: no Stripe price' : 'price_1AbCdEfGhIjKlMn'}
+            placeholder={
+              Number(form.monthlyUsdAmount) === 0
+                ? 'Free plan: no Stripe price'
+                : 'price_1AbCdEfGhIjKlMn'
+            }
             value={form.stripePriceId}
           />
         </label>
@@ -377,7 +384,9 @@ function PlanForm({
           Minimum quality tier
           <select
             className={inputClass}
-            onChange={(e) => setForm({ ...form, minIsvcConfidence: e.target.value as IsvcConfidence | '' })}
+            onChange={(e) =>
+              setForm({ ...form, minIsvcConfidence: e.target.value as IsvcConfidence | '' })
+            }
             value={form.minIsvcConfidence}
           >
             {CONFIDENCE_TIER_OPTIONS.map((opt) => (
@@ -429,7 +438,12 @@ function PlanForm({
       )}
 
       <div className="flex gap-2">
-        <ActionButton className={primaryButtonClass} pending={isSaving} pendingLabel="Saving" type="submit">
+        <ActionButton
+          className={primaryButtonClass}
+          pending={isSaving}
+          pendingLabel="Saving"
+          type="submit"
+        >
           {isNew ? 'Add plan' : 'Save changes'}
         </ActionButton>
         <button
@@ -473,20 +487,29 @@ function PlanRow({ plan }: { plan: SubscriptionPlan }) {
             </span>
           </p>
           <p className="mt-1 text-sm text-muted">
-            {Number(plan.monthlyUsdAmount) === 0 ? 'Free plan - no Stripe billing' : `Stripe Price: ${plan.stripePriceId}`}
+            {Number(plan.monthlyUsdAmount) === 0
+              ? 'Free plan - no Stripe billing'
+              : `Stripe Price: ${plan.stripePriceId}`}
           </p>
           <p className="mt-1 text-sm text-muted">
             Stream decks: {plan.maxStreamDecks ?? 'unlimited'} -- Team members:{' '}
             {plan.maxTeamMembers ?? 'unlimited'}
           </p>
           <p className="mt-1 text-sm text-muted">
-            Quality tier: {plan.minIsvcConfidence ? plan.minIsvcConfidence.replace('_', ' ') + ' or higher' : 'Full catalogue access'}
+            Quality tier:{' '}
+            {plan.minIsvcConfidence
+              ? plan.minIsvcConfidence.replace('_', ' ') + ' or higher'
+              : 'Full catalogue access'}
           </p>
           <p className="mt-1 text-sm text-muted">
             Monthly quota:{' '}
-            {plan.monthlyByteQuota ? `${(Number(plan.monthlyByteQuota) / BYTES_PER_GB).toFixed(1)} GB` : 'unlimited data'}
+            {plan.monthlyByteQuota
+              ? `${(Number(plan.monthlyByteQuota) / BYTES_PER_GB).toFixed(1)} GB`
+              : 'unlimited data'}
             {' -- '}
-            {plan.monthlyRequestQuota ? `${plan.monthlyRequestQuota.toLocaleString()} requests` : 'unlimited requests'}
+            {plan.monthlyRequestQuota
+              ? `${plan.monthlyRequestQuota.toLocaleString()} requests`
+              : 'unlimited requests'}
           </p>
           {plan.features.length > 0 && (
             <ul className="mt-2 grid gap-1">
@@ -605,8 +628,8 @@ function StripePayoutsSettingsPanel() {
               <span>
                 <span className="block font-bold">Stripe Connect payouts enabled</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  When off, trainers cannot create a Stripe payout account and admins cannot
-                  submit withdrawals to Stripe -- keep this off until STRIPE_SECRET_KEY and
+                  When off, trainers cannot create a Stripe payout account and admins cannot submit
+                  withdrawals to Stripe -- keep this off until STRIPE_SECRET_KEY and
                   STRIPE_CONNECT_WEBHOOK_SECRET are configured and tested.
                 </span>
               </span>

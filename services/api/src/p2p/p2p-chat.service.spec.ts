@@ -116,9 +116,9 @@ describe('P2PChatService -- access control', () => {
 describe('P2PChatService.sendMessage', () => {
   it('rejects a message with neither body nor attachment', async () => {
     const { service } = setup(makeTrade());
-    await expect(
-      service.sendMessage('buyer-1', Role.TRAINER, 'trade-1', {}),
-    ).rejects.toThrow('Message must include text or an attachment');
+    await expect(service.sendMessage('buyer-1', Role.TRAINER, 'trade-1', {})).rejects.toThrow(
+      'Message must include text or an attachment',
+    );
   });
 
   it('persists a text message from a participant', async () => {
@@ -132,7 +132,11 @@ describe('P2PChatService.sendMessage', () => {
     expect(result.body).toBe('I have paid');
     expect(prisma.p2PTradeMessage.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ tradeId: 'trade-1', senderId: 'buyer-1', isFromAdmin: false }),
+        data: expect.objectContaining({
+          tradeId: 'trade-1',
+          senderId: 'buyer-1',
+          isFromAdmin: false,
+        }),
       }),
     );
   });
@@ -143,7 +147,9 @@ describe('P2PChatService.sendMessage', () => {
       makeMessage({ senderId: 'admin-1', isFromAdmin: true, body: 'Please share your receipt' }),
     );
 
-    await service.sendMessage('admin-1', Role.ADMIN, 'trade-1', { body: 'Please share your receipt' });
+    await service.sendMessage('admin-1', Role.ADMIN, 'trade-1', {
+      body: 'Please share your receipt',
+    });
 
     expect(prisma.p2PTradeMessage.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ isFromAdmin: true }) }),
@@ -162,7 +168,7 @@ describe('P2PChatService.sendMessage', () => {
   });
 
   describe('admin-joined-dispute notification', () => {
-    it('emails both buyer and seller on the admin\'s first message in the thread', async () => {
+    it("emails both buyer and seller on the admin's first message in the thread", async () => {
       const { service, prisma, mail } = setup(
         makeTrade({ disputedAt: new Date(), status: 'DISPUTED' }),
       );
@@ -171,7 +177,9 @@ describe('P2PChatService.sendMessage', () => {
         makeMessage({ senderId: 'admin-1', isFromAdmin: true, body: 'Please share your receipt' }),
       );
 
-      await service.sendMessage('admin-1', Role.ADMIN, 'trade-1', { body: 'Please share your receipt' });
+      await service.sendMessage('admin-1', Role.ADMIN, 'trade-1', {
+        body: 'Please share your receipt',
+      });
       await flushMicrotasks();
 
       expect(prisma.user.findUnique).toHaveBeenCalledWith({
@@ -183,7 +191,10 @@ describe('P2PChatService.sendMessage', () => {
         select: { email: true },
       });
       expect(mail.sendP2PAdminJoinedDisputeEmail).toHaveBeenCalledTimes(2);
-      expect(mail.sendP2PAdminJoinedDisputeEmail).toHaveBeenCalledWith('party@example.com', 'trade-1');
+      expect(mail.sendP2PAdminJoinedDisputeEmail).toHaveBeenCalledWith(
+        'party@example.com',
+        'trade-1',
+      );
     });
 
     it('does not email again on a second admin message in the same thread', async () => {

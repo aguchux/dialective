@@ -108,10 +108,11 @@ describe('audit completeness', () => {
         .set('Authorization', `Bearer ${org.subscriberJwt}`)
         .send({ name: 'Renamed' });
       expect(rename.status).toBe(200);
-      await waitForCondition(async () =>
-        (await prisma.orgActivityEvent.count({
-          where: { organizationId: org.organizationId, eventType: 'DECK_RENAMED' },
-        })) > 0,
+      await waitForCondition(
+        async () =>
+          (await prisma.orgActivityEvent.count({
+            where: { organizationId: org.organizationId, eventType: 'DECK_RENAMED' },
+          })) > 0,
       );
 
       const addItem = await request(app.getHttpServer())
@@ -119,30 +120,33 @@ describe('audit completeness', () => {
         .set('Authorization', `Bearer ${org.subscriberJwt}`)
         .send({ recordingId: recording.recordingId });
       expect(addItem.status).toBe(201);
-      await waitForCondition(async () =>
-        (await prisma.orgActivityEvent.count({
-          where: { organizationId: org.organizationId, eventType: 'DECK_ITEM_ADDED' },
-        })) > 0,
+      await waitForCondition(
+        async () =>
+          (await prisma.orgActivityEvent.count({
+            where: { organizationId: org.organizationId, eventType: 'DECK_ITEM_ADDED' },
+          })) > 0,
       );
 
       const removeItem = await request(app.getHttpServer())
         .delete(apiPath(`voice-stream/stream-decks/${deck.deckId}/items/${addItem.body.id}`))
         .set('Authorization', `Bearer ${org.subscriberJwt}`);
       expect(removeItem.status).toBe(200);
-      await waitForCondition(async () =>
-        (await prisma.orgActivityEvent.count({
-          where: { organizationId: org.organizationId, eventType: 'DECK_ITEM_REMOVED' },
-        })) > 0,
+      await waitForCondition(
+        async () =>
+          (await prisma.orgActivityEvent.count({
+            where: { organizationId: org.organizationId, eventType: 'DECK_ITEM_REMOVED' },
+          })) > 0,
       );
 
       const remove = await request(app.getHttpServer())
         .delete(apiPath(`voice-stream/stream-decks/${deck.deckId}`))
         .set('Authorization', `Bearer ${org.subscriberJwt}`);
       expect(remove.status).toBe(200);
-      await waitForCondition(async () =>
-        (await prisma.orgActivityEvent.count({
-          where: { organizationId: org.organizationId, eventType: 'DECK_DELETED' },
-        })) > 0,
+      await waitForCondition(
+        async () =>
+          (await prisma.orgActivityEvent.count({
+            where: { organizationId: org.organizationId, eventType: 'DECK_DELETED' },
+          })) > 0,
       );
     });
 
@@ -181,7 +185,11 @@ describe('audit completeness', () => {
       // so the write can land after the response returns.
       await waitForCondition(async () => {
         const count = await prisma.streamAccessLog.count({
-          where: { organizationId: org.organizationId, deckId: deck.deckId, requestType: 'manifest' },
+          where: {
+            organizationId: org.organizationId,
+            deckId: deck.deckId,
+            requestType: 'manifest',
+          },
         });
         return count > before;
       });
@@ -207,7 +215,11 @@ describe('audit completeness', () => {
       // No item in this deck -> guaranteed 404 (denied:not_found_or_ineligible),
       // still must be logged.
       const res = await request(app.getHttpServer())
-        .get(apiPath(`stream/v1/decks/${deck.deckId}/items/00000000-0000-0000-0000-000000000000/audio`))
+        .get(
+          apiPath(
+            `stream/v1/decks/${deck.deckId}/items/00000000-0000-0000-0000-000000000000/audio`,
+          ),
+        )
         .set('Authorization', `Bearer ${key.plaintextKey}`);
       expect(res.status).toBe(404);
       const after = await prisma.streamAccessLog.count({

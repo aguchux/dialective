@@ -30,7 +30,10 @@ describe('SecurityPolicyService.get', () => {
 describe('SecurityPolicyService.upsert', () => {
   it('creates a policy when absent and records activity', async () => {
     const { service, prisma, orgActivity } = setup();
-    prisma.subscriberOrgSecurityPolicy.upsert.mockResolvedValue({ id: 'policy-1', requireSso: true });
+    prisma.subscriberOrgSecurityPolicy.upsert.mockResolvedValue({
+      id: 'policy-1',
+      requireSso: true,
+    });
 
     const result = await service.upsert('org-1', 'admin-1', { requireSso: true });
 
@@ -50,7 +53,10 @@ describe('SecurityPolicyService.upsert', () => {
 
   it('updates a policy when present', async () => {
     const { service, prisma } = setup();
-    prisma.subscriberOrgSecurityPolicy.upsert.mockResolvedValue({ id: 'policy-1', requireIpAllowlist: true });
+    prisma.subscriberOrgSecurityPolicy.upsert.mockResolvedValue({
+      id: 'policy-1',
+      requireIpAllowlist: true,
+    });
 
     await service.upsert('org-1', 'admin-1', { requireIpAllowlist: true });
 
@@ -69,6 +75,11 @@ describe('SecurityPolicyService.remove', () => {
     expect(prisma.subscriberOrgSecurityPolicy.delete).toHaveBeenCalledWith({
       where: { organizationId: 'org-1' },
     });
-    expect(orgActivity.record).toHaveBeenCalledWith('org-1', 'SECURITY_POLICY_REMOVED', 'admin-1', {});
+    expect(orgActivity.record).toHaveBeenCalledWith(
+      'org-1',
+      'SECURITY_POLICY_REMOVED',
+      'admin-1',
+      {},
+    );
   });
 });

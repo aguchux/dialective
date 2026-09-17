@@ -100,4 +100,3 @@ export class ActivityExportQueryDto {
   @IsIn(['csv'])
   format?: 'csv';
 }
-

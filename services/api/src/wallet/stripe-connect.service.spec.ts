@@ -100,9 +100,11 @@ describe('StripeConnectService', () => {
     });
 
     it('surfaces a country-not-supported reason instead of the generic retry message', async () => {
-      const err = new (Stripe as unknown as {
-        errors: { StripeInvalidRequestError: new (message: string, param: string) => Error };
-      }).errors.StripeInvalidRequestError('ET is not currently supported by Stripe.', 'country');
+      const err = new (
+        Stripe as unknown as {
+          errors: { StripeInvalidRequestError: new (message: string, param: string) => Error };
+        }
+      ).errors.StripeInvalidRequestError('ET is not currently supported by Stripe.', 'country');
       mockAccountsCreate.mockRejectedValue(err);
 
       await expect(
@@ -219,14 +221,26 @@ describe('StripeConnectService', () => {
     });
 
     it('reports transferred when nothing has been reversed', async () => {
-      mockTransfersRetrieve.mockResolvedValue({ id: 'tr_123', reversed: false, amount_reversed: 0 });
+      mockTransfersRetrieve.mockResolvedValue({
+        id: 'tr_123',
+        reversed: false,
+        amount_reversed: 0,
+      });
 
       const result = await service.getPayoutStatus('tr_123');
-      expect(result).toEqual({ payoutId: 'tr_123', status: 'transferred', raw: expect.any(Object) });
+      expect(result).toEqual({
+        payoutId: 'tr_123',
+        status: 'transferred',
+        raw: expect.any(Object),
+      });
     });
 
     it('reports reversed when the transfer has been reversed', async () => {
-      mockTransfersRetrieve.mockResolvedValue({ id: 'tr_123', reversed: true, amount_reversed: 5000 });
+      mockTransfersRetrieve.mockResolvedValue({
+        id: 'tr_123',
+        reversed: true,
+        amount_reversed: 5000,
+      });
 
       const result = await service.getPayoutStatus('tr_123');
       expect(result.status).toBe('reversed');

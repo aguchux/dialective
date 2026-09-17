@@ -69,7 +69,10 @@ function activeSubscription() {
 
 describe('StreamAudioController (HTTP layer)', () => {
   let app: INestApplication;
-  let prisma: { subscription: { findUnique: jest.Mock }; streamApiKey: { findUnique: jest.Mock; update: jest.Mock } };
+  let prisma: {
+    subscription: { findUnique: jest.Mock };
+    streamApiKey: { findUnique: jest.Mock; update: jest.Mock };
+  };
   let manifest: { getEligibleItemMetadata: jest.Mock };
   let storage: { getObject: jest.Mock };
   let accessLog: { record: jest.Mock };
@@ -100,7 +103,10 @@ describe('StreamAudioController (HTTP layer)', () => {
         { provide: StorageService, useValue: storage },
         { provide: StreamAccessLogService, useValue: accessLog },
         { provide: WebhookEventService, useValue: webhookEvents },
-        { provide: UsageCounterService, useValue: { getCurrentUsage: jest.fn(), tryReserveRequest: jest.fn() } },
+        {
+          provide: UsageCounterService,
+          useValue: { getCurrentUsage: jest.fn(), tryReserveRequest: jest.fn() },
+        },
         StreamKeyAuthGuard,
         OAuthJwtAuthGuard,
         EitherStreamCredentialGuard,

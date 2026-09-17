@@ -66,7 +66,10 @@ function PasswordSection() {
 
   return (
     <div className={`${cardClass} grid gap-4 p-5`}>
-      <SectionTitle title="Password" subtitle="Changing your password signs out every other session." />
+      <SectionTitle
+        title="Password"
+        subtitle="Changing your password signs out every other session."
+      />
       <form className="grid max-w-sm gap-2.5" onSubmit={handleSubmit}>
         <input
           autoComplete="current-password"

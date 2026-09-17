@@ -11,12 +11,18 @@ function setup() {
       findFirst: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue({}),
     },
-    subscriberOrganization: { findUnique: jest.fn().mockResolvedValue({ id: 'org-1', name: 'Acme' }) },
+    subscriberOrganization: {
+      findUnique: jest.fn().mockResolvedValue({ id: 'org-1', name: 'Acme' }),
+    },
     subscriberMembership: { findMany: jest.fn().mockResolvedValue([]) },
   };
   const mail = { sendAnomalyAlertEmail: jest.fn().mockResolvedValue(undefined) };
   const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
-  const service = new AnomalyDetectionService(prisma as never, mail as never, webhookEvents as never);
+  const service = new AnomalyDetectionService(
+    prisma as never,
+    mail as never,
+    webhookEvents as never,
+  );
   return { service, prisma, mail, webhookEvents };
 }
 
@@ -36,8 +42,9 @@ describe('AnomalyDetectionService.runHourlyCheck', () => {
     // Uniform low volume in both the current window and the baseline lookback
     // keeps the volume-spike rule from firing too, isolating this test to
     // the denial-rate rule's own request-count floor.
-    prisma.streamAccessLog.count.mockImplementation(({ where }: { where: Record<string, unknown> }) =>
-      Promise.resolve(where.entitlementDecision ? 2 : 3),
+    prisma.streamAccessLog.count.mockImplementation(
+      ({ where }: { where: Record<string, unknown> }) =>
+        Promise.resolve(where.entitlementDecision ? 2 : 3),
     );
 
     await service.runHourlyCheck();
@@ -48,12 +55,11 @@ describe('AnomalyDetectionService.runHourlyCheck', () => {
   it('flags denial_rate_spike when the denial rate exceeds the threshold above the request floor', async () => {
     const { service, prisma, mail, webhookEvents } = setup();
     prisma.streamAccessLog.groupBy.mockResolvedValue([{ organizationId: 'org-1' }]);
-    prisma.streamAccessLog.count.mockImplementation(({ where }: { where: Record<string, unknown> }) =>
-      Promise.resolve(where.entitlementDecision ? 15 : 20),
+    prisma.streamAccessLog.count.mockImplementation(
+      ({ where }: { where: Record<string, unknown> }) =>
+        Promise.resolve(where.entitlementDecision ? 15 : 20),
     );
-    prisma.subscriberMembership.findMany.mockResolvedValue([
-      { user: { email: 'admin@acme.com' } },
-    ]);
+    prisma.subscriberMembership.findMany.mockResolvedValue([{ user: { email: 'admin@acme.com' } }]);
 
     await service.runHourlyCheck();
 
@@ -75,8 +81,9 @@ describe('AnomalyDetectionService.runHourlyCheck', () => {
   it('does not re-fire the same rule for the same org+window twice (dedup)', async () => {
     const { service, prisma, mail } = setup();
     prisma.streamAccessLog.groupBy.mockResolvedValue([{ organizationId: 'org-1' }]);
-    prisma.streamAccessLog.count.mockImplementation(({ where }: { where: Record<string, unknown> }) =>
-      Promise.resolve(where.entitlementDecision ? 15 : 20),
+    prisma.streamAccessLog.count.mockImplementation(
+      ({ where }: { where: Record<string, unknown> }) =>
+        Promise.resolve(where.entitlementDecision ? 15 : 20),
     );
     prisma.anomalyEvent.findFirst.mockResolvedValue({ id: 'existing-event' });
 
@@ -91,11 +98,13 @@ describe('AnomalyDetectionService.runHourlyCheck', () => {
     prisma.streamAccessLog.groupBy.mockResolvedValue([{ organizationId: 'org-1' }]);
     prisma.streamAccessLog.count.mockResolvedValue(0);
     const newIps = Array.from({ length: 11 }, (_, i) => ({ ipAddress: `10.0.0.${i}` }));
-    prisma.streamAccessLog.findMany.mockImplementation(({ where }: { where: Record<string, unknown> }) => {
-      const gte = (where.createdAt as { gte: Date }).gte;
-      const isRecentWindow = gte.getTime() > Date.now() - 2 * 60 * 60 * 1000;
-      return Promise.resolve(isRecentWindow ? newIps : []);
-    });
+    prisma.streamAccessLog.findMany.mockImplementation(
+      ({ where }: { where: Record<string, unknown> }) => {
+        const gte = (where.createdAt as { gte: Date }).gte;
+        const isRecentWindow = gte.getTime() > Date.now() - 2 * 60 * 60 * 1000;
+        return Promise.resolve(isRecentWindow ? newIps : []);
+      },
+    );
 
     await service.runHourlyCheck();
 

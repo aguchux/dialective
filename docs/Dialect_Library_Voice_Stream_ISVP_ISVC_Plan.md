@@ -171,15 +171,15 @@ The organization is the ownership and billing boundary for:
 
 Recommended default roles:
 
-| Role | Permissions |
-|---|---|
-| Organization Owner | Full control |
-| Organization Admin | Users, security, decks, integrations |
-| Dataset Manager | Search, filter, create/manage Stream Decks |
-| Validator | Review and validate recordings |
-| API Developer | Generate and manage API integration credentials |
-| Billing Manager | Subscription, invoices, payment methods |
-| Auditor | Read-only access to usage, validations, security and audit logs |
+| Role               | Permissions                                                     |
+| ------------------ | --------------------------------------------------------------- |
+| Organization Owner | Full control                                                    |
+| Organization Admin | Users, security, decks, integrations                            |
+| Dataset Manager    | Search, filter, create/manage Stream Decks                      |
+| Validator          | Review and validate recordings                                  |
+| API Developer      | Generate and manage API integration credentials                 |
+| Billing Manager    | Subscription, invoices, payment methods                         |
+| Auditor            | Read-only access to usage, validations, security and audit logs |
 
 Enterprise subscribers may support custom roles.
 
@@ -472,14 +472,14 @@ Recommended validation dimensions:
 
 Example:
 
-| Metric | Score |
-|---|---:|
-| Transcript Accuracy | 96 |
-| Dialect Authenticity | 95 |
-| Pronunciation | 94 |
-| Audio Quality | 89 |
-| Speech Clarity | 95 |
-| Overall | 94 |
+| Metric               | Score |
+| -------------------- | ----: |
+| Transcript Accuracy  |    96 |
+| Dialect Authenticity |    95 |
+| Pronunciation        |    94 |
+| Audio Quality        |    89 |
+| Speech Clarity       |    95 |
+| Overall              |    94 |
 
 Subscriber organizations may also apply private internal criteria, but only standardized Dialect Library validation metrics should contribute to ISVC.
 
@@ -1253,22 +1253,22 @@ Plans may control:
 
 # 42. Suggested Subscription Tiers
 
-| Capability | Starter | Professional | Enterprise |
-|---|---:|---:|---:|
-| Monthly Billing | Yes | Yes | Yes |
-| Stream Decks | Limited | Higher | Custom |
-| Team Members | Limited | Higher | Custom |
-| ISVP | Basic | Full | Full |
-| ISVC Search | Basic | Full | Full |
-| Deck API Keys | Yes | Yes | Yes |
-| Global API Key | Limited | Yes | Yes |
-| Smart Decks | No | Yes | Yes |
-| Versioned Snapshots | Limited | Yes | Yes |
-| IP Allowlisting | No | Yes | Yes |
-| mTLS | No | No | Yes |
-| SSO | No | No | Yes |
-| Audit Export | Basic | Full | Full |
-| Dedicated Capacity | No | No | Optional |
+| Capability          | Starter | Professional | Enterprise |
+| ------------------- | ------: | -----------: | ---------: |
+| Monthly Billing     |     Yes |          Yes |        Yes |
+| Stream Decks        | Limited |       Higher |     Custom |
+| Team Members        | Limited |       Higher |     Custom |
+| ISVP                |   Basic |         Full |       Full |
+| ISVC Search         |   Basic |         Full |       Full |
+| Deck API Keys       |     Yes |          Yes |        Yes |
+| Global API Key      | Limited |          Yes |        Yes |
+| Smart Decks         |      No |          Yes |        Yes |
+| Versioned Snapshots | Limited |          Yes |        Yes |
+| IP Allowlisting     |      No |          Yes |        Yes |
+| mTLS                |      No |           No |        Yes |
+| SSO                 |      No |           No |        Yes |
+| Audit Export        |   Basic |         Full |       Full |
+| Dedicated Capacity  |      No |           No |   Optional |
 
 Pricing should be determined separately.
 

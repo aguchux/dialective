@@ -6,13 +6,13 @@ Use these TypeScript snippets to execute smart contract functions from a develop
 
 ```ts
 const executionResponse = await circleDeveloperSdk.createContractExecutionTransaction({
-  walletId: "<source-wallet-id>",
-  contractAddress: "<contract-address>",
-  abiFunctionSignature: "transfer(address,uint256)",
-  abiParameters: ["0xRecipientAddress", "1000000"],
+  walletId: '<source-wallet-id>',
+  contractAddress: '<contract-address>',
+  abiFunctionSignature: 'transfer(address,uint256)',
+  abiParameters: ['0xRecipientAddress', '1000000'],
   fee: {
-    type: "level",
-    config: { feeLevel: "MEDIUM" },
+    type: 'level',
+    config: { feeLevel: 'MEDIUM' },
   },
 });
 
@@ -25,12 +25,12 @@ Pass the Solidity function signature and parameters as an array of strings. Supp
 
 ```ts
 const executionResponse = await circleDeveloperSdk.createContractExecutionTransaction({
-  walletId: "<source-wallet-id>",
-  contractAddress: "<contract-address>",
-  callData: "0xa9059cbb000000000000000000000000...",
+  walletId: '<source-wallet-id>',
+  contractAddress: '<contract-address>',
+  callData: '0xa9059cbb000000000000000000000000...',
   fee: {
-    type: "level",
-    config: { feeLevel: "MEDIUM" },
+    type: 'level',
+    config: { feeLevel: 'MEDIUM' },
   },
 });
 
@@ -43,14 +43,14 @@ Use `callData` when you have pre-encoded transaction data (e.g., from ethers or 
 
 ```ts
 const executionResponse = await circleDeveloperSdk.createContractExecutionTransaction({
-  walletId: "<source-wallet-id>",
-  contractAddress: "<contract-address>",
-  abiFunctionSignature: "deposit()",
+  walletId: '<source-wallet-id>',
+  contractAddress: '<contract-address>',
+  abiFunctionSignature: 'deposit()',
   abiParameters: [],
-  amount: "0.1", // native token amount (ETH, MATIC, etc.)
+  amount: '0.1', // native token amount (ETH, MATIC, etc.)
   fee: {
-    type: "level",
-    config: { feeLevel: "MEDIUM" },
+    type: 'level',
+    config: { feeLevel: 'MEDIUM' },
   },
 });
 
@@ -63,10 +63,10 @@ Set `amount` to send native tokens when calling payable functions.
 
 ```ts
 const feeEstimate = await circleDeveloperSdk.estimateContractExecutionFee({
-  walletId: "<source-wallet-id>",
-  contractAddress: "<contract-address>",
-  abiFunctionSignature: "transfer(address,uint256)",
-  abiParameters: ["0xRecipientAddress", "1000000"],
+  walletId: '<source-wallet-id>',
+  contractAddress: '<contract-address>',
+  abiFunctionSignature: 'transfer(address,uint256)',
+  abiParameters: ['0xRecipientAddress', '1000000'],
 });
 
 const { low, medium, high } = feeEstimate.data ?? {};
@@ -79,4 +79,3 @@ Estimate fees before executing to choose an appropriate fee level or set custom 
 
 - [Contract Execution Transaction API](https://developers.circle.com/api-reference/wallets/developer-controlled-wallets/create-developer-transaction-contract-execution)
 - [Estimate Contract Execution Fee API](https://developers.circle.com/api-reference/wallets/developer-controlled-wallets/create-transaction-estimate-fee)
-

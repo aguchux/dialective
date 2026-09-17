@@ -35,7 +35,15 @@ describe('WithdrawalReconciliationService', () => {
       stripeConnect as never,
       platformSettings as never,
     );
-    return { service, prisma, nowPayments, flutterwave, flutterwaveV4, stripeConnect, platformSettings };
+    return {
+      service,
+      prisma,
+      nowPayments,
+      flutterwave,
+      flutterwaveV4,
+      stripeConnect,
+      platformSettings,
+    };
   }
 
   it('does nothing for any provider when all are disabled', async () => {

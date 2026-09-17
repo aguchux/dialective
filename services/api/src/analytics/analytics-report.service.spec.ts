@@ -49,7 +49,9 @@ describe('AnalyticsReportService.getSummary', () => {
         conversions: 2,
       },
     ]);
-    prisma.analyticsDailySnapshot.findFirst.mockResolvedValue({ fetchedAt: new Date('2026-09-15T06:00:00Z') });
+    prisma.analyticsDailySnapshot.findFirst.mockResolvedValue({
+      fetchedAt: new Date('2026-09-15T06:00:00Z'),
+    });
 
     const result = await service.getSummary();
 
@@ -86,7 +88,8 @@ describe('AnalyticsReportService.getSummary', () => {
     expectedSince.setUTCDate(expectedSince.getUTCDate() - expectedDays);
     expectedSince.setUTCHours(0, 0, 0, 0);
 
-    const sinceUsed = prisma.analyticsDailySnapshot.findMany.mock.calls[0][0].where.date.gte as Date;
+    const sinceUsed = prisma.analyticsDailySnapshot.findMany.mock.calls[0][0].where.date
+      .gte as Date;
     expect(sinceUsed.toISOString()).toBe(expectedSince.toISOString());
   });
 });
@@ -122,7 +125,8 @@ describe('AnalyticsReportService.getBreakdown', () => {
     expectedSince.setUTCDate(expectedSince.getUTCDate() - 90);
     expectedSince.setUTCHours(0, 0, 0, 0);
 
-    const sinceUsed = prisma.analyticsDailyBreakdown.groupBy.mock.calls[0][0].where.date.gte as Date;
+    const sinceUsed = prisma.analyticsDailyBreakdown.groupBy.mock.calls[0][0].where.date
+      .gte as Date;
     expect(sinceUsed.toISOString()).toBe(expectedSince.toISOString());
   });
 

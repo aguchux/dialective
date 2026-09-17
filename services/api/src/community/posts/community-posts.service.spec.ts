@@ -29,7 +29,9 @@ describe('CommunityPostsService', () => {
 
   beforeEach(() => {
     prisma = {
-      communitySpace: { findUnique: jest.fn().mockResolvedValue({ id: 'space-1', isArchived: false }) },
+      communitySpace: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'space-1', isArchived: false }),
+      },
       communityPost: {
         create: jest.fn(),
         update: jest.fn(),
@@ -43,7 +45,9 @@ describe('CommunityPostsService', () => {
       },
     };
     profiles = {
-      ensureProfile: jest.fn().mockResolvedValue({ id: 'profile-1', createdAt: new Date('2020-01-01') }),
+      ensureProfile: jest
+        .fn()
+        .mockResolvedValue({ id: 'profile-1', createdAt: new Date('2020-01-01') }),
     };
     tags = { resolveOrCreateMany: jest.fn().mockResolvedValue([]) };
     storage = { getPublicObjectUrl: jest.fn().mockReturnValue('https://public/attachment') };
@@ -121,7 +125,11 @@ describe('CommunityPostsService', () => {
         body: 'hi',
       } as any);
 
-      expect(result.author).toEqual({ id: 'author-1', displayName: 'Ada O.', badge: 'VERIFIED_TRAINER' });
+      expect(result.author).toEqual({
+        id: 'author-1',
+        displayName: 'Ada O.',
+        badge: 'VERIFIED_TRAINER',
+      });
       expect(result.likedByMe).toBe(false);
       expect(result.bookmarkedByMe).toBe(false);
     });
@@ -135,10 +143,19 @@ describe('CommunityPostsService', () => {
         attachments: [],
       });
 
-      await service.create('author-1', { title: 'Draft me', spaceId: 'space-1', body: 'hi', status: 'DRAFT' } as any);
+      await service.create('author-1', {
+        title: 'Draft me',
+        spaceId: 'space-1',
+        body: 'hi',
+        status: 'DRAFT',
+      } as any);
       expect(prisma.communityPost.create.mock.calls[0][0].data.status).toBe('DRAFT');
 
-      await service.create('author-1', { title: 'Publish me', spaceId: 'space-1', body: 'hi' } as any);
+      await service.create('author-1', {
+        title: 'Publish me',
+        spaceId: 'space-1',
+        body: 'hi',
+      } as any);
       expect(prisma.communityPost.create.mock.calls[1][0].data.status).toBe('PUBLISHED');
     });
   });
@@ -171,9 +188,13 @@ describe('CommunityPostsService', () => {
 
     it('keeps emoji reactions distinct from a like and returns bookmark state', async () => {
       prisma.communityPost.findFirst.mockResolvedValue({
-        id: 'post-1', status: 'PUBLISHED', author: fakeAuthor(),
+        id: 'post-1',
+        status: 'PUBLISHED',
+        author: fakeAuthor(),
         space: { id: 'space-1', name: 'General', slug: 'general' },
-        tags: [], attachments: [], reactions: [{ id: 'r1', type: 'HAPPY' }],
+        tags: [],
+        attachments: [],
+        reactions: [{ id: 'r1', type: 'HAPPY' }],
         bookmarks: [{ id: 'b1' }],
       });
       prisma.communityPost.update.mockResolvedValue({});

@@ -39,7 +39,9 @@ export class SubscriptionPlansService {
   constructor(private readonly prisma: PrismaService) {}
 
   async list() {
-    const plans = await this.prisma.subscriptionPlan.findMany({ orderBy: { monthlyUsdAmount: 'asc' } });
+    const plans = await this.prisma.subscriptionPlan.findMany({
+      orderBy: { monthlyUsdAmount: 'asc' },
+    });
     return plans.map(serializePlan);
   }
 

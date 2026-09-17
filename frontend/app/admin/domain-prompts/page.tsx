@@ -76,7 +76,10 @@ export default function AdminDomainPromptsPage() {
       await setDisabled({ id, disabled: nextDisabled }).unwrap();
     } catch (err) {
       setError(
-        normalizeErrorMessage(err, nextDisabled ? 'Unable to disable prompt.' : 'Unable to enable prompt.'),
+        normalizeErrorMessage(
+          err,
+          nextDisabled ? 'Unable to disable prompt.' : 'Unable to enable prompt.',
+        ),
       );
     } finally {
       setTogglingId(null);
@@ -252,7 +255,9 @@ export default function AdminDomainPromptsPage() {
                       <td className="max-w-xs px-5 py-3.5 text-muted">{prompt.text}</td>
                       <td className="px-5 py-3.5 text-muted">{prompt.timesServed}</td>
                       <td className="px-5 py-3.5 text-muted">
-                        {prompt.lastServedAt ? new Date(prompt.lastServedAt).toLocaleDateString() : '—'}
+                        {prompt.lastServedAt
+                          ? new Date(prompt.lastServedAt).toLocaleDateString()
+                          : '—'}
                       </td>
                       <td className="px-5 py-3.5 text-muted">{prompt.source}</td>
                       <td className="px-5 py-3.5">
@@ -410,7 +415,12 @@ function CreatePromptForm({ onClose }: { onClose: () => void }) {
       )}
       <div className="flex justify-end gap-2">
         <DialogClose className={secondaryButtonClass}>Cancel</DialogClose>
-        <ActionButton className={primaryButtonClass} pending={isLoading} pendingLabel="Creating" type="submit">
+        <ActionButton
+          className={primaryButtonClass}
+          pending={isLoading}
+          pendingLabel="Creating"
+          type="submit"
+        >
           Create scenario
         </ActionButton>
       </div>

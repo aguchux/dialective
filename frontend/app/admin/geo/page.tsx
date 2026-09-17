@@ -78,7 +78,9 @@ function CountriesSection({
       const result = await refreshExchangeRatesNow().unwrap();
       setRefreshMessage(
         `Updated ${result.updated} of ${result.total} live-rate countries` +
-          (result.skipped > 0 ? ` (${result.skipped} skipped -- currency not in FX API response)` : ''),
+          (result.skipped > 0
+            ? ` (${result.skipped} skipped -- currency not in FX API response)`
+            : ''),
       );
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to refresh exchange rates.'));
@@ -579,8 +581,8 @@ function SubDialectsSection() {
       <div className="grid gap-1">
         <h2 className="text-2xl leading-snug">Sub-dialects</h2>
         <p className="leading-relaxed text-muted">
-          Every sub-dialect across every country, searchable by name -- pause or resume word
-          tasks for a specific sub-dialect directly, without opening its parent dialect first.
+          Every sub-dialect across every country, searchable by name -- pause or resume word tasks
+          for a specific sub-dialect directly, without opening its parent dialect first.
         </p>
       </div>
       <AllVariantsTable />

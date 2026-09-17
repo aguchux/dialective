@@ -18,7 +18,7 @@ type WhatsappProvider = 'mailersend' | 'meta_direct';
 
 const PROVIDER_LABELS: Record<WhatsappProvider, string> = {
   mailersend: 'MailerSend',
-  meta_direct: "Meta WhatsApp Cloud API (direct)",
+  meta_direct: 'Meta WhatsApp Cloud API (direct)',
 };
 
 export function WhatsappMessagingSettingsPanel() {
@@ -97,9 +97,8 @@ export function WhatsappMessagingSettingsPanel() {
         <h2 className="text-2xl leading-snug">WhatsApp Messaging</h2>
         <p className="leading-relaxed text-muted">
           Delivers OTP codes over WhatsApp, as an alternative to plain SMS. Both backends below
-          require an approved Meta message template (a single-variable template, e.g. one that
-          reads &quot;Your code is {'{{1}}'}&quot;) -- only one backend is active at a time, chosen
-          below.
+          require an approved Meta message template (a single-variable template, e.g. one that reads
+          &quot;Your code is {'{{1}}'}&quot;) -- only one backend is active at a time, chosen below.
         </p>
       </div>
 
@@ -210,7 +209,9 @@ export function WhatsappMessagingSettingsPanel() {
               className={`${inputClass} max-w-80`}
               id="whatsapp-api-key"
               onChange={(e) => setWhatsappApiKey(e.target.value)}
-              placeholder={apiKeySet ? 'Leave blank to keep the saved key' : 'Paste your MailerSend API key'}
+              placeholder={
+                apiKeySet ? 'Leave blank to keep the saved key' : 'Paste your MailerSend API key'
+              }
               type="password"
               value={whatsappApiKey}
             />
@@ -307,7 +308,11 @@ export function WhatsappMessagingSettingsPanel() {
               className={`${inputClass} max-w-80`}
               id="meta-access-token"
               onChange={(e) => setMetaAccessToken(e.target.value)}
-              placeholder={metaAccessTokenSet ? 'Leave blank to keep the saved token' : 'Paste your Meta access token'}
+              placeholder={
+                metaAccessTokenSet
+                  ? 'Leave blank to keep the saved token'
+                  : 'Paste your Meta access token'
+              }
               type="password"
               value={metaAccessToken}
             />

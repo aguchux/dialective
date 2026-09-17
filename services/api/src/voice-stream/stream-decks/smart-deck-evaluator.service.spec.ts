@@ -69,7 +69,11 @@ describe('SmartDeckEvaluatorService.evaluateRule', () => {
 
   it('does nothing for a non-SMART deck', async () => {
     const { service, prisma, catalogue } = setup();
-    prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', type: StreamDeckType.MANUAL, rule: null });
+    prisma.streamDeck.findUnique.mockResolvedValue({
+      id: 'deck-1',
+      type: StreamDeckType.MANUAL,
+      rule: null,
+    });
 
     await service.evaluateRule('deck-1');
 
@@ -90,20 +94,23 @@ describe('SmartDeckEvaluatorService.evaluateAllRulesFor', () => {
       { id: 'deck-ng', rule: { countryCode: 'NG', dialectTag: 'ig' } },
       { id: 'deck-any', rule: { countryCode: null, dialectTag: 'ig' } },
     ]);
-    prisma.streamDeck.findUnique.mockImplementation(({ where: { id } }: { where: { id: string } }) =>
-      Promise.resolve({
-        id,
-        type: StreamDeckType.SMART,
-        createdByUserId: 'user-1',
-        rule: { countryCode: id === 'deck-ng' ? 'NG' : null, dialectTag: 'ig' },
-      }),
+    prisma.streamDeck.findUnique.mockImplementation(
+      ({ where: { id } }: { where: { id: string } }) =>
+        Promise.resolve({
+          id,
+          type: StreamDeckType.SMART,
+          createdByUserId: 'user-1',
+          rule: { countryCode: id === 'deck-ng' ? 'NG' : null, dialectTag: 'ig' },
+        }),
     );
     catalogue.matchingRecordingIdsForRule.mockResolvedValue([]);
     prisma.streamDeckItem.findMany.mockResolvedValue([]);
 
     await service.evaluateAllRulesFor('rec-1');
 
-    const evaluatedDeckIds = prisma.streamDeck.findUnique.mock.calls.map((c: unknown[]) => (c[0] as any).where.id);
+    const evaluatedDeckIds = prisma.streamDeck.findUnique.mock.calls.map(
+      (c: unknown[]) => (c[0] as any).where.id,
+    );
     expect(evaluatedDeckIds).not.toContain('deck-gh');
     expect(evaluatedDeckIds).toEqual(expect.arrayContaining(['deck-ng', 'deck-any']));
   });

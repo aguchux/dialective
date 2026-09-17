@@ -33,7 +33,9 @@ CONSUMER_GROUP = os.environ.get("CONSUMER_GROUP", "prompt-audio-workers")
 # identity -- see whisper-worker/worker.py for the full reasoning. Empty by
 # default, so DO's names are unchanged; the GCP overlay sets CONSUMER_PREFIX.
 CONSUMER_PREFIX = os.environ.get("CONSUMER_PREFIX", "")
-CONSUMER_NAME = f"{CONSUMER_PREFIX}{os.environ.get('HOSTNAME', 'prompt-audio-service-1')}"
+CONSUMER_NAME = (
+    f"{CONSUMER_PREFIX}{os.environ.get('HOSTNAME', 'prompt-audio-service-1')}"
+)
 PROMPT_AUDIO_BUCKET = os.environ.get(
     "SPACES_PROMPT_AUDIO_BUCKET", "dialectiva-prompt-audio"
 )

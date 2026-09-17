@@ -31,7 +31,13 @@ describe('ValidatorRecordingsService', () => {
   it('reports myDeckId null for a recording not in any of the caller own decks', async () => {
     const { service, prisma } = setup();
     prisma.wordRecording.findMany.mockResolvedValue([
-      { id: 'rec-1', direction: 'ENGLISH_TO_DIALECT', translationText: 'hello', word: { text: 'hello' }, sentence: null },
+      {
+        id: 'rec-1',
+        direction: 'ENGLISH_TO_DIALECT',
+        translationText: 'hello',
+        word: { text: 'hello' },
+        sentence: null,
+      },
     ]);
     prisma.validatorDeckItem.findMany.mockResolvedValue([]);
 
@@ -43,9 +49,17 @@ describe('ValidatorRecordingsService', () => {
   it('reports myDeckId when the recording is in one of the caller own decks', async () => {
     const { service, prisma } = setup();
     prisma.wordRecording.findMany.mockResolvedValue([
-      { id: 'rec-1', direction: 'ENGLISH_TO_DIALECT', translationText: 'hello', word: { text: 'hello' }, sentence: null },
+      {
+        id: 'rec-1',
+        direction: 'ENGLISH_TO_DIALECT',
+        translationText: 'hello',
+        word: { text: 'hello' },
+        sentence: null,
+      },
     ]);
-    prisma.validatorDeckItem.findMany.mockResolvedValue([{ recordingId: 'rec-1', deckId: 'deck-1' }]);
+    prisma.validatorDeckItem.findMany.mockResolvedValue([
+      { recordingId: 'rec-1', deckId: 'deck-1' },
+    ]);
 
     const result = await service.listAll(baseQuery, 'user-1', 'VALIDATOR');
 
@@ -55,7 +69,13 @@ describe('ValidatorRecordingsService', () => {
   it('scopes the deck-membership lookup to the caller own decks, not every validator', async () => {
     const { service, prisma } = setup();
     prisma.wordRecording.findMany.mockResolvedValue([
-      { id: 'rec-1', direction: 'ENGLISH_TO_DIALECT', translationText: 'hello', word: { text: 'hello' }, sentence: null },
+      {
+        id: 'rec-1',
+        direction: 'ENGLISH_TO_DIALECT',
+        translationText: 'hello',
+        word: { text: 'hello' },
+        sentence: null,
+      },
     ]);
 
     await service.listAll(baseQuery, 'user-1', 'VALIDATOR');
@@ -70,7 +90,13 @@ describe('ValidatorRecordingsService', () => {
   it('picks the most recently-added deck when the recording is in more than one of the caller own decks', async () => {
     const { service, prisma } = setup();
     prisma.wordRecording.findMany.mockResolvedValue([
-      { id: 'rec-1', direction: 'ENGLISH_TO_DIALECT', translationText: 'hello', word: { text: 'hello' }, sentence: null },
+      {
+        id: 'rec-1',
+        direction: 'ENGLISH_TO_DIALECT',
+        translationText: 'hello',
+        word: { text: 'hello' },
+        sentence: null,
+      },
     ]);
     // Service orders by addedAt desc -- most recent first -- so the mock
     // returns them in that order and the first entry per recordingId wins.
@@ -104,7 +130,9 @@ describe('ValidatorRecordingsService', () => {
       await service.listAll(baseQuery, 'user-1', 'VALIDATOR');
 
       expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ dialectTag: { in: ['ig', 'yo'] } }) }),
+        expect.objectContaining({
+          where: expect.objectContaining({ dialectTag: { in: ['ig', 'yo'] } }),
+        }),
       );
     });
 
@@ -136,7 +164,9 @@ describe('ValidatorRecordingsService', () => {
 
       expect(prisma.validatorDialectAssignment.findMany).not.toHaveBeenCalled();
       expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.not.objectContaining({ dialectTag: expect.anything() }) }),
+        expect.objectContaining({
+          where: expect.not.objectContaining({ dialectTag: expect.anything() }),
+        }),
       );
     });
   });

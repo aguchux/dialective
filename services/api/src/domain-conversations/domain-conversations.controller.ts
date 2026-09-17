@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Role } from '@dialectiva/db';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
@@ -30,14 +42,20 @@ export class DomainConversationsController {
   }
 
   @Post('recordings/upload-url')
-  createUploadUrl(@Req() req: AuthenticatedRequest, @Body() body: CreateDomainConversationUploadUrlDto) {
+  createUploadUrl(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: CreateDomainConversationUploadUrlDto,
+  ) {
     return this.domainConversations.createUploadUrl(req.user.sub, body);
   }
 
   @Post('recordings')
   @UseGuards(SubmissionRateLimitGuard)
   @Throttle({ default: { limit: 120, ttl: 60 * 60 * 1000 } })
-  createRecording(@Req() req: AuthenticatedRequest, @Body() body: CreateDomainConversationRecordingDto) {
+  createRecording(
+    @Req() req: AuthenticatedRequest,
+    @Body() body: CreateDomainConversationRecordingDto,
+  ) {
     return this.domainConversations.createRecording(req.user.sub, body);
   }
 

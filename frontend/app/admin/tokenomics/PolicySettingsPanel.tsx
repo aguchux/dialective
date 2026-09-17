@@ -262,8 +262,7 @@ export function PinnedValuePanel() {
         <>
           {isPinned && policy && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-bold text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-              Currently pinned to ${policy.pinnedValueUsd} -- the calculated value is being
-              ignored.
+              Currently pinned to ${policy.pinnedValueUsd} -- the calculated value is being ignored.
             </p>
           )}
 

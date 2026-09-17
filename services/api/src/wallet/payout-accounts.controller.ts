@@ -28,10 +28,7 @@ import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { OtpService } from '../otp/otp.service';
 import { resolveOtpDestination } from '../otp/otp.util';
 import { encryptPayoutField, maskAccountNumber } from '../common/payout-crypto.util';
-import {
-  payoutAccountDeleteContextHash,
-  payoutAccountSetupContextHash,
-} from './otp-context.util';
+import { payoutAccountDeleteContextHash, payoutAccountSetupContextHash } from './otp-context.util';
 import { FlutterwaveService } from './flutterwave.service';
 import { FlutterwaveV4Service, RecipientCountry } from './flutterwave-v4.service';
 import { StripeConnectService } from './stripe-connect.service';
@@ -75,7 +72,9 @@ export class PayoutAccountsController {
   @UseGuards(JwtAuthGuard)
   async create(@Req() req: AuthenticatedRequest, @Body() dto: CreatePayoutAccountDto) {
     if (dto.type !== 'STABLECOIN_WALLET' && (!dto.country || !dto.currency)) {
-      throw new BadRequestException('country and currency are required for this payout account type');
+      throw new BadRequestException(
+        'country and currency are required for this payout account type',
+      );
     }
 
     if (dto.type === 'BANK') {

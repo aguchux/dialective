@@ -50,7 +50,11 @@ describe('MetaWhatsAppProvider', () => {
   it('throws with the status and body text on a non-2xx response', async () => {
     global.fetch = jest
       .fn()
-      .mockResolvedValue({ ok: false, status: 401, text: async () => 'invalid access token' }) as never;
+      .mockResolvedValue({
+        ok: false,
+        status: 401,
+        text: async () => 'invalid access token',
+      }) as never;
 
     await expect(new MetaWhatsAppProvider().send('+15559876543', '123456', config)).rejects.toThrow(
       'Meta WhatsApp request failed: 401 invalid access token',

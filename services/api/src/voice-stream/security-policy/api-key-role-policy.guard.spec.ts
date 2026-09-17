@@ -26,7 +26,9 @@ describe('ApiKeyRolePolicyGuard.canActivate', () => {
 
   it('allows when the policy has no role narrowing configured (empty array)', async () => {
     const { guard, prisma } = setup();
-    prisma.subscriberOrgSecurityPolicy.findUnique.mockResolvedValue({ minRoleForApiKeyCreation: [] });
+    prisma.subscriberOrgSecurityPolicy.findUnique.mockResolvedValue({
+      minRoleForApiKeyCreation: [],
+    });
 
     const result = await guard.canActivate(ctxWith('org-1', SubscriberOrgRole.API_DEVELOPER));
 

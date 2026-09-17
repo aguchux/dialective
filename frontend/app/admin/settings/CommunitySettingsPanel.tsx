@@ -50,7 +50,9 @@ export function CommunitySettingsPanel() {
     setError(null);
     const delayMinutes = Number(newMemberPostingDelayMinutes);
     if (!Number.isInteger(delayMinutes) || delayMinutes < 0 || delayMinutes > 10080) {
-      setError('New-member posting delay must be a whole number between 0 and 10,080 minutes (7 days).');
+      setError(
+        'New-member posting delay must be a whole number between 0 and 10,080 minutes (7 days).',
+      );
       return;
     }
     if (adsterraEnabled && !adsterraScriptUrl.trim()) {
@@ -220,8 +222,8 @@ export function CommunitySettingsPanel() {
             <div>
               <h3 className="font-bold">Ad networks</h3>
               <p className="mt-1 text-sm leading-relaxed text-muted">
-                Site-wide popunder/social-bar scripts, monetizing community.dialectlibrary.com.
-                Each network only loads once it's enabled AND its script URL is set below -- a
+                Site-wide popunder/social-bar scripts, monetizing community.dialectlibrary.com. Each
+                network only loads once it's enabled AND its script URL is set below -- a
                 half-configured toggle never ships a broken embed.
               </p>
             </div>
@@ -302,7 +304,12 @@ export function CommunitySettingsPanel() {
           )}
 
           <div>
-            <ActionButton className={primaryButtonClass} pending={isSaving} pendingLabel="Saving" type="submit">
+            <ActionButton
+              className={primaryButtonClass}
+              pending={isSaving}
+              pendingLabel="Saving"
+              type="submit"
+            >
               Save changes
             </ActionButton>
           </div>

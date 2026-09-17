@@ -24,14 +24,14 @@ Explore Dialect Library's voice data with a generous free tier -- pull real
 recordings, build a small proof of concept, and see the coverage for
 yourself before you pay anything.
 
-| Limit | Value |
-| --- | --- |
-| Voice data accesses / month | 1,000 |
-| Stream Decks | 5 |
-| Team members | 1 |
-| Concurrent streams | 1 |
-| Rate limit | 60 requests/minute |
-| Catalogue access | Established dialects only (emerging/low-confidence entries excluded) |
+| Limit                       | Value                                                                |
+| --------------------------- | -------------------------------------------------------------------- |
+| Voice data accesses / month | 1,000                                                                |
+| Stream Decks                | 5                                                                    |
+| Team members                | 1                                                                    |
+| Concurrent streams          | 1                                                                    |
+| Rate limit                  | 60 requests/minute                                                   |
+| Catalogue access            | Established dialects only (emerging/low-confidence entries excluded) |
 
 ## Stream Professional -- $249 / month
 
@@ -40,14 +40,14 @@ yourself before you pay anything.
 Full-catalogue access at a rate built for real integration work -- training
 pipelines, ongoing QA, and a small team collaborating on the same decks.
 
-| Limit | Value |
-| --- | --- |
-| Voice data accesses / month | 50,000 |
-| Stream Decks | 50 |
-| Team members | 5 |
-| Concurrent streams | 10 |
-| Rate limit | 300 requests/minute |
-| Catalogue access | High-confidence dialects and above |
+| Limit                       | Value                              |
+| --------------------------- | ---------------------------------- |
+| Voice data accesses / month | 50,000                             |
+| Stream Decks                | 50                                 |
+| Team members                | 5                                  |
+| Concurrent streams          | 10                                 |
+| Rate limit                  | 300 requests/minute                |
+| Catalogue access            | High-confidence dialects and above |
 
 ## Stream Premium -- $899 / month
 
@@ -58,14 +58,14 @@ access to the full catalogue including emerging dialects still building
 consensus -- for teams whose product depends on breadth of coverage, not
 just volume.
 
-| Limit | Value |
-| --- | --- |
-| Voice data accesses / month | 500,000 |
-| Stream Decks | Unlimited |
-| Team members | Unlimited |
-| Concurrent streams | 50 |
-| Rate limit | 1,000 requests/minute |
-| Catalogue access | Full catalogue, including emerging dialects |
+| Limit                       | Value                                       |
+| --------------------------- | ------------------------------------------- |
+| Voice data accesses / month | 500,000                                     |
+| Stream Decks                | Unlimited                                   |
+| Team members                | Unlimited                                   |
+| Concurrent streams          | 50                                          |
+| Rate limit                  | 1,000 requests/minute                       |
+| Catalogue access            | Full catalogue, including emerging dialects |
 
 ## Open questions / follow-ups
 

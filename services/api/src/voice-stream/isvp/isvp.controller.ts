@@ -20,7 +20,11 @@ const CAN_VALIDATE = [
 // Peer review is deliberately narrower than CAN_VALIDATE -- a VALIDATOR
 // can submit but not approve/reject (even their own org's queue), so
 // review always comes from someone with broader org authority.
-const CAN_REVIEW = [SubscriberOrgRole.OWNER, SubscriberOrgRole.ADMIN, SubscriberOrgRole.DATASET_MANAGER];
+const CAN_REVIEW = [
+  SubscriberOrgRole.OWNER,
+  SubscriberOrgRole.ADMIN,
+  SubscriberOrgRole.DATASET_MANAGER,
+];
 
 @Controller('voice-stream/isvp')
 @UseGuards(SubscriberAuthGuard)

@@ -39,7 +39,13 @@ function keyStatus(key: StreamApiKeySummary): { label: string; className: string
   return { label: 'Active', className: 'bg-accent/10 text-accent-dark' };
 }
 
-function RevealedKeyBanner({ created, onDismiss }: { created: CreatedStreamApiKey; onDismiss: () => void }) {
+function RevealedKeyBanner({
+  created,
+  onDismiss,
+}: {
+  created: CreatedStreamApiKey;
+  onDismiss: () => void;
+}) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -101,7 +107,10 @@ function CreateKeyForm({
         deckId: deckId || undefined,
         scopes,
         allowedIps: allowedIps
-          ? allowedIps.split(',').map((ip) => ip.trim()).filter(Boolean)
+          ? allowedIps
+              .split(',')
+              .map((ip) => ip.trim())
+              .filter(Boolean)
           : undefined,
         expiresAt: expiresAt || undefined,
       }).unwrap();
@@ -157,11 +166,7 @@ function CreateKeyForm({
 
         <div>
           <FieldLabel>Expires (optional)</FieldLabel>
-          <TextInput
-            onChange={(e) => setExpiresAt(e.target.value)}
-            type="date"
-            value={expiresAt}
-          />
+          <TextInput onChange={(e) => setExpiresAt(e.target.value)} type="date" value={expiresAt} />
         </div>
 
         {error && <ErrorText>{error}</ErrorText>}
@@ -218,8 +223,10 @@ function KeyRow({ streamKey }: { streamKey: StreamApiKeySummary }) {
             {streamKey.deckId ? 'Deck-scoped' : 'Org-wide'} -- {streamKey.scopes.join(', ')}
           </p>
           <p className="mt-1 text-xs text-muted">
-            Last used: {streamKey.lastUsedAt ? new Date(streamKey.lastUsedAt).toLocaleString() : 'never'}
-            {streamKey.expiresAt && ` -- Expires: ${new Date(streamKey.expiresAt).toLocaleDateString()}`}
+            Last used:{' '}
+            {streamKey.lastUsedAt ? new Date(streamKey.lastUsedAt).toLocaleString() : 'never'}
+            {streamKey.expiresAt &&
+              ` -- Expires: ${new Date(streamKey.expiresAt).toLocaleDateString()}`}
           </p>
         </div>
         <div className="flex items-center gap-2">

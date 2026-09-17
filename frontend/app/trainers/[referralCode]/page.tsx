@@ -53,7 +53,10 @@ export default async function TrainerProfilePage({ params }: TrainerProfilePageP
         <Breadcrumbs items={[{ label: 'Trainers', href: '/testimonials' }, { label: name }]} />
 
         <section className="grid gap-6 rounded-xl border border-line bg-white/90 p-6 shadow-[0_10px_35px_rgba(27,31,27,0.08)] backdrop-blur md:grid-cols-[auto_1fr_auto] md:items-center md:p-8">
-          <div className="grid size-20 place-items-center rounded-full bg-accent text-3xl font-black text-white" aria-hidden="true">
+          <div
+            className="grid size-20 place-items-center rounded-full bg-accent text-3xl font-black text-white"
+            aria-hidden="true"
+          >
             {name.charAt(0).toUpperCase()}
           </div>
           <div className="grid gap-2">
@@ -74,46 +77,105 @@ export default async function TrainerProfilePage({ params }: TrainerProfilePageP
               )}
             </div>
             <p className="text-lg text-muted">{location}</p>
-            <p className="inline-flex items-center gap-2 text-sm text-muted"><CalendarDays className="size-4" aria-hidden="true" /> Contributing since {joined}</p>
+            <p className="inline-flex items-center gap-2 text-sm text-muted">
+              <CalendarDays className="size-4" aria-hidden="true" /> Contributing since {joined}
+            </p>
           </div>
-          <Link className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-4 py-3 text-sm font-extrabold text-white no-underline hover:bg-accent-dark" href={`/invite/${encodeURIComponent(profile.referralCode)}/earn`}>
+          <Link
+            className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-4 py-3 text-sm font-extrabold text-white no-underline hover:bg-accent-dark"
+            href={`/invite/${encodeURIComponent(profile.referralCode)}/earn`}
+          >
             Join Dialect Library
           </Link>
         </section>
 
         <section className="grid gap-4 sm:grid-cols-3" aria-label="Trainer contribution evidence">
-          <MetricCard icon={Mic2} label="Scored contributions" value={String(profile.scoredContributions)} />
-          <MetricCard icon={BarChart3} label="Average platform score" value={profile.averageScore === null ? 'In progress' : `${profile.averageScore.toFixed(1)}%`} />
-          <MetricCard icon={ShieldCheck} label="Profile status" value={profile.identityVerified ? 'Verified trainer' : 'Active trainer'} />
+          <MetricCard
+            icon={Mic2}
+            label="Scored contributions"
+            value={String(profile.scoredContributions)}
+          />
+          <MetricCard
+            icon={BarChart3}
+            label="Average platform score"
+            value={
+              profile.averageScore === null ? 'In progress' : `${profile.averageScore.toFixed(1)}%`
+            }
+          />
+          <MetricCard
+            icon={ShieldCheck}
+            label="Profile status"
+            value={profile.identityVerified ? 'Verified trainer' : 'Active trainer'}
+          />
         </section>
 
         <section className="grid gap-3 border-t border-line pt-8">
           <p className="text-sm font-extrabold uppercase text-accent">Contribution record</p>
           <h2 className="text-2xl font-black">A public view of trainer quality evidence.</h2>
           <p className="max-w-3xl leading-relaxed text-muted">
-            This profile shows aggregate contribution and quality information only. Personal contact details, wallet activity, payment information, recordings, and individual task results remain private.
+            This profile shows aggregate contribution and quality information only. Personal contact
+            details, wallet activity, payment information, recordings, and individual task results
+            remain private.
           </p>
         </section>
 
         {profile.testimonials.length > 0 && (
-          <section className="grid gap-5 border-t border-line pt-8" aria-labelledby="trainer-testimonials-title">
-            <div><p className="text-sm font-extrabold uppercase text-accent">Trainer testimonials</p><h2 className="mt-1 text-2xl font-black" id="trainer-testimonials-title">What {profile.firstName ?? 'this trainer'} says</h2></div>
+          <section
+            className="grid gap-5 border-t border-line pt-8"
+            aria-labelledby="trainer-testimonials-title"
+          >
+            <div>
+              <p className="text-sm font-extrabold uppercase text-accent">Trainer testimonials</p>
+              <h2 className="mt-1 text-2xl font-black" id="trainer-testimonials-title">
+                What {profile.firstName ?? 'this trainer'} says
+              </h2>
+            </div>
             <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
               {profile.testimonials.map((testimony) => (
-                <article className="grid content-start gap-3 rounded-lg border border-line bg-white p-5" key={testimony.id}>
-                  {testimony.kind === 'VIDEO' && testimony.videoUrl ? <video className="aspect-video w-full rounded-lg bg-black object-cover" controls preload="metadata" src={testimony.videoUrl} /> : <Quote className="size-7 text-accent" aria-hidden="true" />}
-                  {testimony.text && <p className="leading-relaxed text-muted">&ldquo;{testimony.text}&rdquo;</p>}
+                <article
+                  className="grid content-start gap-3 rounded-lg border border-line bg-white p-5"
+                  key={testimony.id}
+                >
+                  {testimony.kind === 'VIDEO' && testimony.videoUrl ? (
+                    <video
+                      className="aspect-video w-full rounded-lg bg-black object-cover"
+                      controls
+                      preload="metadata"
+                      src={testimony.videoUrl}
+                    />
+                  ) : (
+                    <Quote className="size-7 text-accent" aria-hidden="true" />
+                  )}
+                  {testimony.text && (
+                    <p className="leading-relaxed text-muted">&ldquo;{testimony.text}&rdquo;</p>
+                  )}
                 </article>
               ))}
             </div>
           </section>
         )}
       </div>
-      <div className="relative z-10"><LandingFooter /></div>
+      <div className="relative z-10">
+        <LandingFooter />
+      </div>
     </main>
   );
 }
 
-function MetricCard({ icon: Icon, label, value }: { icon: typeof Mic2; label: string; value: string }) {
-  return <article className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]"><Icon className="size-5 text-accent" aria-hidden="true" /><p className="text-sm font-bold text-muted">{label}</p><p className="text-2xl font-black">{value}</p></article>;
+function MetricCard({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: typeof Mic2;
+  label: string;
+  value: string;
+}) {
+  return (
+    <article className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+      <Icon className="size-5 text-accent" aria-hidden="true" />
+      <p className="text-sm font-bold text-muted">{label}</p>
+      <p className="text-2xl font-black">{value}</p>
+    </article>
+  );
 }

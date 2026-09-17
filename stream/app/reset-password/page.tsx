@@ -31,9 +31,7 @@ function ResetPasswordForm() {
       setDone(true);
       setTimeout(() => router.push('/login'), 2000);
     } catch (err) {
-      setError(
-        err instanceof ApiError ? err.message : 'Unable to reset your password right now.',
-      );
+      setError(err instanceof ApiError ? err.message : 'Unable to reset your password right now.');
     } finally {
       setPending(false);
     }

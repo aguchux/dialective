@@ -166,8 +166,8 @@ export function DomainConversationSettingsPanel() {
                 <span className="block font-bold">Show the task to trainers</span>
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
                   Whether the &quot;Domain Conversation&quot; card appears in the trainer dashboard
-                  at all. Independent of prompt generation below -- the pool can build up before
-                  you expose the task.
+                  at all. Independent of prompt generation below -- the pool can build up before you
+                  expose the task.
                 </span>
               </span>
             </label>
@@ -209,9 +209,7 @@ export function DomainConversationSettingsPanel() {
               </div>
             </div>
             {!durationRangeValid && (
-              <p className="text-sm font-bold text-danger">
-                Minimum must be less than maximum.
-              </p>
+              <p className="text-sm font-bold text-danger">Minimum must be less than maximum.</p>
             )}
           </div>
 
@@ -314,7 +312,10 @@ export function DomainConversationSettingsPanel() {
             <div className="grid grid-cols-3 gap-3">
               {(['1st choice', '2nd choice', '3rd choice'] as const).map((label, index) => (
                 <div className="grid gap-1" key={label}>
-                  <label className="text-sm font-bold" htmlFor={`domain-conversation-order-${index}`}>
+                  <label
+                    className="text-sm font-bold"
+                    htmlFor={`domain-conversation-order-${index}`}
+                  >
                     {label}
                   </label>
                   <select
@@ -337,9 +338,9 @@ export function DomainConversationSettingsPanel() {
           <div className="grid gap-2">
             <span className="font-bold">Quality score weights</span>
             <p className="text-sm leading-relaxed text-muted">
-              How much each quality-gate signal counts toward this task's composite score. Must
-              sum to 100% -- there's no consensus/exact-match component for a free-form
-              conversation, unlike word training's four-way blend.
+              How much each quality-gate signal counts toward this task's composite score. Must sum
+              to 100% -- there's no consensus/exact-match component for a free-form conversation,
+              unlike word training's four-way blend.
             </p>
             <div className="grid grid-cols-3 gap-3">
               <div className="grid gap-1">
@@ -388,7 +389,9 @@ export function DomainConversationSettingsPanel() {
                 />
               </div>
             </div>
-            <p className={`text-sm font-bold ${weightSumValid ? 'text-accent-dark' : 'text-danger'}`}>
+            <p
+              className={`text-sm font-bold ${weightSumValid ? 'text-accent-dark' : 'text-danger'}`}
+            >
               Sums to: {weightSum}% {weightSumValid ? '' : '(must equal 100%)'}
             </p>
           </div>

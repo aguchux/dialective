@@ -170,7 +170,10 @@ describe('SentencesController delete', () => {
       const { controller, prisma } = setup();
       prisma.sentence.updateMany.mockResolvedValueOnce({ count: 2 });
 
-      const result = await controller.bulkSetSentencesDisabled({ ids: ['a', 'b'], setDisabled: false });
+      const result = await controller.bulkSetSentencesDisabled({
+        ids: ['a', 'b'],
+        setDisabled: false,
+      });
 
       expect(prisma.sentence.updateMany).toHaveBeenCalledWith({
         where: { id: { in: ['a', 'b'] } },

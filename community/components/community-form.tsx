@@ -115,7 +115,11 @@ export function TagInput({
 
   function addTag(raw: string) {
     const tag = raw.trim().replace(/^#/, '').replace(/\s+/g, ' ');
-    if (!tag || tags.length >= maxItems || tags.some((item) => item.toLowerCase() === tag.toLowerCase()))
+    if (
+      !tag ||
+      tags.length >= maxItems ||
+      tags.some((item) => item.toLowerCase() === tag.toLowerCase())
+    )
       return;
     onChange([...tags, tag]);
     setValue('');
@@ -150,7 +154,9 @@ export function TagInput({
             }
             if (event.key === 'Backspace' && !value && tags.length) onChange(tags.slice(0, -1));
           }}
-          placeholder={placeholder ?? (tags.length ? 'Add another' : 'Add tags e.g. Igbo, Recording Tips')}
+          placeholder={
+            placeholder ?? (tags.length ? 'Add another' : 'Add tags e.g. Igbo, Recording Tips')
+          }
           value={value}
         />
       </div>
@@ -178,12 +184,19 @@ export function TagInput({
 const MAX_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
-const ACCEPT_BY_KIND: Record<'image' | 'audio' | 'document', { accept: string; label: string; icon: typeof ImageIcon }> = {
+const ACCEPT_BY_KIND: Record<
+  'image' | 'audio' | 'document',
+  { accept: string; label: string; icon: typeof ImageIcon }
+> = {
   image: { accept: 'image/jpeg,image/png,image/webp', label: 'Image', icon: ImageIcon },
   // audio/mp4 and audio/x-m4a cover iOS Safari's file/voice-memo picker,
   // which never produces audio/webm -- without these, every iOS audio
   // attachment was silently excluded by the OS picker or rejected server-side.
-  audio: { accept: 'audio/mpeg,audio/wav,audio/webm,audio/mp4,audio/x-m4a', label: 'Audio', icon: Mic2 },
+  audio: {
+    accept: 'audio/mpeg,audio/wav,audio/webm,audio/mp4,audio/x-m4a',
+    label: 'Audio',
+    icon: Mic2,
+  },
   document: { accept: 'application/pdf', label: 'Document', icon: FileText },
 };
 
@@ -303,7 +316,9 @@ export function AttachmentPicker({
               <span className="min-w-0 flex-1 truncate">{attachment.originalName}</span>
               <IconButton
                 label={`Remove ${attachment.originalName}`}
-                onClick={() => onChange(attachments.filter((item) => item.localId !== attachment.localId))}
+                onClick={() =>
+                  onChange(attachments.filter((item) => item.localId !== attachment.localId))
+                }
               >
                 <X aria-hidden="true" className="size-4" />
               </IconButton>

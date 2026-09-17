@@ -12,7 +12,9 @@ function setup(row: Record<string, unknown>) {
     },
   };
   const storage = {
-    getPublicObjectUrl: jest.fn((bucket: string, key: string) => `https://cdn.example.com/${bucket}/${key}`),
+    getPublicObjectUrl: jest.fn(
+      (bucket: string, key: string) => `https://cdn.example.com/${bucket}/${key}`,
+    ),
     createPresignedUploadUrl: jest
       .fn()
       .mockResolvedValue({ url: 'https://upload.example.com', expiresInSeconds: 900 }),
@@ -69,7 +71,10 @@ describe('PlatformSettingsService.getTopBanner', () => {
       altText: 'Switching to P2P',
       learnMoreUrl: 'https://example.com/learn-more',
     });
-    expect(storage.getPublicObjectUrl).toHaveBeenCalledWith('dialectiva-marketing', 'dyk/banner.jpg');
+    expect(storage.getPublicObjectUrl).toHaveBeenCalledWith(
+      'dialectiva-marketing',
+      'dyk/banner.jpg',
+    );
   });
 });
 
@@ -420,23 +425,21 @@ describe('PlatformSettingsService.update WhatsApp API key handling', () => {
 describe('PlatformSettingsService.update DLKYC decline-ceiling validation', () => {
   it('rejects a face-match decline ceiling above 100', async () => {
     const { service } = setup({});
-    await expect(
-      service.update({ selfHostedKycMaxFaceMatchScoreForDecline: 101 }),
-    ).rejects.toThrow('selfHostedKycMaxFaceMatchScoreForDecline must be between 0 and 100');
+    await expect(service.update({ selfHostedKycMaxFaceMatchScoreForDecline: 101 })).rejects.toThrow(
+      'selfHostedKycMaxFaceMatchScoreForDecline must be between 0 and 100',
+    );
   });
 
   it('rejects a liveness decline ceiling below 0', async () => {
     const { service } = setup({});
-    await expect(
-      service.update({ selfHostedKycMaxLivenessScoreForDecline: -1 }),
-    ).rejects.toThrow('selfHostedKycMaxLivenessScoreForDecline must be between 0 and 100');
+    await expect(service.update({ selfHostedKycMaxLivenessScoreForDecline: -1 })).rejects.toThrow(
+      'selfHostedKycMaxLivenessScoreForDecline must be between 0 and 100',
+    );
   });
 
   it('rejects a face-match decline ceiling set above the existing approve floor', async () => {
     const { service } = setup({ selfHostedKycMinFaceMatchScore: 85 });
-    await expect(
-      service.update({ selfHostedKycMaxFaceMatchScoreForDecline: 90 }),
-    ).rejects.toThrow(
+    await expect(service.update({ selfHostedKycMaxFaceMatchScoreForDecline: 90 })).rejects.toThrow(
       'selfHostedKycMaxFaceMatchScoreForDecline must be less than or equal to selfHostedKycMinFaceMatchScore',
     );
   });
@@ -450,9 +453,7 @@ describe('PlatformSettingsService.update DLKYC decline-ceiling validation', () =
 
   it('rejects a liveness decline ceiling set above the existing approve floor', async () => {
     const { service } = setup({ selfHostedKycMinLivenessScore: 80 });
-    await expect(
-      service.update({ selfHostedKycMaxLivenessScoreForDecline: 85 }),
-    ).rejects.toThrow(
+    await expect(service.update({ selfHostedKycMaxLivenessScoreForDecline: 85 })).rejects.toThrow(
       'selfHostedKycMaxLivenessScoreForDecline must be less than or equal to selfHostedKycMinLivenessScore',
     );
   });
@@ -866,7 +867,10 @@ describe('PlatformSettingsService Domain Conversation settings', () => {
       domainConversationMaxDurationSeconds: 60,
     });
     await expect(
-      service.update({ domainConversationMinDurationSeconds: 60, domainConversationMaxDurationSeconds: 60 }),
+      service.update({
+        domainConversationMinDurationSeconds: 60,
+        domainConversationMaxDurationSeconds: 60,
+      }),
     ).rejects.toThrow(
       'domainConversationMinDurationSeconds must be less than domainConversationMaxDurationSeconds',
     );
@@ -880,9 +884,7 @@ describe('PlatformSettingsService Domain Conversation settings', () => {
         domainConversationQualityWeightQuality: 40,
         domainConversationQualityWeightLiveness: 40,
       }),
-    ).rejects.toThrow(
-      'domainConversationQualityWeightNoise/Quality/Liveness must sum to 100',
-    );
+    ).rejects.toThrow('domainConversationQualityWeightNoise/Quality/Liveness must sum to 100');
   });
 
   it('update rejects an invalid domainConversationProviderOrder', async () => {

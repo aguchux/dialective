@@ -1,6 +1,30 @@
-import { ArrayMinSize, ArrayUnique, IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
+import {
+  ArrayMinSize,
+  ArrayUnique,
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
 
-export const DYK_CONDITIONS = ['CLICKED', 'VISITED', 'PHONE', 'KYC', 'PWA', 'REFERRAL_SHARE', 'TRAINING', 'COURSE', 'TESTIMONY', 'QRAC'] as const;
+export const DYK_CONDITIONS = [
+  'CLICKED',
+  'VISITED',
+  'PHONE',
+  'KYC',
+  'PWA',
+  'REFERRAL_SHARE',
+  'TRAINING',
+  'COURSE',
+  'TESTIMONY',
+  'QRAC',
+] as const;
 
 export class DykSettingsDto {
   @IsBoolean() enabled!: boolean;

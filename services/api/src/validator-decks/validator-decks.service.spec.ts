@@ -32,10 +32,14 @@ describe('ValidatorDecksService', () => {
         findUnique: jest.fn().mockResolvedValue({ role: 'VALIDATOR', validatorLevel: 'L1' }),
       },
       wordRecording: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'rec-1', dialectTag: 'ig', dialectVariantId: null }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'rec-1', dialectTag: 'ig', dialectVariantId: null }),
       },
       domainConversationRecording: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'dc-rec-1', dialectTag: 'ig', dialectVariantId: null }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'dc-rec-1', dialectTag: 'ig', dialectVariantId: null }),
       },
       dialect: {
         findUnique: jest.fn().mockResolvedValue({
@@ -195,25 +199,25 @@ describe('ValidatorDecksService', () => {
 
     it('rejects a duplicate recording', async () => {
       prisma.validatorDeckItem.findUnique.mockResolvedValue({ id: 'existing-item' });
-      await expect(service.addItem('deck-1', 'user-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-1')).rejects.toThrow(
-        'This recording is already in the deck',
-      );
+      await expect(
+        service.addItem('deck-1', 'user-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-1'),
+      ).rejects.toThrow('This recording is already in the deck');
     });
 
     it('rejects a recording that does not exist', async () => {
       prisma.wordRecording.findUnique.mockResolvedValue(null);
-      await expect(service.addItem('deck-1', 'user-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-missing')).rejects.toThrow(
-        'Recording not found',
-      );
+      await expect(
+        service.addItem('deck-1', 'user-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-missing'),
+      ).rejects.toThrow('Recording not found');
     });
 
     it('enforces the platform-configured max-items cap', async () => {
       settings.getValidatorDeckMaxItems.mockResolvedValue(1);
       prisma.validatorDeckItem.findUnique.mockResolvedValue(null);
       prisma.validatorDeckItem.count.mockResolvedValue(1);
-      await expect(service.addItem('deck-1', 'user-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-1')).rejects.toThrow(
-        'This deck already has the maximum of 1 recordings',
-      );
+      await expect(
+        service.addItem('deck-1', 'user-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-1'),
+      ).rejects.toThrow('This deck already has the maximum of 1 recordings');
     });
 
     it('does not enforce a cap when validatorDeckMaxItems is 0 (uncapped)', async () => {
@@ -239,15 +243,25 @@ describe('ValidatorDecksService', () => {
       });
 
       it('allows a recording matching the deck dialect', async () => {
-        prisma.wordRecording.findUnique.mockResolvedValue({ id: 'rec-1', dialectTag: 'ig', dialectVariantId: null });
-        await expect(service.addItem('deck-1', 'user-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-1')).resolves.toBeDefined();
+        prisma.wordRecording.findUnique.mockResolvedValue({
+          id: 'rec-1',
+          dialectTag: 'ig',
+          dialectVariantId: null,
+        });
+        await expect(
+          service.addItem('deck-1', 'user-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-1'),
+        ).resolves.toBeDefined();
       });
 
       it('rejects a recording from a different dialect', async () => {
-        prisma.wordRecording.findUnique.mockResolvedValue({ id: 'rec-1', dialectTag: 'yo', dialectVariantId: null });
-        await expect(service.addItem('deck-1', 'user-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-1')).rejects.toThrow(
-          "This recording is not in the deck's dialect",
-        );
+        prisma.wordRecording.findUnique.mockResolvedValue({
+          id: 'rec-1',
+          dialectTag: 'yo',
+          dialectVariantId: null,
+        });
+        await expect(
+          service.addItem('deck-1', 'user-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-1'),
+        ).rejects.toThrow("This recording is not in the deck's dialect");
       });
 
       it('rejects a recording from a different sub-dialect when the deck has one set', async () => {
@@ -258,10 +272,14 @@ describe('ValidatorDecksService', () => {
           dialectId: 'dialect-1',
           dialectVariantId: 'variant-1',
         });
-        prisma.wordRecording.findUnique.mockResolvedValue({ id: 'rec-1', dialectTag: 'ig', dialectVariantId: 'variant-2' });
-        await expect(service.addItem('deck-1', 'user-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-1')).rejects.toThrow(
-          "This recording is not in the deck's sub-dialect",
-        );
+        prisma.wordRecording.findUnique.mockResolvedValue({
+          id: 'rec-1',
+          dialectTag: 'ig',
+          dialectVariantId: 'variant-2',
+        });
+        await expect(
+          service.addItem('deck-1', 'user-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-1'),
+        ).rejects.toThrow("This recording is not in the deck's sub-dialect");
       });
     });
 
@@ -269,7 +287,13 @@ describe('ValidatorDecksService', () => {
       it('adds a DomainConversationRecording to the deck, looking it up from the right table', async () => {
         prisma.validatorDeckItem.findUnique.mockResolvedValue(null);
         prisma.validatorDeckItem.create.mockResolvedValue({ id: 'item-1' });
-        await service.addItem('deck-1', 'user-1', 'VALIDATOR', 'DOMAIN_CONVERSATION_RECORDING', 'dc-rec-1');
+        await service.addItem(
+          'deck-1',
+          'user-1',
+          'VALIDATOR',
+          'DOMAIN_CONVERSATION_RECORDING',
+          'dc-rec-1',
+        );
         expect(prisma.domainConversationRecording.findUnique).toHaveBeenCalledWith({
           where: { id: 'dc-rec-1' },
         });
@@ -299,7 +323,13 @@ describe('ValidatorDecksService', () => {
           dialectVariantId: null,
         });
         await expect(
-          service.addItem('deck-1', 'user-1', 'VALIDATOR', 'DOMAIN_CONVERSATION_RECORDING', 'dc-rec-1'),
+          service.addItem(
+            'deck-1',
+            'user-1',
+            'VALIDATOR',
+            'DOMAIN_CONVERSATION_RECORDING',
+            'dc-rec-1',
+          ),
         ).rejects.toThrow("This recording is not in the deck's dialect");
       });
     });
@@ -313,7 +343,10 @@ describe('ValidatorDecksService', () => {
         status: 'DRAFT',
       });
       prisma.validatorDeckItem.findUnique.mockResolvedValue({ id: 'item-1' });
-      prisma.validatorDeckItem.update.mockResolvedValue({ id: 'item-1', validationStatus: 'VALID' });
+      prisma.validatorDeckItem.update.mockResolvedValue({
+        id: 'item-1',
+        validationStatus: 'VALID',
+      });
 
       await service.scoreItem('deck-1', 'user-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-1', {
         status: 'VALID' as never,
@@ -376,7 +409,9 @@ describe('ValidatorDecksService', () => {
       });
 
       await expect(
-        service.updateTranscript('deck-1', 'user-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-1', { transcript: 'x' }),
+        service.updateTranscript('deck-1', 'user-1', 'VALIDATOR', 'WORD_RECORDING', 'rec-1', {
+          transcript: 'x',
+        }),
       ).rejects.toThrow('Only the deck owner or an admin can edit this deck');
     });
   });

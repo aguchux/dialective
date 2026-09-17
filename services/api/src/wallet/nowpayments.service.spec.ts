@@ -228,12 +228,8 @@ describe('NowPaymentsService IPN verification', () => {
     try {
       await promise;
     } catch (err) {
-      expect((err as NowPaymentsApiError).providerDetail).toContain(
-        'NOWPayments createPayout 400',
-      );
-      expect((err as NowPaymentsApiError).providerDetail).toContain(
-        'Insufficient payout balance',
-      );
+      expect((err as NowPaymentsApiError).providerDetail).toContain('NOWPayments createPayout 400');
+      expect((err as NowPaymentsApiError).providerDetail).toContain('Insufficient payout balance');
     }
   });
 
@@ -332,9 +328,11 @@ describe('NowPaymentsService.getBalance', () => {
   });
 
   it('parses the { [currency]: { amount, pendingAmount } } map shape with a simple x-api-key GET', async () => {
-    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ usdt: { amount: 40, pendingAmount: 5 } }), { status: 200 }),
-    );
+    const fetchSpy = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ usdt: { amount: 40, pendingAmount: 5 } }), { status: 200 }),
+      );
 
     await expect(service.getBalance()).resolves.toEqual([
       { currency: 'USDT', availableBalance: 40, ledgerBalance: 45 },

@@ -54,16 +54,16 @@ Language baselines learn shared patterns. Dialect adapters or continued fine-tun
 
 ## 4. Initial Model Decision
 
-| Setting | First run |
-|---|---|
-| Base model | `openai/whisper-small` |
-| Target | One Igbo baseline or one well-prepared pilot dialect |
-| Dataset | 10–25 validated hours |
-| GPU | One NVIDIA T4 |
-| Machine | `n1-standard-8` |
-| Precision | FP16 |
-| Metrics | WER and CER |
-| Hugging Face visibility | Private until reviewed |
+| Setting                 | First run                                            |
+| ----------------------- | ---------------------------------------------------- |
+| Base model              | `openai/whisper-small`                               |
+| Target                  | One Igbo baseline or one well-prepared pilot dialect |
+| Dataset                 | 10–25 validated hours                                |
+| GPU                     | One NVIDIA T4                                        |
+| Machine                 | `n1-standard-8`                                      |
+| Precision               | FP16                                                 |
+| Metrics                 | WER and CER                                          |
+| Hugging Face visibility | Private until reviewed                               |
 
 After the pipeline works, train MMS or XLS-R 300M on the same dataset and compare them on the same frozen test set. Select the production model from measured quality and operating cost.
 
@@ -87,7 +87,17 @@ An English prompt must never replace the transcript of the dialect words actuall
 Example JSONL record:
 
 ```json
-{"audio":"gs://BUCKET/datasets/igbo/v1/audio/000001.wav","text":"verified spoken transcript","translation_en":"English meaning","language":"ibo","dialect":"nsukka","dialect_code":"DL-IGB-NSK","speaker_id":"speaker_001","consensus_score":0.96,"split":"train"}
+{
+  "audio": "gs://BUCKET/datasets/igbo/v1/audio/000001.wav",
+  "text": "verified spoken transcript",
+  "translation_en": "English meaning",
+  "language": "ibo",
+  "dialect": "nsukka",
+  "dialect_code": "DL-IGB-NSK",
+  "speaker_id": "speaker_001",
+  "consensus_score": 0.96,
+  "split": "train"
+}
 ```
 
 Vosk may produce a draft for review, but only the human-validated final transcript becomes ground truth.
@@ -309,15 +319,15 @@ Never publish contributor identities, private recordings, consent records or pri
 
 ## 16. $300 Credit Allocation
 
-| Activity | Ceiling |
-|---|---:|
-| Storage and preparation | $15 |
-| Builds and smoke tests | $25 |
-| First Whisper baseline | $80 |
-| Correction/repeat run | $60 |
-| MMS/XLS-R comparison | $80 |
-| Evaluation/failure reserve | $40 |
-| **Total** | **$300** |
+| Activity                   |  Ceiling |
+| -------------------------- | -------: |
+| Storage and preparation    |      $15 |
+| Builds and smoke tests     |      $25 |
+| First Whisper baseline     |      $80 |
+| Correction/repeat run      |      $60 |
+| MMS/XLS-R comparison       |      $80 |
+| Evaluation/failure reserve |      $40 |
+| **Total**                  | **$300** |
 
 Confirm live regional pricing before every full run.
 
@@ -339,13 +349,13 @@ Do not retrain after every submission. Trigger a candidate training run when:
 - normalization rules change;
 - a scheduled quarterly release is due.
 
-| Validated audio | Interpretation |
-|---:|---|
-| 1–3 hours | Pipeline test |
-| 10–25 hours | Experimental baseline |
-| 50–100 hours | Useful early model |
-| 200–500 hours | Strong production-oriented dialect model |
-| 1,000+ hours | Mature language baseline if coverage is diverse |
+| Validated audio | Interpretation                                  |
+| --------------: | ----------------------------------------------- |
+|       1–3 hours | Pipeline test                                   |
+|     10–25 hours | Experimental baseline                           |
+|    50–100 hours | Useful early model                              |
+|   200–500 hours | Strong production-oriented dialect model        |
+|    1,000+ hours | Mature language baseline if coverage is diverse |
 
 ## 18. Implementation Phases
 
@@ -416,4 +426,3 @@ The first milestone is complete when Dialect Library can repeatedly:
 ## 20. Final Operating Rule
 
 **Audio and human-validated transcripts create the training truth. Human consensus controls dataset acceptance. Temporary GPUs train candidate models. Frozen test sets measure them. Only reviewed improvements become Hugging Face releases.**
-

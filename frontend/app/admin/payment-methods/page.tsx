@@ -331,7 +331,11 @@ function PaymentMethodForm({
 
       <label className="grid gap-1.5 text-sm font-bold">
         Bank code (optional -- only meaningful for BANK)
-        <input className={inputClass} onChange={(e) => setBankCode(e.target.value)} value={bankCode} />
+        <input
+          className={inputClass}
+          onChange={(e) => setBankCode(e.target.value)}
+          value={bankCode}
+        />
       </label>
 
       <label className="grid gap-1.5 text-sm font-bold">
@@ -352,7 +356,12 @@ function PaymentMethodForm({
             Cancel
           </button>
         </DialogClose>
-        <ActionButton className={primaryButtonClass} pending={isSaving} pendingLabel="Saving" type="submit">
+        <ActionButton
+          className={primaryButtonClass}
+          pending={isSaving}
+          pendingLabel="Saving"
+          type="submit"
+        >
           Save
         </ActionButton>
       </div>

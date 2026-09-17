@@ -1,7 +1,17 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, ArrowLeft, Check, ChevronDown, MessageSquare, Search, Send, ShieldCheck, Smartphone } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  MessageSquare,
+  Search,
+  Send,
+  ShieldCheck,
+  Smartphone,
+} from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import {
@@ -145,7 +155,9 @@ export default function AdminSmsPage() {
 
             <div className="flex items-center justify-between border-t border-line px-4 py-3 text-sm">
               <span className="text-muted">
-                {isFetching ? 'Refreshing' : `Page ${data?.page ?? page} of ${data?.totalPages ?? 1}`}
+                {isFetching
+                  ? 'Refreshing'
+                  : `Page ${data?.page ?? page} of ${data?.totalPages ?? 1}`}
               </span>
               <div className="flex gap-2">
                 <button
@@ -336,7 +348,9 @@ function ThreadPane({
         </label>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="grid gap-0.5">
-            <p className={`text-sm ${remaining <= WARN_AT_REMAINING ? 'font-bold text-amber-700' : 'text-muted'}`}>
+            <p
+              className={`text-sm ${remaining <= WARN_AT_REMAINING ? 'font-bold text-amber-700' : 'text-muted'}`}
+            >
               {message.length}/{MESSAGE_LIMIT} characters
             </p>
             <p className="text-xs text-muted">
@@ -406,7 +420,8 @@ function MessageBubble({ message }: { message: AdminSmsMessage }) {
         )}
       </div>
       <p className="px-1 text-xs text-muted">
-        {senderName} &middot; {time.toLocaleDateString()} {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        {senderName} &middot; {time.toLocaleDateString()}{' '}
+        {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
       </p>
     </div>
   );

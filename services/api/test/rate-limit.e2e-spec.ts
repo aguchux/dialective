@@ -49,9 +49,21 @@ describe('rate limiting', () => {
     it('exhausting one key does not affect a second key from the same org', async () => {
       const orgWithTightLimit = await seedOrg(prisma, { planOverrides: { rateLimitPerMinute: 1 } });
       orgIds.push(orgWithTightLimit.organizationId);
-      const deck = await seedDeck(prisma, orgWithTightLimit.organizationId, orgWithTightLimit.userId);
-      const keyA = await seedStreamKey(prisma, orgWithTightLimit.organizationId, orgWithTightLimit.userId);
-      const keyB = await seedStreamKey(prisma, orgWithTightLimit.organizationId, orgWithTightLimit.userId);
+      const deck = await seedDeck(
+        prisma,
+        orgWithTightLimit.organizationId,
+        orgWithTightLimit.userId,
+      );
+      const keyA = await seedStreamKey(
+        prisma,
+        orgWithTightLimit.organizationId,
+        orgWithTightLimit.userId,
+      );
+      const keyB = await seedStreamKey(
+        prisma,
+        orgWithTightLimit.organizationId,
+        orgWithTightLimit.userId,
+      );
 
       const first = await request(app.getHttpServer())
         .get(apiPath(`stream/v1/decks/${deck.deckId}/manifest`))

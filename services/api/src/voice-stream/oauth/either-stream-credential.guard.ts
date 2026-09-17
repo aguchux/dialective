@@ -21,8 +21,11 @@ export class EitherStreamCredentialGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean | Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
     const header = request.headers.authorization;
-    const looksLikeJwt = header?.startsWith('Bearer ') && header.slice('Bearer '.length).split('.').length === 3;
+    const looksLikeJwt =
+      header?.startsWith('Bearer ') && header.slice('Bearer '.length).split('.').length === 3;
 
-    return looksLikeJwt ? this.oauthGuard.canActivate(context) : this.streamKeyGuard.canActivate(context);
+    return looksLikeJwt
+      ? this.oauthGuard.canActivate(context)
+      : this.streamKeyGuard.canActivate(context);
   }
 }

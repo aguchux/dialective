@@ -30,9 +30,7 @@ function getSecret(): string {
   return secret;
 }
 
-export function signKycHandoffToken(
-  claims: Omit<KycHandoffTokenClaims, 'typ'>,
-): string {
+export function signKycHandoffToken(claims: Omit<KycHandoffTokenClaims, 'typ'>): string {
   return jwt.sign({ ...claims, typ: 'kyc-handoff' }, getSecret(), {
     expiresIn: HANDOFF_TOKEN_TTL,
   });

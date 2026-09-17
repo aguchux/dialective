@@ -20,7 +20,8 @@ function formatInterests(lead: AdminDataAccessLead): string {
   if (lead.interests.length === 0) return '-';
   return lead.interests
     .map((interest) => {
-      const dialects = interest.dialectTags.length > 0 ? ` (${interest.dialectTags.join(', ')})` : '';
+      const dialects =
+        interest.dialectTags.length > 0 ? ` (${interest.dialectTags.join(', ')})` : '';
       return `${interest.country.name}${dialects}`;
     })
     .join('; ');
@@ -38,9 +39,10 @@ export default function AdminDataAccessLeadsPage() {
   const [deleteLeadMutation] = useDeleteDataAccessLeadMutation();
   const [resendInviteMutation, { isLoading: isResendingInvite }] =
     useResendDataAccessLeadInviteMutation();
-  const [resendInviteError, setResendInviteError] = useState<{ id: string; message: string } | null>(
-    null,
-  );
+  const [resendInviteError, setResendInviteError] = useState<{
+    id: string;
+    message: string;
+  } | null>(null);
 
   const columns: DataTableColumn<AdminDataAccessLead>[] = [
     {

@@ -1,6 +1,6 @@
 ---
 name: use-gateway
-description: "Integrate Circle Gateway to hold a unified USDC balance across multiple blockchains and transfer USDC instantly (<500ms) via permissionless deposit, burn, and mint workflows. Available on 11 EVM chains + Solana (mainnet and testnet), plus Arc testnet. Use when: enabling chain-agnostic user experiences, low-latency or instant next-block finality is required, capital needs to be pooled across chains for greater capital efficiency, or building apps with consolidated crosschain balances. Triggers on: Gateway, Gateway Wallet, Gateway Minter, gatewayMint, burn intent, unified balance, instant crosschain transfer."
+description: 'Integrate Circle Gateway to hold a unified USDC balance across multiple blockchains and transfer USDC instantly (<500ms) via permissionless deposit, burn, and mint workflows. Available on 11 EVM chains + Solana (mainnet and testnet), plus Arc testnet. Use when: enabling chain-agnostic user experiences, low-latency or instant next-block finality is required, capital needs to be pooled across chains for greater capital efficiency, or building apps with consolidated crosschain balances. Triggers on: Gateway, Gateway Wallet, Gateway Minter, gatewayMint, burn intent, unified balance, instant crosschain transfer.'
 ---
 
 ## Overview
@@ -39,56 +39,60 @@ Canonical source docs for verification:
 ### Key Addresses
 
 **EVM Mainnet (All Chains)**
+
 - Gateway Wallet: `0x77777777Dcc4d5A8B6E418Fd04D8997ef11000eE`
 - Gateway Minter: `0x2222222d7164433c4C09B0b0D809a9b52C04C205`
 
 **EVM Testnet (All Chains)**
+
 - Gateway Wallet: `0x0077777d7EBA4688BDeF3E311b846F25870A19B9`
 - Gateway Minter: `0x0022222ABE238Cc2C7Bb1f21003F0a260052475B`
 
 **Solana Mainnet**
+
 - Gateway Wallet: `GATEwy4YxeiEbRJLwB6dXgg7q61e6zBPrMzYj5h1pRXQ`
 - Gateway Minter: `GATEm5SoBJiSw1v2Pz1iPBgUYkXzCUJ27XSXhDfSyzVZ`
 
 **Solana Devnet**
+
 - Gateway Wallet: `GATEwdfmYNELfp5wDmmR6noSr2vHnAfBPMm2PvCzX5vu`
 - Gateway Minter: `GATEmKK2ECL1brEngQZWCgMWPbvrEYqsV6u29dAaHavr`
 - USDC Mint: `4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU`
 
 ### Domain IDs (Mainnet)
 
-| Chain | Domain |
-|-------|--------|
-| Ethereum | 0 |
-| Avalanche | 1 |
-| OP | 2 |
-| Arbitrum | 3 |
-| Solana | 5 |
-| Base | 6 |
-| Polygon PoS | 7 |
-| Unichain | 10 |
-| Sonic | 13 |
-| World Chain | 14 |
-| Sei | 16 |
-| HyperEVM | 19 |
+| Chain       | Domain |
+| ----------- | ------ |
+| Ethereum    | 0      |
+| Avalanche   | 1      |
+| OP          | 2      |
+| Arbitrum    | 3      |
+| Solana      | 5      |
+| Base        | 6      |
+| Polygon PoS | 7      |
+| Unichain    | 10     |
+| Sonic       | 13     |
+| World Chain | 14     |
+| Sei         | 16     |
+| HyperEVM    | 19     |
 
 ### Domain IDs (Testnet)
 
-| Chain | Domain |
-|-------|--------|
-| Ethereum Sepolia | 0 |
-| Avalanche Fuji | 1 |
-| OP Sepolia | 2 |
-| Arbitrum Sepolia | 3 |
-| Solana Devnet | 5 |
-| Base Sepolia | 6 |
-| Polygon Amoy | 7 |
-| Unichain Sepolia | 10 |
-| Sonic Testnet | 13 |
-| World Chain Sepolia | 14 |
-| Sei Atlantic | 16 |
-| HyperEVM Testnet | 19 |
-| Arc Testnet | 26 |
+| Chain               | Domain |
+| ------------------- | ------ |
+| Ethereum Sepolia    | 0      |
+| Avalanche Fuji      | 1      |
+| OP Sepolia          | 2      |
+| Arbitrum Sepolia    | 3      |
+| Solana Devnet       | 5      |
+| Base Sepolia        | 6      |
+| Polygon Amoy        | 7      |
+| Unichain Sepolia    | 10     |
+| Sonic Testnet       | 13     |
+| World Chain Sepolia | 14     |
+| Sei Atlantic        | 16     |
+| HyperEVM Testnet    | 19     |
+| Arc Testnet         | 26     |
 
 ## Core Concepts
 
@@ -118,29 +122,36 @@ Think of it like a multi-currency bank account: you see one total, but withdrawa
 - Solana refs use Anchor plus the relevant Solana tooling.
 
 ### Deposits
+
 - `references/deposit-evm.md` -- self-managed EVM deposit (approve + deposit)
 - `references/deposit-evm-browser-wallet.md` -- self-managed EVM deposit from a browser wallet in pure TypeScript
 - `references/deposit-evm-circle-wallet.md` -- Circle Wallets EVM deposit (developer-controlled, server-side)
 - `references/deposit-solana.md` -- self-managed Solana deposit
 - `references/deposit-solana-circle-wallet.md` -- Circle Wallets Solana deposit
+
 ### Transfers from EVM
+
 - `references/evm-to-evm.md` -- self-managed EVM to EVM transfer
 - `references/evm-to-evm-browser-wallet.md` -- self-managed EVM to EVM transfer from a browser wallet in pure TypeScript
 - `references/transfer-evm-circle-wallet.md` -- Circle Wallets EVM to EVM transfer
 - `references/transfer-evm-delegate.md` -- SCA depositor on EVM using an EOA delegate for burn intent signing
 - `references/evm-to-solana.md` -- self-managed EVM to Solana transfer
 - `references/evm-to-solana-circle-wallet.md` -- Circle Wallets EVM to Solana transfer
+
 ### Transfers from Solana
+
 - `references/solana-to-evm.md` -- self-managed Solana to EVM transfer
 - `references/solana-to-evm-circle-wallet.md` -- Circle Wallets Solana to EVM transfer
 - `references/solana-to-solana.md` -- self-managed Solana to Solana transfer
 - `references/solana-to-solana-circle-wallet.md` -- Circle Wallets Solana to Solana transfer
+
 ### Balance queries
+
 - `references/query-balance.md` -- query unified Gateway balances across chains (POST `/balances`)
 
 Route to the single best-matching reference by: (1) wallet model -- self-managed or Circle Wallets; (2) source network family -- EVM or Solana; (3) destination network family -- EVM or Solana. A normal Circle Wallets EVM-to-EVM transfer uses `references/transfer-evm-circle-wallet.md`.
 
-The delegate flow is a NARROW exception -- an SCA source *depositor* that signs burn intents via a separate EOA delegate:
+The delegate flow is a NARROW exception -- an SCA source _depositor_ that signs burn intents via a separate EOA delegate:
 
 - Circle Developer-Controlled Wallets where an EOA delegate signs for an SCA depositor -> `references/transfer-evm-delegate.md`. Do NOT use the delegate ref for an ordinary Circle Wallets transfer.
 - Self-managed SCA -> no exact reference matches. Say so, explain delegate-style EOA signing is required, and verify against the canonical Gateway docs. Do NOT reuse `transfer-evm-delegate.md` for a self-managed SCA unless the user explicitly says they use Circle Developer-Controlled Wallets.

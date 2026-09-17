@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { ActivityEventType, SubscriberOrgRole } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -36,11 +41,7 @@ export class SsoIdpConfigService {
     return config;
   }
 
-  async create(
-    organizationId: string,
-    createdByUserId: string,
-    dto: CreateSsoIdpConfigDto,
-  ) {
+  async create(organizationId: string, createdByUserId: string, dto: CreateSsoIdpConfigDto) {
     assertRoleIsNotOwner(dto.defaultRole);
 
     const existing = await this.prisma.ssoIdpConfig.findUnique({ where: { organizationId } });
@@ -66,9 +67,14 @@ export class SsoIdpConfigService {
       },
     });
 
-    void this.orgActivity.record(organizationId, ActivityEventType.SSO_CONFIGURED, createdByUserId, {
-      idpEntityId: config.idpEntityId,
-    });
+    void this.orgActivity.record(
+      organizationId,
+      ActivityEventType.SSO_CONFIGURED,
+      createdByUserId,
+      {
+        idpEntityId: config.idpEntityId,
+      },
+    );
 
     return config;
   }

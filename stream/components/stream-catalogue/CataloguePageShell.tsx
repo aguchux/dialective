@@ -52,9 +52,7 @@ export function CataloguePageShell({
                 )}
                 {title}
               </h1>
-              {description && (
-                <p className="mt-1 text-sm text-catalogue-muted">{description}</p>
-              )}
+              {description && <p className="mt-1 text-sm text-catalogue-muted">{description}</p>}
             </div>
             {children}
           </div>

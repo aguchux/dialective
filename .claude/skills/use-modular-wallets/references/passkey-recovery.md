@@ -16,16 +16,16 @@ VITE_CLIENT_URL=https://modular-sdk.circle.com/v1/rpc/w3s/buidl
 ## Setup
 
 ```typescript
-import { createPublicClient, type Hex } from 'viem'
-import { polygonAmoy } from 'viem/chains'
-import { english, generateMnemonic, mnemonicToAccount } from 'viem/accounts'
+import { createPublicClient, type Hex } from 'viem';
+import { polygonAmoy } from 'viem/chains';
+import { english, generateMnemonic, mnemonicToAccount } from 'viem/accounts';
 import {
   type P256Credential,
   type SmartAccount,
   type WebAuthnAccount,
   createBundlerClient,
   toWebAuthnAccount,
-} from 'viem/account-abstraction'
+} from 'viem/account-abstraction';
 import {
   recoveryActions,
   toCircleSmartAccount,
@@ -33,25 +33,25 @@ import {
   toPasskeyTransport,
   toWebAuthnCredential,
   WebAuthnMode,
-} from '@circle-fin/modular-wallets-core'
-import { validateMnemonic } from 'bip39'
+} from '@circle-fin/modular-wallets-core';
+import { validateMnemonic } from 'bip39';
 
-const clientKey = import.meta.env.VITE_CLIENT_KEY as string
-const clientUrl = import.meta.env.VITE_CLIENT_URL as string
+const clientKey = import.meta.env.VITE_CLIENT_KEY as string;
+const clientUrl = import.meta.env.VITE_CLIENT_URL as string;
 
-const passkeyTransport = toPasskeyTransport(clientUrl, clientKey)
-const modularTransport = toModularTransport(`${clientUrl}/polygonAmoy`, clientKey)
+const passkeyTransport = toPasskeyTransport(clientUrl, clientKey);
+const modularTransport = toModularTransport(`${clientUrl}/polygonAmoy`, clientKey);
 
 const client = createPublicClient({
   chain: polygonAmoy,
   transport: modularTransport,
-})
+});
 
 // Extend bundler client with recovery actions for managing account recovery
 const bundlerClient = createBundlerClient({
   chain: polygonAmoy,
   transport: modularTransport,
-}).extend(recoveryActions)
+}).extend(recoveryActions);
 ```
 
 ## Recovery Setup (while user has access)
@@ -61,9 +61,9 @@ const bundlerClient = createBundlerClient({
 Generate a BIP-39 mnemonic and derive the recovery EOA address. The user must save this phrase securely -- it is the only way to recover the account if the passkey is lost.
 
 ```typescript
-const mnemonic = generateMnemonic(english)
-const recoveryEoa = mnemonicToAccount(mnemonic)
-const recoveryAddress: Hex = recoveryEoa.address
+const mnemonic = generateMnemonic(english);
+const recoveryEoa = mnemonicToAccount(mnemonic);
+const recoveryAddress: Hex = recoveryEoa.address;
 
 // Display mnemonic to user and instruct them to save it securely
 ```
@@ -74,10 +74,10 @@ Register the recovery EOA address with the smart account. This is an on-chain tr
 
 ```typescript
 await bundlerClient.registerRecoveryAddress({
-  account,           // the user's existing Circle Smart Account
-  recoveryAddress,   // EOA address derived from the mnemonic
+  account, // the user's existing Circle Smart Account
+  recoveryAddress, // EOA address derived from the mnemonic
   paymaster: true,
-})
+});
 ```
 
 ## Recovery Execution (when passkey is lost)
@@ -88,14 +88,14 @@ Prompt the user for their saved mnemonic, validate it, and register a new passke
 
 ```typescript
 if (!validateMnemonic(userEnteredMnemonic.trim())) {
-  throw new Error('Invalid recovery phrase')
+  throw new Error('Invalid recovery phrase');
 }
 
 const newCredential = await toWebAuthnCredential({
   transport: passkeyTransport,
   mode: WebAuthnMode.Register,
   username: `${originalUsername}-recovered-${Date.now()}`,
-})
+});
 ```
 
 ### Step 4: Execute Recovery
@@ -103,23 +103,23 @@ const newCredential = await toWebAuthnCredential({
 Use the mnemonic EOA to authorize replacing the lost passkey with the new one.
 
 ```typescript
-const localAccount = mnemonicToAccount(userEnteredMnemonic.trim())
+const localAccount = mnemonicToAccount(userEnteredMnemonic.trim());
 
 // Create a temporary smart account using the recovery EOA as owner
 const tempAccount = await toCircleSmartAccount({
   client,
   owner: localAccount,
-})
+});
 
 // Execute recovery -- replaces the lost passkey owner with the new credential
 await bundlerClient.executeRecovery({
   account: tempAccount,
   credential: newCredential,
   paymaster: true,
-})
+});
 
 // Persist the new credential for future sessions
-localStorage.setItem('credential', JSON.stringify(newCredential))
+localStorage.setItem('credential', JSON.stringify(newCredential));
 ```
 
 ## Expected Flow Summary

@@ -48,7 +48,9 @@ export class LlmFallbackChain {
     order: LlmProviderKey[],
   ): Promise<{ text: string; provider: LlmProviderKey }> {
     const failures: string[] = [];
-    const imageCapableOrder = order.filter((key) => typeof this.providersByKey[key].describeImage === 'function');
+    const imageCapableOrder = order.filter(
+      (key) => typeof this.providersByKey[key].describeImage === 'function',
+    );
 
     if (imageCapableOrder.length === 0) {
       throw new Error('No image-capable LLM provider is configured in this order');

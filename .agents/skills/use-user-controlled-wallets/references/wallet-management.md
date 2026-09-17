@@ -14,8 +14,8 @@ Updates the display name or reference ID of an existing wallet. No on-chain tran
 const response = await circleClient.updateWallet({
   userToken,
   id: walletId,
-  name: "Updated Wallet Name",
-  refId: "new-ref-id",
+  name: 'Updated Wallet Name',
+  refId: 'new-ref-id',
 });
 // response.data: { wallet }
 ```

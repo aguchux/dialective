@@ -52,7 +52,9 @@ export function RevokePhoneVerificationDialog({
       setError(
         normalizeErrorMessage(
           err,
-          otpRequestId ? 'Unable to verify this code.' : 'Unable to revoke this phone verification.',
+          otpRequestId
+            ? 'Unable to verify this code.'
+            : 'Unable to revoke this phone verification.',
         ),
       );
     }

@@ -23,9 +23,9 @@ describe('ValidatorDecksService (Phase 2: approval chain)', () => {
         create: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn(),
-        findUniqueOrThrow: jest.fn().mockImplementation(({ where: { id } }: any) =>
-          Promise.resolve(baseDeck({ id })),
-        ),
+        findUniqueOrThrow: jest
+          .fn()
+          .mockImplementation(({ where: { id } }: any) => Promise.resolve(baseDeck({ id }))),
         update: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
@@ -45,7 +45,9 @@ describe('ValidatorDecksService (Phase 2: approval chain)', () => {
         findUnique: jest.fn(),
       },
       wordRecording: {
-        findUnique: jest.fn().mockResolvedValue({ id: 'rec-1', dialectTag: 'ig', dialectVariantId: null }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'rec-1', dialectTag: 'ig', dialectVariantId: null }),
       },
       dialect: {
         findUnique: jest.fn().mockResolvedValue({
@@ -83,7 +85,9 @@ describe('ValidatorDecksService (Phase 2: approval chain)', () => {
         data: { status: 'PENDING_L2' },
       });
       expect(prisma.validatorDeckAuditLog.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ action: 'SUBMITTED', toStatus: 'PENDING_L2' }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ action: 'SUBMITTED', toStatus: 'PENDING_L2' }),
+        }),
       );
 
       prisma.validatorDeck.findUnique.mockResolvedValue(baseDeck({ status: 'PENDING_L2' }));
@@ -95,7 +99,11 @@ describe('ValidatorDecksService (Phase 2: approval chain)', () => {
       });
       expect(prisma.validatorDeckAuditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ action: 'APPROVED', fromStatus: 'PENDING_L2', toStatus: 'PENDING_L3' }),
+          data: expect.objectContaining({
+            action: 'APPROVED',
+            fromStatus: 'PENDING_L2',
+            toStatus: 'PENDING_L3',
+          }),
         }),
       );
 
@@ -108,7 +116,11 @@ describe('ValidatorDecksService (Phase 2: approval chain)', () => {
       });
       expect(prisma.validatorDeckAuditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ action: 'APPROVED', fromStatus: 'PENDING_L3', toStatus: 'APPROVED' }),
+          data: expect.objectContaining({
+            action: 'APPROVED',
+            fromStatus: 'PENDING_L3',
+            toStatus: 'APPROVED',
+          }),
         }),
       );
     });
@@ -150,7 +162,11 @@ describe('ValidatorDecksService (Phase 2: approval chain)', () => {
       });
       expect(prisma.validatorDeckAuditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ action: 'APPROVED', fromStatus: 'PENDING_ADMIN', toStatus: 'APPROVED' }),
+          data: expect.objectContaining({
+            action: 'APPROVED',
+            fromStatus: 'PENDING_ADMIN',
+            toStatus: 'APPROVED',
+          }),
         }),
       );
     });
@@ -211,7 +227,9 @@ describe('ValidatorDecksService (Phase 2: approval chain)', () => {
         expect.objectContaining({ data: expect.objectContaining({ action: 'APPROVED' }) }),
       );
       expect(prisma.validatorDeckAuditLog.create).not.toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ action: 'ADMIN_BYPASS_APPROVED' }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ action: 'ADMIN_BYPASS_APPROVED' }),
+        }),
       );
     });
   });
@@ -222,7 +240,9 @@ describe('ValidatorDecksService (Phase 2: approval chain)', () => {
       prisma.user.findUnique.mockResolvedValue({ role: 'VALIDATOR', validatorLevel: 'L2' });
       prisma.validatorDeck.updateMany.mockResolvedValue({ count: 0 });
 
-      await expect(service.approve('deck-1', 'l2-user', 'VALIDATOR')).rejects.toThrow(ConflictException);
+      await expect(service.approve('deck-1', 'l2-user', 'VALIDATOR')).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('throws ConflictException when updateMany matches zero rows on submit', async () => {
@@ -230,7 +250,9 @@ describe('ValidatorDecksService (Phase 2: approval chain)', () => {
       prisma.user.findUnique.mockResolvedValue({ role: 'VALIDATOR', validatorLevel: 'L1' });
       prisma.validatorDeck.updateMany.mockResolvedValue({ count: 0 });
 
-      await expect(service.submit('deck-1', 'owner-1', 'VALIDATOR')).rejects.toThrow(ConflictException);
+      await expect(service.submit('deck-1', 'owner-1', 'VALIDATOR')).rejects.toThrow(
+        ConflictException,
+      );
     });
 
     it('throws ConflictException when updateMany matches zero rows on reject', async () => {
@@ -303,7 +325,11 @@ describe('ValidatorDecksService (Phase 2: approval chain)', () => {
       });
       expect(prisma.validatorDeckAuditLog.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ action: 'RESUBMITTED', fromStatus: 'REJECTED', toStatus: 'PENDING_L3' }),
+          data: expect.objectContaining({
+            action: 'RESUBMITTED',
+            fromStatus: 'REJECTED',
+            toStatus: 'PENDING_L3',
+          }),
         }),
       );
       // Resubmission must not re-write a CREATED row.

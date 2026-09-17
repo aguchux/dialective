@@ -173,7 +173,11 @@ export function DialectsTable({
             type="checkbox"
           />
           <span
-            className={d.tasksPaused ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}
+            className={
+              d.tasksPaused
+                ? 'text-amber-700 dark:text-amber-400'
+                : 'text-emerald-700 dark:text-emerald-400'
+            }
           >
             {d.tasksPaused ? 'Paused' : 'Running'}
           </span>
@@ -522,15 +526,13 @@ function DialectVariantsDialog({
                           </span>{' '}
                           &middot;{' '}
                           <span
-                            className={
-                              variant.tasksPaused ? 'text-amber-700' : 'text-emerald-700'
-                            }
+                            className={variant.tasksPaused ? 'text-amber-700' : 'text-emerald-700'}
                           >
                             Tasks {variant.tasksPaused ? 'paused' : 'running'}
                           </span>{' '}
                           &middot; {variant._count.users} user
-                          {variant._count.users === 1 ? '' : 's'}{' '}
-                          &middot; {variant._count.wordRecordings} word recording
+                          {variant._count.users === 1 ? '' : 's'} &middot;{' '}
+                          {variant._count.wordRecordings} word recording
                           {variant._count.wordRecordings === 1 ? '' : 's'}
                         </p>
                       </div>

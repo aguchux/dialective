@@ -42,7 +42,9 @@ describe('WhatsAppValidatorService', () => {
   beforeEach(() => {
     prisma = {
       user: {
-        findUnique: jest.fn().mockResolvedValue({ id: requesterId, phoneVerifiedAt: null, email: 'req@example.com' }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: requesterId, phoneVerifiedAt: null, email: 'req@example.com' }),
         update: jest.fn().mockResolvedValue({}),
       },
       whatsAppValidationRequest: {
@@ -140,7 +142,10 @@ describe('WhatsAppValidatorService', () => {
     });
 
     it('does NOT release an existing CLAIMED request when regenerating -- a claim is permanent until explicitly released', async () => {
-      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({ ...baseRequest, status: 'CLAIMED' });
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({
+        ...baseRequest,
+        status: 'CLAIMED',
+      });
       await service.regenerateCode(requesterId);
       expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -184,7 +189,7 @@ describe('WhatsAppValidatorService', () => {
       expect(result).toBeNull();
     });
 
-    it('includes the claiming validator\'s phone number and name once claimed', async () => {
+    it("includes the claiming validator's phone number and name once claimed", async () => {
       prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({
         ...baseRequest,
         claimedByValidator: { phoneNumber: '+15551234567', firstName: 'Ada', lastName: 'Lovelace' },
@@ -198,7 +203,9 @@ describe('WhatsAppValidatorService', () => {
       // arrive together, never one without the other.
       expect(prisma.whatsAppValidationRequest.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          include: { claimedByValidator: { select: { phoneNumber: true, firstName: true, lastName: true } } },
+          include: {
+            claimedByValidator: { select: { phoneNumber: true, firstName: true, lastName: true } },
+          },
         }),
       );
     });
@@ -222,7 +229,7 @@ describe('WhatsAppValidatorService', () => {
       await expect(service.listPending(validatorId)).rejects.toThrow(ForbiddenException);
     });
 
-    it('lists PENDING requests excluding the caller\'s own, including the requester\'s name', async () => {
+    it("lists PENDING requests excluding the caller's own, including the requester's name", async () => {
       prisma.whatsAppValidationRequest.count.mockResolvedValue(1);
       prisma.whatsAppValidationRequest.findMany.mockResolvedValue([
         { ...baseRequest, status: 'PENDING', requester: { firstName: 'Chidi', lastName: 'Okoro' } },
@@ -262,7 +269,7 @@ describe('WhatsAppValidatorService', () => {
       expect(prisma.whatsAppValidationRequest.count).not.toHaveBeenCalled();
     });
 
-    it('counts PENDING requests excluding the caller\'s own, for a subscribed validator', async () => {
+    it("counts PENDING requests excluding the caller's own, for a subscribed validator", async () => {
       prisma.whatsAppValidationRequest.count.mockResolvedValue(4);
       const result = await service.pendingCount(validatorId);
       expect(prisma.whatsAppValidationRequest.count).toHaveBeenCalledWith(
@@ -275,7 +282,7 @@ describe('WhatsAppValidatorService', () => {
   });
 
   describe('myClaims', () => {
-    it('returns every currently-claimed request, including each requester\'s name', async () => {
+    it("returns every currently-claimed request, including each requester's name", async () => {
       prisma.whatsAppValidationRequest.findMany.mockResolvedValue([
         { ...baseRequest, requester: { firstName: 'Chidi', lastName: 'Okoro' } },
         { ...baseRequest, id: 'request-2', requester: { firstName: 'Ada', lastName: 'Lovelace' } },
@@ -424,7 +431,9 @@ describe('WhatsAppValidatorService', () => {
 
   describe('verify', () => {
     it('rejects when the caller is not the claimant', async () => {
-      await expect(service.verify('someone-else', requestId, code)).rejects.toThrow(ForbiddenException);
+      await expect(service.verify('someone-else', requestId, code)).rejects.toThrow(
+        ForbiddenException,
+      );
     });
 
     it('succeeds even long after the old fixed claim-TTL window would have elapsed -- a claim is permanent, not time-boxed', async () => {
@@ -447,22 +456,32 @@ describe('WhatsAppValidatorService', () => {
     });
 
     it('rejects when the request is not CLAIMED', async () => {
-      prisma.whatsAppValidationRequest.findUnique.mockResolvedValue({ ...baseRequest, status: 'PENDING' });
+      prisma.whatsAppValidationRequest.findUnique.mockResolvedValue({
+        ...baseRequest,
+        status: 'PENDING',
+      });
       await expect(service.verify(validatorId, requestId, code)).rejects.toThrow(
         UnprocessableEntityException,
       );
     });
 
     it('rejects and increments attempts on a wrong code', async () => {
-      await expect(service.verify(validatorId, requestId, '000000')).rejects.toThrow(UnauthorizedException);
+      await expect(service.verify(validatorId, requestId, '000000')).rejects.toThrow(
+        UnauthorizedException,
+      );
       expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({ data: { attempts: { increment: 1 } } }),
       );
     });
 
     it('rejects once max attempts are reached', async () => {
-      prisma.whatsAppValidationRequest.findUnique.mockResolvedValue({ ...baseRequest, attempts: 5 });
-      await expect(service.verify(validatorId, requestId, code)).rejects.toThrow(UnauthorizedException);
+      prisma.whatsAppValidationRequest.findUnique.mockResolvedValue({
+        ...baseRequest,
+        attempts: 5,
+      });
+      await expect(service.verify(validatorId, requestId, code)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('on correct code: debits requester, credits validator, sets phoneVerifiedAt', async () => {
@@ -478,10 +497,14 @@ describe('WhatsAppValidatorService', () => {
         expect.objectContaining({ data: { balance: { increment: baseRequest.feeTokenAmount } } }),
       );
       expect(prisma.ledgerEntry.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ type: 'WHATSAPP_VALIDATION_FEE' }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ type: 'WHATSAPP_VALIDATION_FEE' }),
+        }),
       );
       expect(prisma.ledgerEntry.create).toHaveBeenCalledWith(
-        expect.objectContaining({ data: expect.objectContaining({ type: 'WHATSAPP_VALIDATION_PAYOUT' }) }),
+        expect.objectContaining({
+          data: expect.objectContaining({ type: 'WHATSAPP_VALIDATION_PAYOUT' }),
+        }),
       );
       expect(prisma.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -518,8 +541,11 @@ describe('WhatsAppValidatorService', () => {
   });
 
   describe('releaseClaim', () => {
-    it('returns the requester\'s claimed request to PENDING, clearing the claim', async () => {
-      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({ ...baseRequest, status: 'CLAIMED' });
+    it("returns the requester's claimed request to PENDING, clearing the claim", async () => {
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({
+        ...baseRequest,
+        status: 'CLAIMED',
+      });
       const result = await service.releaseClaim(requesterId);
       expect(result).toEqual({ released: true });
       expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
@@ -536,7 +562,10 @@ describe('WhatsAppValidatorService', () => {
     });
 
     it('throws a conflict if the claim moved under us (e.g. just verified)', async () => {
-      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({ ...baseRequest, status: 'CLAIMED' });
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({
+        ...baseRequest,
+        status: 'CLAIMED',
+      });
       prisma.whatsAppValidationRequest.updateMany.mockResolvedValue({ count: 0 });
       await expect(service.releaseClaim(requesterId)).rejects.toThrow(ConflictException);
     });
@@ -544,7 +573,10 @@ describe('WhatsAppValidatorService', () => {
 
   describe('cancelRequest', () => {
     it('cancels a PENDING request', async () => {
-      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({ ...baseRequest, status: 'PENDING' });
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({
+        ...baseRequest,
+        status: 'PENDING',
+      });
       const result = await service.cancelRequest(requesterId);
       expect(result).toEqual({ cancelled: true });
       expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
@@ -556,13 +588,20 @@ describe('WhatsAppValidatorService', () => {
     });
 
     it('cancels a CLAIMED request, clearing the claim', async () => {
-      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({ ...baseRequest, status: 'CLAIMED' });
+      prisma.whatsAppValidationRequest.findFirst.mockResolvedValue({
+        ...baseRequest,
+        status: 'CLAIMED',
+      });
       const result = await service.cancelRequest(requesterId);
       expect(result).toEqual({ cancelled: true });
       expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: requestId, status: 'CLAIMED' },
-          data: expect.objectContaining({ status: 'CANCELLED', claimedByValidatorId: null, claimedAt: null }),
+          data: expect.objectContaining({
+            status: 'CANCELLED',
+            claimedByValidatorId: null,
+            claimedAt: null,
+          }),
         }),
       );
     });
@@ -579,8 +618,18 @@ describe('WhatsAppValidatorService', () => {
       prisma.whatsAppValidationRequest.findMany.mockResolvedValue([
         {
           ...baseRequest,
-          requester: { id: requesterId, email: 'req@example.com', firstName: 'Chidi', lastName: 'Okoro' },
-          claimedByValidator: { id: validatorId, email: 'val@example.com', firstName: 'Ada', lastName: 'Lovelace' },
+          requester: {
+            id: requesterId,
+            email: 'req@example.com',
+            firstName: 'Chidi',
+            lastName: 'Okoro',
+          },
+          claimedByValidator: {
+            id: validatorId,
+            email: 'val@example.com',
+            firstName: 'Ada',
+            lastName: 'Lovelace',
+          },
         },
       ]);
       const result = await service.listAdmin({ page: 1, pageSize: 20 });
@@ -612,7 +661,9 @@ describe('WhatsAppValidatorService', () => {
         }),
       );
       // Fee still moves to the claimant validator on an admin-assisted verify.
-      expect(prisma.wallet.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: validatorId } }));
+      expect(prisma.wallet.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: validatorId } }),
+      );
     });
 
     it('verifies a PENDING (unclaimed) request without any payout', async () => {
@@ -637,8 +688,13 @@ describe('WhatsAppValidatorService', () => {
     });
 
     it('rejects a request that is not PENDING or CLAIMED', async () => {
-      prisma.whatsAppValidationRequest.findUnique.mockResolvedValue({ ...baseRequest, status: 'VERIFIED' });
-      await expect(service.adminVerify(requestId, code)).rejects.toThrow(UnprocessableEntityException);
+      prisma.whatsAppValidationRequest.findUnique.mockResolvedValue({
+        ...baseRequest,
+        status: 'VERIFIED',
+      });
+      await expect(service.adminVerify(requestId, code)).rejects.toThrow(
+        UnprocessableEntityException,
+      );
     });
   });
 
@@ -646,7 +702,9 @@ describe('WhatsAppValidatorService', () => {
     it('force-verifies a CLAIMED request without checking the code, still paying the claimant', async () => {
       const result = await service.adminForceVerify(requestId);
       expect(result.status).toBe('VERIFIED');
-      expect(prisma.wallet.upsert).toHaveBeenCalledWith(expect.objectContaining({ where: { userId: validatorId } }));
+      expect(prisma.wallet.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { userId: validatorId } }),
+      );
     });
 
     it('force-verifies a PENDING request with no payout', async () => {
@@ -664,7 +722,9 @@ describe('WhatsAppValidatorService', () => {
         ...baseRequest,
         expiresAt: new Date(Date.now() - 1000),
       });
-      await expect(service.adminForceVerify(requestId)).rejects.toThrow(UnprocessableEntityException);
+      await expect(service.adminForceVerify(requestId)).rejects.toThrow(
+        UnprocessableEntityException,
+      );
     });
   });
 
@@ -681,7 +741,10 @@ describe('WhatsAppValidatorService', () => {
     });
 
     it('rejects a PENDING request too', async () => {
-      prisma.whatsAppValidationRequest.findUnique.mockResolvedValue({ ...baseRequest, status: 'PENDING' });
+      prisma.whatsAppValidationRequest.findUnique.mockResolvedValue({
+        ...baseRequest,
+        status: 'PENDING',
+      });
       await service.adminReject(requestId);
       expect(prisma.whatsAppValidationRequest.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: requestId, status: 'PENDING' } }),
@@ -689,7 +752,10 @@ describe('WhatsAppValidatorService', () => {
     });
 
     it('throws when the request is already terminal', async () => {
-      prisma.whatsAppValidationRequest.findUnique.mockResolvedValue({ ...baseRequest, status: 'VERIFIED' });
+      prisma.whatsAppValidationRequest.findUnique.mockResolvedValue({
+        ...baseRequest,
+        status: 'VERIFIED',
+      });
       await expect(service.adminReject(requestId)).rejects.toThrow(UnprocessableEntityException);
     });
   });

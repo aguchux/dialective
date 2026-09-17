@@ -119,7 +119,9 @@ export function MetricCard({
         className={`flex min-w-0 flex-1 items-start gap-3 ${href ? 'transition-colors hover:opacity-80' : ''}`}
         href={href as never}
       >
-        <span className={`grid size-10 shrink-0 place-items-center rounded-lg ${METRIC_TONES[tone]}`}>
+        <span
+          className={`grid size-10 shrink-0 place-items-center rounded-lg ${METRIC_TONES[tone]}`}
+        >
           <Icon aria-hidden="true" className="size-5" />
         </span>
         <div className="min-w-0 flex-1">

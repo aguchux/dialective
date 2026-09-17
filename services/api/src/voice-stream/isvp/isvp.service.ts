@@ -181,7 +181,11 @@ export class IsvpService {
     return updated;
   }
 
-  private async getReviewable(organizationId: string, reviewerUserId: string, validationId: string) {
+  private async getReviewable(
+    organizationId: string,
+    reviewerUserId: string,
+    validationId: string,
+  ) {
     const validation = await this.prisma.subscriberValidation.findUnique({
       where: { id: validationId },
     });

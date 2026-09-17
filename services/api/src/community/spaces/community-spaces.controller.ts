@@ -1,6 +1,9 @@
 import { Controller, Delete, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthenticatedRequest, JwtAuthGuard } from '../../auth/strategies/jwt-auth.guard';
-import { OptionalJwtAuthGuard, OptionallyAuthenticatedRequest } from '../../auth/strategies/optional-jwt-auth.guard';
+import {
+  OptionalJwtAuthGuard,
+  OptionallyAuthenticatedRequest,
+} from '../../auth/strategies/optional-jwt-auth.guard';
 import { CommunityProfilesService } from '../profiles/community-profiles.service';
 import { CommunitySpacesService } from './community-spaces.service';
 

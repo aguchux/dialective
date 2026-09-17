@@ -81,8 +81,11 @@ export class OtpService {
       return;
     }
     const primarySend =
-      channel === 'WHATSAPP' ? this.whatsapp.sendOtp(destination, code) : this.sms.sendOtp(destination, code);
-    const expectedException = channel === 'WHATSAPP' ? WhatsappDeliveryException : SmsDeliveryException;
+      channel === 'WHATSAPP'
+        ? this.whatsapp.sendOtp(destination, code)
+        : this.sms.sendOtp(destination, code);
+    const expectedException =
+      channel === 'WHATSAPP' ? WhatsappDeliveryException : SmsDeliveryException;
     const channelLabel = channel === 'WHATSAPP' ? 'WhatsApp' : 'SMS';
 
     if (purpose === 'PHONE_VERIFICATION') {
@@ -105,7 +108,10 @@ export class OtpService {
       ...(user ? [this.mail.sendOtpEmail(user.email, code, purpose)] : []),
     ]);
     const [primaryResult, mailResult] = results;
-    if (primaryResult.status === 'rejected' && !(primaryResult.reason instanceof expectedException)) {
+    if (
+      primaryResult.status === 'rejected' &&
+      !(primaryResult.reason instanceof expectedException)
+    ) {
       throw primaryResult.reason;
     }
     if (primaryResult.status === 'rejected') {

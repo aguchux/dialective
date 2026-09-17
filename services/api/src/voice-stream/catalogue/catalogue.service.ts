@@ -27,10 +27,7 @@ export function qualityTierFor(
 }
 
 /** Takes the stricter (higher-ranked) of two optional confidence floors. */
-function stricterConfidence(
-  a?: IsvcConfidence,
-  b?: IsvcConfidence,
-): IsvcConfidence | undefined {
+function stricterConfidence(a?: IsvcConfidence, b?: IsvcConfidence): IsvcConfidence | undefined {
   if (!a) return b;
   if (!b) return a;
   return CONFIDENCE_RANK[a] >= CONFIDENCE_RANK[b] ? a : b;
@@ -51,13 +48,20 @@ const RECORDING_SELECT = {
     select: {
       tag: true,
       name: true,
-      dialect: { select: { tag: true, name: true, country: { select: { code: true, name: true } } } },
+      dialect: {
+        select: { tag: true, name: true, country: { select: { code: true, name: true } } },
+      },
     },
   },
 } satisfies Prisma.WordRecordingSelect;
 
 type SearchRecordingRow = Prisma.WordRecordingGetPayload<{ select: typeof RECORDING_SELECT }>;
-type CurrentIsvc = { isvs: unknown; confidence: IsvcConfidence; organizationCount: number; agreement: unknown };
+type CurrentIsvc = {
+  isvs: unknown;
+  confidence: IsvcConfidence;
+  organizationCount: number;
+  agreement: unknown;
+};
 
 /**
  * Read-only against WordRecording -- Voice Stream's catalogue is a search
@@ -91,9 +95,7 @@ export class CatalogueService {
         ? {
             dialectVariant: {
               ...(params.subdialectTag ? { tag: params.subdialectTag } : {}),
-              ...(params.countryCode
-                ? { dialect: { country: { code: params.countryCode } } }
-                : {}),
+              ...(params.countryCode ? { dialect: { country: { code: params.countryCode } } } : {}),
             },
           }
         : {}),
@@ -117,7 +119,10 @@ export class CatalogueService {
     pageSize: number;
   }) {
     const where = this.eligibleWhere(params);
-    const effectiveMinConfidence = stricterConfidence(params.minConfidence, params.planMinConfidence);
+    const effectiveMinConfidence = stricterConfidence(
+      params.minConfidence,
+      params.planMinConfidence,
+    );
 
     // IsvcCurrent/IsvcAggregation aren't a Prisma relation on WordRecording
     // (recordingId is a loose string reference, same rationale as
@@ -179,10 +184,18 @@ export class CatalogueService {
   ) {
     const sorted = [...matching].sort((a, b) => b.isvs - a.isvs);
     const total = sorted.length;
-    const pageIds = sorted.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize).map((m) => m.recordingId);
+    const pageIds = sorted
+      .slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize)
+      .map((m) => m.recordingId);
 
     if (pageIds.length === 0) {
-      return { items: [], page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) };
+      return {
+        items: [],
+        page,
+        pageSize,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      };
     }
 
     const rows = await this.prisma.wordRecording.findMany({
@@ -193,7 +206,9 @@ export class CatalogueService {
     const orderedRows = pageIds
       .map((id) => rowById.get(id))
       .filter((r): r is SearchRecordingRow => Boolean(r));
-    const isvcByRecordingId = await this.currentIsvcByRecordingId(orderedRows.map((item) => item.id));
+    const isvcByRecordingId = await this.currentIsvcByRecordingId(
+      orderedRows.map((item) => item.id),
+    );
 
     return {
       items: orderedRows.map((item) => this.toSearchResult(item, isvcByRecordingId.get(item.id))),
@@ -299,7 +314,7 @@ export class CatalogueService {
     });
 
     const hasIsvcFilter =
-      rule.minIsvs !== undefined && rule.minIsvs !== null ||
+      (rule.minIsvs !== undefined && rule.minIsvs !== null) ||
       Boolean(rule.minConfidence) ||
       (rule.minOrganizationCount !== undefined && rule.minOrganizationCount !== null);
 

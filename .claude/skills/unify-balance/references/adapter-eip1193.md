@@ -21,10 +21,10 @@ Get the provider from the connector and switch to the chain that signs the trans
 For the two `spend` destination (`to`) shapes, see the Spend / Forwarding Service notes in `SKILL.md`. The examples below use the Forwarding Service (`useForwarder: true`) — the natural fit for browser wallets, since the user signs once (the burn on the source chain) and never has to switch the wallet to the destination chain. To submit the mint from the user's own destination wallet instead, build a destination adapter the same way (`await getAdapter(destinationChainId)`) and pass it as `adapter`.
 
 ```tsx
-import { useAccount, useChainId, useSwitchChain } from "wagmi";
-import { createViemAdapterFromProvider } from "@circle-fin/adapter-viem-v2";
-import { AppKit } from "@circle-fin/app-kit";
-import type { EIP1193Provider } from "viem";
+import { useAccount, useChainId, useSwitchChain } from 'wagmi';
+import { createViemAdapterFromProvider } from '@circle-fin/adapter-viem-v2';
+import { AppKit } from '@circle-fin/app-kit';
+import type { EIP1193Provider } from 'viem';
 
 const appKit = new AppKit();
 
@@ -34,7 +34,7 @@ function UnifiedBalanceComponent() {
   const { switchChainAsync } = useSwitchChain();
 
   const getAdapter = async (requiredChainId: number) => {
-    if (!connector) throw new Error("Wallet not connected");
+    if (!connector) throw new Error('Wallet not connected');
     if (chainId !== requiredChainId) {
       await switchChainAsync({ chainId: requiredChainId });
     }
@@ -47,7 +47,7 @@ function UnifiedBalanceComponent() {
 
     const result = await appKit.unifiedBalance.deposit({
       from: { adapter, chain: sourceChain },
-      amount: "10.00",
+      amount: '10.00',
     });
   };
 
@@ -62,21 +62,21 @@ function UnifiedBalanceComponent() {
     const result = await appKit.unifiedBalance.spend({
       from: {
         adapter,
-        allocations: { amount: "5.00", chain: sourceChain },
+        allocations: { amount: '5.00', chain: sourceChain },
       },
       to: { chain: destinationChain, recipientAddress, useForwarder: true },
-      amount: "5.00",
+      amount: '5.00',
     });
   };
 
   const handleGetBalances = async () => {
-    if (!connector) throw new Error("Wallet not connected");
+    if (!connector) throw new Error('Wallet not connected');
     const provider = (await connector.getProvider()) as EIP1193Provider;
     const adapter = await createViemAdapterFromProvider({ provider });
 
     const balances = await appKit.unifiedBalance.getBalances({
       sources: { adapter },
-      networkType: "testnet",
+      networkType: 'testnet',
     });
   };
 }
@@ -87,10 +87,10 @@ function UnifiedBalanceComponent() {
 The standalone kit exposes the same operations directly on the instance (`kit.deposit`, `kit.spend`, `kit.getBalances`) instead of under `kit.unifiedBalance.*`.
 
 ```tsx
-import { useAccount, useChainId, useSwitchChain } from "wagmi";
-import { createViemAdapterFromProvider } from "@circle-fin/adapter-viem-v2";
-import { UnifiedBalanceKit } from "@circle-fin/unified-balance-kit";
-import type { EIP1193Provider } from "viem";
+import { useAccount, useChainId, useSwitchChain } from 'wagmi';
+import { createViemAdapterFromProvider } from '@circle-fin/adapter-viem-v2';
+import { UnifiedBalanceKit } from '@circle-fin/unified-balance-kit';
+import type { EIP1193Provider } from 'viem';
 
 const kit = new UnifiedBalanceKit();
 
@@ -100,7 +100,7 @@ function UnifiedBalanceComponent() {
   const { switchChainAsync } = useSwitchChain();
 
   const getAdapter = async (requiredChainId: number) => {
-    if (!connector) throw new Error("Wallet not connected");
+    if (!connector) throw new Error('Wallet not connected');
     if (chainId !== requiredChainId) {
       await switchChainAsync({ chainId: requiredChainId });
     }
@@ -113,7 +113,7 @@ function UnifiedBalanceComponent() {
 
     const result = await kit.deposit({
       from: { adapter, chain: sourceChain },
-      amount: "10.00",
+      amount: '10.00',
     });
   };
 
@@ -128,21 +128,21 @@ function UnifiedBalanceComponent() {
     const result = await kit.spend({
       from: {
         adapter,
-        allocations: { amount: "5.00", chain: sourceChain },
+        allocations: { amount: '5.00', chain: sourceChain },
       },
       to: { chain: destinationChain, recipientAddress, useForwarder: true },
-      amount: "5.00",
+      amount: '5.00',
     });
   };
 
   const handleGetBalances = async () => {
-    if (!connector) throw new Error("Wallet not connected");
+    if (!connector) throw new Error('Wallet not connected');
     const provider = (await connector.getProvider()) as EIP1193Provider;
     const adapter = await createViemAdapterFromProvider({ provider });
 
     const balances = await kit.getBalances({
       sources: { adapter },
-      networkType: "testnet",
+      networkType: 'testnet',
     });
   };
 }

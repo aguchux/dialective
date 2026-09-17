@@ -78,10 +78,15 @@ export class OAuthClientsService {
       select: PUBLIC_CLIENT_SELECT,
     });
 
-    void this.orgActivity.record(organizationId, ActivityEventType.OAUTH_CLIENT_CREATED, createdByUserId, {
-      clientId: row.clientId,
-      deckId: row.deckId,
-    });
+    void this.orgActivity.record(
+      organizationId,
+      ActivityEventType.OAUTH_CLIENT_CREATED,
+      createdByUserId,
+      {
+        clientId: row.clientId,
+        deckId: row.deckId,
+      },
+    );
 
     return { ...row, plaintextSecret: secret };
   }
@@ -101,9 +106,14 @@ export class OAuthClientsService {
       data: { revokedAt: new Date() },
       select: PUBLIC_CLIENT_SELECT,
     });
-    void this.orgActivity.record(organizationId, ActivityEventType.OAUTH_CLIENT_REVOKED, actorUserId, {
-      clientId: revoked.clientId,
-    });
+    void this.orgActivity.record(
+      organizationId,
+      ActivityEventType.OAUTH_CLIENT_REVOKED,
+      actorUserId,
+      {
+        clientId: revoked.clientId,
+      },
+    );
     return revoked;
   }
 }

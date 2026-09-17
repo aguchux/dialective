@@ -5,7 +5,8 @@ import { Loader2 } from 'lucide-react';
 import { DykSettings, useDykSettingsQuery, useSaveDykSettingsMutation } from '@/store/dyk-api';
 
 const input = 'w-full rounded-md border border-line bg-white p-2 text-ink';
-const button = 'inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-line px-3 py-2 disabled:opacity-50';
+const button =
+  'inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-line px-3 py-2 disabled:opacity-50';
 const primaryButtonClass =
   'inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-accent bg-accent px-3.5 py-2.5 font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60';
 
@@ -27,12 +28,18 @@ export function DykSettingsPanel() {
   if (!value || settings.isError) {
     return (
       <div role="alert">
-        Unable to load settings. <button className={button} onClick={() => settings.refetch()}>Retry</button>
+        Unable to load settings.{' '}
+        <button className={button} onClick={() => settings.refetch()}>
+          Retry
+        </button>
       </div>
     );
   }
 
-  const change = (update: Partial<DykSettings>) => { setDraftSettings({ ...value, ...update }); setSaved(false); };
+  const change = (update: Partial<DykSettings>) => {
+    setDraftSettings({ ...value, ...update });
+    setSaved(false);
+  };
 
   return (
     <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
@@ -63,7 +70,11 @@ export function DykSettingsPanel() {
         }}
       >
         <label className="flex items-center gap-3">
-          <input type="checkbox" checked={value.enabled} onChange={(e) => change({ enabled: e.target.checked })} />
+          <input
+            type="checkbox"
+            checked={value.enabled}
+            onChange={(e) => change({ enabled: e.target.checked })}
+          />
           Enable dashboard notices
         </label>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -95,9 +106,17 @@ export function DykSettingsPanel() {
         <button disabled={saving.isLoading} className={primaryButtonClass}>
           {saving.isLoading && <Loader2 className="size-4 animate-spin" />}Save settings
         </button>
-        {saved && <p role="status" className="leading-relaxed text-accent-dark">Settings saved.</p>}
+        {saved && (
+          <p role="status" className="leading-relaxed text-accent-dark">
+            Settings saved.
+          </p>
+        )}
       </form>
-      {error && <p role="alert" className="leading-relaxed text-danger">{error}</p>}
+      {error && (
+        <p role="alert" className="leading-relaxed text-danger">
+          {error}
+        </p>
+      )}
     </section>
   );
 }

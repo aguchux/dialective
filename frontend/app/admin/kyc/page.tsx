@@ -53,8 +53,8 @@ export default function AdminKycPage() {
             <h1 className="text-3xl font-black">Identity verification</h1>
             <p className="mt-2 max-w-4xl text-muted">
               Review ID-scan and selfie verifications from both providers -- Didit (hosted,
-              decisions made by Didit) and DLKYC (self-hosted; AI-assisted findings, if enabled,
-              are shown as a reviewer aid only, never an approval).
+              decisions made by Didit) and DLKYC (self-hosted; AI-assisted findings, if enabled, are
+              shown as a reviewer aid only, never an approval).
             </p>
           </div>
           <label className="grid gap-1 text-sm font-bold">
@@ -116,7 +116,9 @@ export default function AdminKycPage() {
                 ) : rows.length === 0 ? (
                   <tr>
                     <td className="px-4 py-10 text-center font-bold text-muted" colSpan={8}>
-                      {search ? `No verifications match "${search}".` : 'No verifications in this status.'}
+                      {search
+                        ? `No verifications match "${search}".`
+                        : 'No verifications in this status.'}
                     </td>
                   </tr>
                 ) : (

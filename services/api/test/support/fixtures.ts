@@ -259,7 +259,10 @@ export async function cleanupOrgs(prisma: PrismaClient, organizationIds: string[
   await prisma.subscriberOrganization.deleteMany({ where: { id: { in: organizationIds } } });
 }
 
-export async function cleanupRecordings(prisma: PrismaClient, recordingIds: string[]): Promise<void> {
+export async function cleanupRecordings(
+  prisma: PrismaClient,
+  recordingIds: string[],
+): Promise<void> {
   if (recordingIds.length === 0) return;
   await prisma.wordRecording.deleteMany({ where: { id: { in: recordingIds } } });
 }

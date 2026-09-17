@@ -49,7 +49,9 @@ export class SmartDeckEvaluatorService implements OnModuleInit {
       await this.evaluateAllRulesFor(recordingId);
       return;
     }
-    this.logger.warn(`Received smart-deck job with unrecognized shape: ${JSON.stringify(message.data)}`);
+    this.logger.warn(
+      `Received smart-deck job with unrecognized shape: ${JSON.stringify(message.data)}`,
+    );
   }
 
   /**
@@ -67,9 +69,7 @@ export class SmartDeckEvaluatorService implements OnModuleInit {
       return;
     }
 
-    const matchingIds = new Set(
-      await this.catalogue.matchingRecordingIdsForRule(deck.rule),
-    );
+    const matchingIds = new Set(await this.catalogue.matchingRecordingIdsForRule(deck.rule));
     const currentItems = await this.prisma.streamDeckItem.findMany({ where: { deckId } });
     const currentIds = new Set(currentItems.map((item) => item.recordingId));
 
@@ -120,10 +120,12 @@ export class SmartDeckEvaluatorService implements OnModuleInit {
     const dialectTag =
       recording?.dialectVariant?.dialect.tag ??
       recording?.dialectTag ??
-      (await this.prisma.wordRecording.findUnique({
-        where: { id: recordingId },
-        select: { dialectTag: true },
-      }))?.dialectTag;
+      (
+        await this.prisma.wordRecording.findUnique({
+          where: { id: recordingId },
+          select: { dialectTag: true },
+        })
+      )?.dialectTag;
     const countryCode = recording?.dialectVariant?.dialect.country.code;
 
     const candidateDecks = await this.prisma.streamDeck.findMany({
@@ -131,10 +133,7 @@ export class SmartDeckEvaluatorService implements OnModuleInit {
         type: StreamDeckType.SMART,
         rule: {
           is: {
-            OR: [
-              { dialectTag: null },
-              ...(dialectTag ? [{ dialectTag }] : []),
-            ],
+            OR: [{ dialectTag: null }, ...(dialectTag ? [{ dialectTag }] : [])],
           },
         },
       },

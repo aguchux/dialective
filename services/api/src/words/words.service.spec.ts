@@ -154,10 +154,12 @@ describe('WordsService', () => {
     });
 
     it('blocks the session with a distinct message when the dialect has tasks paused', async () => {
-      prisma.user.findUnique.mockResolvedValueOnce({ auditHoldAt: null, auditHoldReleasedAt: null }).mockResolvedValueOnce({
-        ...trainer,
-        dialect: { ...trainer.dialect, tasksPaused: true },
-      });
+      prisma.user.findUnique
+        .mockResolvedValueOnce({ auditHoldAt: null, auditHoldReleasedAt: null })
+        .mockResolvedValueOnce({
+          ...trainer,
+          dialect: { ...trainer.dialect, tasksPaused: true },
+        });
       await expect(service.startSession(trainer.id)).rejects.toThrow(
         'Training tasks are temporarily paused for your dialect',
       );
@@ -165,10 +167,12 @@ describe('WordsService', () => {
     });
 
     it('blocks the session with a distinct message when the sub-dialect has tasks paused', async () => {
-      prisma.user.findUnique.mockResolvedValueOnce({ auditHoldAt: null, auditHoldReleasedAt: null }).mockResolvedValueOnce({
-        ...trainer,
-        dialectVariant: { ...trainer.dialectVariant, tasksPaused: true },
-      });
+      prisma.user.findUnique
+        .mockResolvedValueOnce({ auditHoldAt: null, auditHoldReleasedAt: null })
+        .mockResolvedValueOnce({
+          ...trainer,
+          dialectVariant: { ...trainer.dialectVariant, tasksPaused: true },
+        });
       await expect(service.startSession(trainer.id)).rejects.toThrow(
         'Training tasks are temporarily paused for your dialect',
       );
@@ -176,11 +180,13 @@ describe('WordsService', () => {
     });
 
     it('allows the session when tasksPaused is false and everything else is fine', async () => {
-      prisma.user.findUnique.mockResolvedValueOnce({ auditHoldAt: null, auditHoldReleasedAt: null }).mockResolvedValueOnce({
-        ...trainer,
-        dialect: { ...trainer.dialect, tasksPaused: false },
-        dialectVariant: { ...trainer.dialectVariant, tasksPaused: false },
-      });
+      prisma.user.findUnique
+        .mockResolvedValueOnce({ auditHoldAt: null, auditHoldReleasedAt: null })
+        .mockResolvedValueOnce({
+          ...trainer,
+          dialect: { ...trainer.dialect, tasksPaused: false },
+          dialectVariant: { ...trainer.dialectVariant, tasksPaused: false },
+        });
       const result = await service.startSession(trainer.id);
       expect(result.sessionId).toBe(session.id);
     });
@@ -302,7 +308,9 @@ describe('WordsService', () => {
   it('blocks a new assignment when the trainer cannot cover its cost', async () => {
     prisma.wallet.upsert.mockResolvedValue({ id: 'wallet-1', balance: { lt: () => true } });
 
-    await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow('Insufficient balance');
+    await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow(
+      'Insufficient balance',
+    );
     expect(prisma.wordTrainingAssignment.create).not.toHaveBeenCalled();
   });
 
@@ -455,7 +463,9 @@ describe('WordsService', () => {
     prisma.wordRecording.findMany.mockResolvedValue([{ wordId: 'word-1' }]);
     prisma.wordTrainingAssignment.findFirst.mockResolvedValue({ wordId: 'word-1' });
 
-    await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow('NO_WORDS_AVAILABLE');
+    await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow(
+      'NO_WORDS_AVAILABLE',
+    );
     expect(prisma.wordTrainingAssignment.create).not.toHaveBeenCalled();
   });
 
@@ -561,7 +571,10 @@ describe('WordsService', () => {
     });
     expect(prisma.wordRecording.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ userId: { not: trainer.id }, direction: 'ENGLISH_TO_DIALECT' }),
+        where: expect.objectContaining({
+          userId: { not: trainer.id },
+          direction: 'ENGLISH_TO_DIALECT',
+        }),
       }),
     );
     jest.restoreAllMocks();
@@ -1189,7 +1202,10 @@ describe('WordsService', () => {
       prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
       const createRecordingMock = jest
         .fn()
-        .mockImplementation(({ data }: any) => ({ id: 'recording-sentence-reverse-no-text', ...data }));
+        .mockImplementation(({ data }: any) => ({
+          id: 'recording-sentence-reverse-no-text',
+          ...data,
+        }));
       prisma.$transaction.mockImplementation(async (callback: (tx: any) => unknown) =>
         callback({
           wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },

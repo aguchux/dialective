@@ -38,7 +38,12 @@ describe('SsoIdpConfigService.create', () => {
         createdByUserId: 'admin-1',
       }),
     });
-    expect(orgActivity.record).toHaveBeenCalledWith('org-1', 'SSO_CONFIGURED', 'admin-1', expect.anything());
+    expect(orgActivity.record).toHaveBeenCalledWith(
+      'org-1',
+      'SSO_CONFIGURED',
+      'admin-1',
+      expect.anything(),
+    );
   });
 
   it('rejects a second config for an org that already has one', async () => {
@@ -90,11 +95,20 @@ describe('SsoIdpConfigService.remove', () => {
 
   it('deletes and records an activity event on success', async () => {
     const { service, prisma, orgActivity } = setup();
-    prisma.ssoIdpConfig.findUnique.mockResolvedValue({ id: 'idp-1', organizationId: 'org-1', idpEntityId: dto.idpEntityId });
+    prisma.ssoIdpConfig.findUnique.mockResolvedValue({
+      id: 'idp-1',
+      organizationId: 'org-1',
+      idpEntityId: dto.idpEntityId,
+    });
 
     await service.remove('org-1', 'admin-1');
 
     expect(prisma.ssoIdpConfig.delete).toHaveBeenCalledWith({ where: { organizationId: 'org-1' } });
-    expect(orgActivity.record).toHaveBeenCalledWith('org-1', 'SSO_DISABLED', 'admin-1', expect.anything());
+    expect(orgActivity.record).toHaveBeenCalledWith(
+      'org-1',
+      'SSO_DISABLED',
+      'admin-1',
+      expect.anything(),
+    );
   });
 });

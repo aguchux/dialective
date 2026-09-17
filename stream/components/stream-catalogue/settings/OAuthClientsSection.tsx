@@ -30,7 +30,13 @@ const ALL_SCOPES: { value: StreamKeyScope; label: string }[] = [
   { value: 'USAGE_READ', label: 'Read usage' },
 ];
 
-function RevealedSecretBanner({ created, onDismiss }: { created: CreatedOAuthClient; onDismiss: () => void }) {
+function RevealedSecretBanner({
+  created,
+  onDismiss,
+}: {
+  created: CreatedOAuthClient;
+  onDismiss: () => void;
+}) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -46,24 +52,31 @@ function RevealedSecretBanner({ created, onDismiss }: { created: CreatedOAuthCli
       </p>
       <div className="mb-3 grid gap-2">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-catalogue-muted">Client ID</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-catalogue-muted">
+            Client ID
+          </p>
           <code className="mt-1 block break-all rounded-lg border border-catalogue-line bg-catalogue-bg px-3 py-2 text-sm text-catalogue-ink">
             {created.clientId}
           </code>
         </div>
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-catalogue-muted">Client Secret</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-catalogue-muted">
+            Client Secret
+          </p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <code className="min-w-0 flex-1 break-all rounded-lg border border-catalogue-line bg-catalogue-bg px-3 py-2 text-sm text-catalogue-ink">
               {created.plaintextSecret}
             </code>
-            <SettingsPrimaryButton onClick={() => void copy()}>{copied ? 'Copied' : 'Copy'}</SettingsPrimaryButton>
+            <SettingsPrimaryButton onClick={() => void copy()}>
+              {copied ? 'Copied' : 'Copy'}
+            </SettingsPrimaryButton>
           </div>
         </div>
       </div>
       <p className="mb-3 text-xs text-catalogue-dim">
         Exchange these for a short-lived access token:{' '}
-        <code className="rounded bg-catalogue-bg px-1 py-0.5">POST /stream/v1/oauth/token</code> with{' '}
+        <code className="rounded bg-catalogue-bg px-1 py-0.5">POST /stream/v1/oauth/token</code>{' '}
+        with{' '}
         <code className="rounded bg-catalogue-bg px-1 py-0.5">grant_type=client_credentials</code>.
       </p>
       <SettingsSecondaryButton onClick={onDismiss}>Done</SettingsSecondaryButton>
@@ -71,7 +84,13 @@ function RevealedSecretBanner({ created, onDismiss }: { created: CreatedOAuthCli
   );
 }
 
-function CreateClientForm({ onCreated, onDone }: { onCreated: (client: CreatedOAuthClient) => void; onDone: () => void }) {
+function CreateClientForm({
+  onCreated,
+  onDone,
+}: {
+  onCreated: (client: CreatedOAuthClient) => void;
+  onDone: () => void;
+}) {
   const { data: decks } = useListStreamDecksQuery();
   const [createClient, { isLoading }] = useCreateOAuthClientMutation();
   const [deckId, setDeckId] = useState('');
@@ -79,7 +98,9 @@ function CreateClientForm({ onCreated, onDone }: { onCreated: (client: CreatedOA
   const [error, setError] = useState<string | null>(null);
 
   function toggleScope(scope: StreamKeyScope) {
-    setScopes((current) => (current.includes(scope) ? current.filter((s) => s !== scope) : [...current, scope]));
+    setScopes((current) =>
+      current.includes(scope) ? current.filter((s) => s !== scope) : [...current, scope],
+    );
   }
 
   async function submit(e: FormEvent) {
@@ -98,9 +119,16 @@ function CreateClientForm({ onCreated, onDone }: { onCreated: (client: CreatedOA
   }
 
   return (
-    <form className="grid gap-3 rounded-lg border border-catalogue-line bg-catalogue-bg p-4" onSubmit={submit}>
+    <form
+      className="grid gap-3 rounded-lg border border-catalogue-line bg-catalogue-bg p-4"
+      onSubmit={submit}
+    >
       <SettingsField label="Scope of access">
-        <select className={settingsInputClassName} onChange={(e) => setDeckId(e.target.value)} value={deckId}>
+        <select
+          className={settingsInputClassName}
+          onChange={(e) => setDeckId(e.target.value)}
+          value={deckId}
+        >
           <option value="">All authorized Stream Decks (org-wide)</option>
           {decks?.map((deck) => (
             <option key={deck.id} value={deck.id}>
@@ -113,7 +141,11 @@ function CreateClientForm({ onCreated, onDone }: { onCreated: (client: CreatedOA
         <div className="grid gap-1.5 sm:grid-cols-2">
           {ALL_SCOPES.map((scope) => (
             <label className="flex items-center gap-2 text-sm text-catalogue-ink" key={scope.value}>
-              <input checked={scopes.includes(scope.value)} onChange={() => toggleScope(scope.value)} type="checkbox" />
+              <input
+                checked={scopes.includes(scope.value)}
+                onChange={() => toggleScope(scope.value)}
+                type="checkbox"
+              />
               {scope.label}
             </label>
           ))}
@@ -154,12 +186,16 @@ function ClientRow({ client }: { client: OAuthClientSummary }) {
           <p className="mt-1 text-xs text-catalogue-muted">
             {client.deckId ? 'Deck-scoped' : 'Org-wide'} -- {client.scopes.join(', ')}
           </p>
-          <p className="mt-1 text-xs text-catalogue-dim">Created {new Date(client.createdAt).toLocaleDateString()}</p>
+          <p className="mt-1 text-xs text-catalogue-dim">
+            Created {new Date(client.createdAt).toLocaleDateString()}
+          </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <span
             className={`rounded-md px-2 py-0.5 text-[11px] font-bold ${
-              client.revokedAt ? 'bg-danger/15 text-danger' : 'bg-catalogue-green/15 text-catalogue-green'
+              client.revokedAt
+                ? 'bg-danger/15 text-danger'
+                : 'bg-catalogue-green/15 text-catalogue-green'
             }`}
           >
             {client.revokedAt ? 'Revoked' : 'Active'}

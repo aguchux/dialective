@@ -43,7 +43,13 @@ function renderLinks(text: string, keyPrefix: string): ReactNode[] {
     }
     if (internalPath === null) {
       return (
-        <a className="font-bold underline" href={match[2]} key={key} rel="noreferrer" target="_blank">
+        <a
+          className="font-bold underline"
+          href={match[2]}
+          key={key}
+          rel="noreferrer"
+          target="_blank"
+        >
           {match[1]}
         </a>
       );

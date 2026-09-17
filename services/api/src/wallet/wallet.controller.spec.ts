@@ -33,7 +33,9 @@ describe('WalletController crypto withdrawal eligibility', () => {
     withdrawalsDisabledMessage?: string | null;
   }) {
     const prisma = {
-      wordRecording: { count: jest.fn().mockResolvedValue(overrides?.settledWordRecordings ?? 100) },
+      wordRecording: {
+        count: jest.fn().mockResolvedValue(overrides?.settledWordRecordings ?? 100),
+      },
       domainConversationRecording: {
         count: jest.fn().mockResolvedValue(overrides?.settledDomainConversationRecordings ?? 0),
       },
@@ -65,7 +67,9 @@ describe('WalletController crypto withdrawal eligibility', () => {
       }),
       isCryptoWithdrawalsEnabled: jest.fn().mockResolvedValue(true),
       getMinWithdrawalTokens: jest.fn().mockResolvedValue(50),
-      getMinWalletBalanceTokens: jest.fn().mockResolvedValue(overrides?.minWalletBalanceTokens ?? 0),
+      getMinWalletBalanceTokens: jest
+        .fn()
+        .mockResolvedValue(overrides?.minWalletBalanceTokens ?? 0),
       getMinCompletedTasksForWithdrawal: jest.fn().mockResolvedValue(100),
       isPhoneVerificationRequired: jest.fn().mockResolvedValue(true),
       isKycRequiredForWithdrawals: jest.fn().mockResolvedValue(true),
@@ -207,9 +211,9 @@ describe('WalletController crypto withdrawal eligibility', () => {
         kycMinTokens: 100,
       });
 
-      await expect(controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody)).rejects.toThrow(
-        'Your identity verification was not approved',
-      );
+      await expect(
+        controller.requestWithdrawalOtp(cryptoOtpRequest, cryptoOtpBody),
+      ).rejects.toThrow('Your identity verification was not approved');
       expect(otp.issueForUser).not.toHaveBeenCalled();
     },
   );
@@ -724,7 +728,12 @@ describe('WalletController withdrawal payout automation', () => {
     const nowPayments = {
       createPayout: jest
         .fn()
-        .mockResolvedValue({ payoutId: 'payout-1', batchId: 'batch-1', status: 'processing', raw: {} }),
+        .mockResolvedValue({
+          payoutId: 'payout-1',
+          batchId: 'batch-1',
+          status: 'processing',
+          raw: {},
+        }),
       getPayoutStatus: jest
         .fn()
         .mockResolvedValue({ payoutId: 'payout-1', status: 'processing', raw: {} }),
@@ -961,7 +970,8 @@ describe('WalletController withdrawal payout automation', () => {
     expect(prisma.nowPaymentsPayoutEvent.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          processingError: 'NOWPayments createPayout 400: {"message":"Insufficient payout balance"}',
+          processingError:
+            'NOWPayments createPayout 400: {"message":"Insufficient payout balance"}',
         }),
       }),
     );
@@ -1081,7 +1091,9 @@ describe('WalletController withdrawal payout automation', () => {
   });
 
   it('cancel-nowpayments only accepts a PROCESSING withdrawal with a providerPayoutId', async () => {
-    const { controller } = setup(baseWithdrawal({ status: 'APPROVED', providerPayoutId: 'payout-1' }));
+    const { controller } = setup(
+      baseWithdrawal({ status: 'APPROVED', providerPayoutId: 'payout-1' }),
+    );
 
     await expect(controller.cancelNowPaymentsWithdrawal('withdrawal-1')).rejects.toThrow(
       'Only a withdrawal that is PROCESSING with the payment provider can be cancelled',
@@ -1501,10 +1513,13 @@ describe('WalletController.listActivity', () => {
   it('returns every ledger entry type when no category is given', async () => {
     const { prisma, controller } = setup();
 
-    await controller.listActivity({ user: { sub: 'user-1' } } as never, {
-      page: 1,
-      pageSize: 10,
-    } as never);
+    await controller.listActivity(
+      { user: { sub: 'user-1' } } as never,
+      {
+        page: 1,
+        pageSize: 10,
+      } as never,
+    );
 
     expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { walletId: 'wallet-1' } }),
@@ -1514,11 +1529,14 @@ describe('WalletController.listActivity', () => {
   it('filters to LIFETIME_CREDIT_ENTRY_TYPES for category=earned', async () => {
     const { prisma, controller } = setup();
 
-    await controller.listActivity({ user: { sub: 'user-1' } } as never, {
-      page: 1,
-      pageSize: 10,
-      category: 'earned',
-    } as never);
+    await controller.listActivity(
+      { user: { sub: 'user-1' } } as never,
+      {
+        page: 1,
+        pageSize: 10,
+        category: 'earned',
+      } as never,
+    );
 
     expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1535,11 +1553,14 @@ describe('WalletController.listActivity', () => {
   it('filters to EXTERNAL_TOPUP_ENTRY_TYPES for category=other-credits', async () => {
     const { prisma, controller } = setup();
 
-    await controller.listActivity({ user: { sub: 'user-1' } } as never, {
-      page: 1,
-      pageSize: 10,
-      category: 'other-credits',
-    } as never);
+    await controller.listActivity(
+      { user: { sub: 'user-1' } } as never,
+      {
+        page: 1,
+        pageSize: 10,
+        category: 'other-credits',
+      } as never,
+    );
 
     expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1570,7 +1591,10 @@ describe('WalletController.getEarningsChart', () => {
       {} as never,
     );
 
-    await controller.getEarningsChart({ user: { sub: 'user-1' } } as never, { range: 'week' } as never);
+    await controller.getEarningsChart(
+      { user: { sub: 'user-1' } } as never,
+      { range: 'week' } as never,
+    );
 
     expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1789,10 +1813,13 @@ describe('WalletController.emailTrainerReport', () => {
   it('forwards an explicit from/to range as Dates', async () => {
     const { controller, trainerReport } = setup();
 
-    await controller.emailTrainerReport({ user: { sub: 'trainer-1' } } as never, {
-      from: '2026-08-01T00:00:00Z',
-      to: '2026-08-07T00:00:00Z',
-    } as never);
+    await controller.emailTrainerReport(
+      { user: { sub: 'trainer-1' } } as never,
+      {
+        from: '2026-08-01T00:00:00Z',
+        to: '2026-08-07T00:00:00Z',
+      } as never,
+    );
 
     expect(trainerReport.buildReport).toHaveBeenCalledWith(
       'trainer-1',
@@ -1988,10 +2015,15 @@ describe('WalletController.sendProofAccountReport', () => {
 
 describe('WalletController.getMyProofAccountReport', () => {
   function setup(overrides: { share?: Record<string, unknown> | null } = {}) {
-    const share = 'share' in overrides ? overrides.share : { userId: 'trainer-1', lastSentAt: new Date('2026-09-12T00:00:00Z') };
+    const share =
+      'share' in overrides
+        ? overrides.share
+        : { userId: 'trainer-1', lastSentAt: new Date('2026-09-12T00:00:00Z') };
     const prisma = { proofReportShare: { findUnique: jest.fn().mockResolvedValue(share) } };
     const trainerReport = {
-      buildProofAccountReport: jest.fn().mockResolvedValue({ summary: { totalTokensSinceJoin: '1' } }),
+      buildProofAccountReport: jest
+        .fn()
+        .mockResolvedValue({ summary: { totalTokensSinceJoin: '1' } }),
     };
     const controller = new WalletController(
       prisma as never,
@@ -2012,7 +2044,9 @@ describe('WalletController.getMyProofAccountReport', () => {
   it('returns the report once a share row exists', async () => {
     const { controller, trainerReport } = setup();
 
-    const result = await controller.getMyProofAccountReport({ user: { sub: 'trainer-1' } } as never);
+    const result = await controller.getMyProofAccountReport({
+      user: { sub: 'trainer-1' },
+    } as never);
 
     expect(trainerReport.buildProofAccountReport).toHaveBeenCalledWith('trainer-1');
     expect(result).toEqual({
@@ -2039,7 +2073,12 @@ describe('WalletController.getMyProofAccountReportPdf', () => {
       user: {
         findUniqueOrThrow: jest
           .fn()
-          .mockResolvedValue({ id: 'trainer-1', email: 'trainer@example.com', firstName: 'Ada', lastName: null }),
+          .mockResolvedValue({
+            id: 'trainer-1',
+            email: 'trainer@example.com',
+            firstName: 'Ada',
+            lastName: null,
+          }),
       },
     };
     const trainerReport = {
@@ -2071,7 +2110,10 @@ describe('WalletController.getMyProofAccountReportPdf', () => {
     const { controller } = setup();
     const res = { setHeader: jest.fn(), send: jest.fn() };
 
-    await controller.getMyProofAccountReportPdf({ user: { sub: 'trainer-1' } } as never, res as never);
+    await controller.getMyProofAccountReportPdf(
+      { user: { sub: 'trainer-1' } } as never,
+      res as never,
+    );
 
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
     expect(res.send).toHaveBeenCalledWith(expect.any(Buffer));
@@ -2644,9 +2686,7 @@ describe('WalletController.listReferralInvitations', () => {
     } as never);
 
     expect(result.page).toBe(1); // ceil(2/5) = 1 total page
-    expect(prisma.user.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ take: 1 * 5 }),
-    );
+    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 1 * 5 }));
   });
 
   it('clamps the merge-fetch depth at MAX_MERGE_DEPTH_PAGES regardless of how many pages exist', async () => {
@@ -2661,9 +2701,7 @@ describe('WalletController.listReferralInvitations', () => {
     // pages deep (see MAX_MERGE_DEPTH_PAGES in wallet.controller.ts) --
     // requested page 500 clamps down to page 20, not all the way to 2000.
     expect(result.page).toBe(20);
-    expect(prisma.user.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ take: 20 * 5 }),
-    );
+    expect(prisma.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 20 * 5 }));
   });
 });
 
@@ -2729,7 +2767,9 @@ describe('WalletController.listWithdrawalsForAdmin', () => {
                 user: { email: { contains: 'hayleyesusgetu109@gmail.com', mode: 'insensitive' } },
               },
             },
-            { destinationAddress: { contains: 'hayleyesusgetu109@gmail.com', mode: 'insensitive' } },
+            {
+              destinationAddress: { contains: 'hayleyesusgetu109@gmail.com', mode: 'insensitive' },
+            },
           ],
         }),
       }),
@@ -2756,7 +2796,11 @@ describe('WalletController.getTrainerDashboard', () => {
       wallet: {
         findUnique: jest
           .fn()
-          .mockResolvedValue({ id: 'wallet-1', balance: { toString: () => '15.0097', toNumber: () => 15.0097 }, lockedBalance: { toString: () => '1.8', toNumber: () => 1.8 } }),
+          .mockResolvedValue({
+            id: 'wallet-1',
+            balance: { toString: () => '15.0097', toNumber: () => 15.0097 },
+            lockedBalance: { toString: () => '1.8', toNumber: () => 1.8 },
+          }),
       },
       referralSettings: {
         upsert: jest.fn().mockResolvedValue({

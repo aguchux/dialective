@@ -116,7 +116,14 @@ export class GeoController {
     // Every figure is still computed regardless of visibility -- these flags
     // only tell the landing page which cards to render, they're not a
     // shortcut to skip the underlying aggregate reads.
-    return { countryCount, dialectCount, totalTrainers, totalRecordings, totalPayoutUsd, visibility };
+    return {
+      countryCount,
+      dialectCount,
+      totalTrainers,
+      totalRecordings,
+      totalPayoutUsd,
+      visibility,
+    };
   }
 
   /**
@@ -237,7 +244,10 @@ export class GeoController {
         where: { id },
         data: {
           exchangeRateSource: 'LIVE',
-          ...(liveRate !== null && { usdExchangeRate: liveRate, exchangeRateUpdatedAt: new Date() }),
+          ...(liveRate !== null && {
+            usdExchangeRate: liveRate,
+            exchangeRateUpdatedAt: new Date(),
+          }),
         },
       });
     } catch (err) {

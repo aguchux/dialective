@@ -52,8 +52,8 @@ export default function AdminSettlementPage() {
           <h1 className="text-3xl font-black">Unsettled Tasks</h1>
           <p className="mt-2 text-muted">
             Scored word recordings that have not yet been paid out. The automated settlement job
-            clears these on its own schedule -- use this page to force-settle a row it
-            hasn&apos;t reached yet, or one that keeps failing.
+            clears these on its own schedule -- use this page to force-settle a row it hasn&apos;t
+            reached yet, or one that keeps failing.
           </p>
         </div>
 

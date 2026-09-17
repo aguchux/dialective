@@ -52,7 +52,7 @@ Returns a `challengeId` for the Web SDK to execute. Error code 155106 means user
 const response = await circleClient.createUserPinWithWallets({
   userToken,
   blockchains: [Blockchain.ArcTestnet],
-  accountType: "SCA",
+  accountType: 'SCA',
 });
 // response.data: { challengeId }
 ```
@@ -79,14 +79,15 @@ const response = await circleClient.getWalletTokenBalance({
 Unlike email/social auth, PIN does not require a login callback -- the SDK is initialized without one.
 
 The frontend implements four button handlers mapping to the User Flow steps:
+
 1. `handleCreateUser` -- Create user in Circle's system
 2. `handleGetUserToken` -- Get session token
 3. `handleInitializeUser` -- Initialize user (get challenge)
 4. `handleCreateWallet` -- Create wallet (execute challenge with PIN setup)
 
 ```tsx
-import { useState, useEffect, useRef } from "react";
-import { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
+import { useState, useEffect, useRef } from 'react';
+import { W3SSdk } from '@circle-fin/w3s-pw-web-sdk';
 
 interface UserCredentials {
   userToken: string;
@@ -95,17 +96,17 @@ interface UserCredentials {
 
 export default function PinWallet({
   circleAppId,
-  apiBaseUrl = "",
+  apiBaseUrl = '',
 }: {
   circleAppId: string;
   apiBaseUrl?: string;
 }) {
   const sdkRef = useRef<W3SSdk | null>(null);
   const [sdkReady, setSdkReady] = useState(false);
-  const [userId, setUserId] = useState("");
+  const [userId, setUserId] = useState('');
   const [credentials, setCredentials] = useState<UserCredentials | null>(null);
   const [challengeId, setChallengeId] = useState<string | null>(null);
-  const [status, setStatus] = useState("Ready");
+  const [status, setStatus] = useState('Ready');
 
   // Initialize SDK on mount (no callback needed for PIN auth)
   useEffect(() => {
@@ -114,21 +115,21 @@ export default function PinWallet({
         const sdk = new W3SSdk({ appSettings: { appId: circleAppId } });
         sdkRef.current = sdk;
 
-        const storedDeviceId = localStorage.getItem("deviceId");
+        const storedDeviceId = localStorage.getItem('deviceId');
         if (!storedDeviceId) {
           const id = await sdk.getDeviceId();
-          localStorage.setItem("deviceId", id);
+          localStorage.setItem('deviceId', id);
         }
 
-        const storedUserToken = localStorage.getItem("userToken");
-        const storedEncryptionKey = localStorage.getItem("encryptionKey");
+        const storedUserToken = localStorage.getItem('userToken');
+        const storedEncryptionKey = localStorage.getItem('encryptionKey');
         if (storedUserToken && storedEncryptionKey) {
           setCredentials({ userToken: storedUserToken, encryptionKey: storedEncryptionKey });
         }
 
         setSdkReady(true);
       } catch {
-        setStatus("Failed to initialize Web SDK");
+        setStatus('Failed to initialize Web SDK');
       }
     };
 
@@ -143,19 +144,19 @@ export default function PinWallet({
     setChallengeId(null);
 
     const response = await fetch(`${apiBaseUrl}/api/wallet/create-user`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId }),
     });
     const data = await response.json();
 
     // Error code 155106 means user already exists -- proceed to get token
     if (data.code === 155106) {
-      setStatus("User already exists. Get user token to continue.");
+      setStatus('User already exists. Get user token to continue.');
       return;
     }
 
-    setStatus("User created. Get user token to continue.");
+    setStatus('User created. Get user token to continue.');
   };
 
   // Step 2: Get User Token
@@ -163,15 +164,15 @@ export default function PinWallet({
     if (!userId) return;
 
     const response = await fetch(`${apiBaseUrl}/api/wallet/get-token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId }),
     });
     const data = await response.json();
 
     setCredentials({ userToken: data.userToken, encryptionKey: data.encryptionKey });
-    localStorage.setItem("userToken", data.userToken);
-    localStorage.setItem("encryptionKey", data.encryptionKey);
+    localStorage.setItem('userToken', data.userToken);
+    localStorage.setItem('encryptionKey', data.encryptionKey);
   };
 
   // Step 3: Initialize User (get challenge)
@@ -179,8 +180,8 @@ export default function PinWallet({
     if (!credentials?.userToken) return;
 
     const response = await fetch(`${apiBaseUrl}/api/wallet/initialize`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userToken: credentials.userToken }),
     });
     const data = await response.json();
@@ -205,10 +206,10 @@ export default function PinWallet({
 
     sdk.execute(challengeId, (error, result) => {
       if (error) {
-        setStatus("Failed: " + ((error as Error).message || "Unknown error"));
+        setStatus('Failed: ' + ((error as Error).message || 'Unknown error'));
         return;
       }
-      console.log("Challenge result:", result);
+      console.log('Challenge result:', result);
       setChallengeId(null);
       // Wait for Circle to index, then call listUserWallets to fetch the new wallet
     });
@@ -220,11 +221,11 @@ export default function PinWallet({
 
 ## Error Handling
 
-| Error Code | Meaning | Action |
-|------------|---------|--------|
-| 155106 | User already initialized | Fetch existing wallets instead of creating |
-| 155104 | Invalid user token | Token expired -- call `createUserToken` again |
-| 155101 | User not found | User needs to be created first |
+| Error Code | Meaning                  | Action                                        |
+| ---------- | ------------------------ | --------------------------------------------- |
+| 155106     | User already initialized | Fetch existing wallets instead of creating    |
+| 155104     | Invalid user token       | Token expired -- call `createUserToken` again |
+| 155101     | User not found           | User needs to be created first                |
 
 ## Reference Links
 

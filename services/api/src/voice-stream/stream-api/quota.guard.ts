@@ -1,4 +1,10 @@
-import { CanActivate, ExecutionContext, HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  HttpException,
+  HttpStatus,
+  Injectable,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsageCounterService } from './usage-counter.service';
 import { AuthenticatedStreamKeyRequest } from './stream-key-auth.guard';

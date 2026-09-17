@@ -133,7 +133,11 @@ function CreateDeckDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-40 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-40 grid place-items-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+    >
       <form
         className={`${cardClass} grid w-full max-w-sm gap-3 p-5`}
         onSubmit={(e) => void handleSubmit(e)}
@@ -160,9 +164,7 @@ function CreateDeckDialog({ onClose }: { onClose: () => void }) {
             required
             value={dialectId}
           >
-            <option value="">
-              {isLoadingDialects ? 'Loading…' : 'Select a dialect'}
-            </option>
+            <option value="">{isLoadingDialects ? 'Loading…' : 'Select a dialect'}</option>
             {myDialects?.map((d) => (
               <option key={d.dialectId} value={d.dialectId}>
                 {d.dialectName} ({d.countryName})

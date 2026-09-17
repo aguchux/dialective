@@ -15,7 +15,8 @@ import {
 } from '@/components/ui/DropdownMenu';
 import { roleHomePath } from '@/lib/role-home';
 
-const COMMUNITY_URL = process.env.NEXT_PUBLIC_COMMUNITY_URL ?? 'https://community.dialectlibrary.com';
+const COMMUNITY_URL =
+  process.env.NEXT_PUBLIC_COMMUNITY_URL ?? 'https://community.dialectlibrary.com';
 
 const menuLinks = [
   { href: '/about', label: 'About Us' },

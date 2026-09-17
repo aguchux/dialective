@@ -32,7 +32,8 @@ const STATUS_LABELS: Record<WhatsAppValidationRequestStatus, string> = {
 
 function statusBadgeClass(status: WhatsAppValidationRequestStatus): string {
   if (status === 'VERIFIED') return 'bg-success/10 text-success';
-  if (status === 'EXPIRED' || status === 'REJECTED' || status === 'CANCELLED') return 'bg-danger/10 text-danger';
+  if (status === 'EXPIRED' || status === 'REJECTED' || status === 'CANCELLED')
+    return 'bg-danger/10 text-danger';
   return 'bg-accent-soft text-accent';
 }
 
@@ -84,7 +85,8 @@ export function WhatsAppValidator() {
 const PENDING_PAGE_SIZE = 20;
 
 function ValidateTab() {
-  const { data: myClaims = [], isFetching: loadingClaims } = useListMyWhatsAppValidationClaimsQuery();
+  const { data: myClaims = [], isFetching: loadingClaims } =
+    useListMyWhatsAppValidationClaimsQuery();
   const [page, setPage] = useState(1);
   const {
     data: pendingPage,
@@ -103,7 +105,9 @@ function ValidateTab() {
     try {
       await claimRequest(id).unwrap();
     } catch (err) {
-      setError(normalizeErrorMessage(err, 'Someone else may have just claimed this one -- try another.'));
+      setError(
+        normalizeErrorMessage(err, 'Someone else may have just claimed this one -- try another.'),
+      );
       refetchPending();
     } finally {
       setClaimingId(null);
@@ -126,9 +130,13 @@ function ValidateTab() {
         </div>
       )}
 
-      {!loadingPending && !loadingClaims && pending.length === 0 && myClaims.length === 0 && page === 1 && (
-        <EmptyPanel icon={MessageCircle} title="No requests waiting right now" unframed />
-      )}
+      {!loadingPending &&
+        !loadingClaims &&
+        pending.length === 0 &&
+        myClaims.length === 0 &&
+        page === 1 && (
+          <EmptyPanel icon={MessageCircle} title="No requests waiting right now" unframed />
+        )}
 
       {pending.length > 0 && (
         <div className="grid gap-3">
@@ -143,7 +151,11 @@ function ValidateTab() {
                 </span>
                 <div className="min-w-0">
                   <p className="truncate font-black">
-                    {formatContact(request.requesterFirstName, request.requesterLastName, request.phoneNumber)}
+                    {formatContact(
+                      request.requesterFirstName,
+                      request.requesterLastName,
+                      request.phoneNumber,
+                    )}
                   </p>
                   <p className="text-xs font-bold text-muted">
                     Earn {request.feeTokenAmount} DL &middot; requested{' '}
@@ -245,8 +257,8 @@ function ClaimedRequestCard({ claim }: { claim: WhatsAppValidationClaim }) {
             />
           </p>
           <p className="text-xs font-bold text-muted">
-            Tap the name above to message this member on WhatsApp and ask for their code, then
-            enter it below. Confirm their name matches before you verify.
+            Tap the name above to message this member on WhatsApp and ask for their code, then enter
+            it below. Confirm their name matches before you verify.
           </p>
         </div>
       </div>
@@ -256,7 +268,10 @@ function ClaimedRequestCard({ claim }: { claim: WhatsAppValidationClaim }) {
         </p>
       )}
       <p className="text-sm font-extrabold">You'll earn {claim.feeTokenAmount} DL on success</p>
-      <label className="grid gap-1.5 text-sm font-bold" htmlFor={`whatsapp-validate-code-${claim.id}`}>
+      <label
+        className="grid gap-1.5 text-sm font-bold"
+        htmlFor={`whatsapp-validate-code-${claim.id}`}
+      >
         Code from the member
         <input
           className="min-h-11 rounded-lg border border-line bg-white px-3 text-center text-lg font-black uppercase tracking-[0.3em] dark:bg-surface-muted"
@@ -295,7 +310,8 @@ function ClaimedRequestCard({ claim }: { claim: WhatsAppValidationClaim }) {
 function GetVerifiedTab() {
   const { data: myRequest, isLoading } = useGetMyWhatsAppValidationRequestQuery();
   const [requestVerification, { isLoading: requesting }] = useRequestWhatsAppValidationMutation();
-  const [regenerateCode, { isLoading: regenerating }] = useRegenerateWhatsAppValidationCodeMutation();
+  const [regenerateCode, { isLoading: regenerating }] =
+    useRegenerateWhatsAppValidationCodeMutation();
   const [releaseClaim, { isLoading: releasing }] = useReleaseWhatsAppValidationClaimMutation();
   const [cancelRequest, { isLoading: cancelling }] = useCancelWhatsAppValidationRequestMutation();
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -344,7 +360,9 @@ function GetVerifiedTab() {
   }
 
   const activeRequest =
-    myRequest && (myRequest.status === 'PENDING' || myRequest.status === 'CLAIMED') ? myRequest : null;
+    myRequest && (myRequest.status === 'PENDING' || myRequest.status === 'CLAIMED')
+      ? myRequest
+      : null;
 
   if (isLoading) {
     return <div className={`${cardClass} h-40 animate-pulse`} />;
@@ -368,7 +386,9 @@ function GetVerifiedTab() {
         <div className={`${cardClass} grid gap-3 p-5`}>
           <div className="flex items-center justify-between gap-3">
             <p className="font-black">{activeRequest.phoneNumber}</p>
-            <p className={`rounded-full px-2.5 py-1 text-xs font-black ${statusBadgeClass(activeRequest.status)}`}>
+            <p
+              className={`rounded-full px-2.5 py-1 text-xs font-black ${statusBadgeClass(activeRequest.status)}`}
+            >
               {STATUS_LABELS[activeRequest.status]}
             </p>
           </div>
@@ -398,8 +418,8 @@ function GetVerifiedTab() {
           )}
           {activeRequest.status === 'PENDING' && (
             <p className="text-sm text-muted">
-              Your request is in the queue. A subscribed member will claim it and reach out to you on
-              WhatsApp for your code.
+              Your request is in the queue. A subscribed member will claim it and reach out to you
+              on WhatsApp for your code.
             </p>
           )}
           {activeRequest.status === 'CLAIMED' && (

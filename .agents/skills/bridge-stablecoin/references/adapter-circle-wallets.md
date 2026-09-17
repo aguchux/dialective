@@ -24,9 +24,9 @@ SOLANA_WALLET_ADDRESS=    # Developer-controlled Solana wallet address
 ## Using App Kit
 
 ```ts
-import { AppKit } from "@circle-fin/app-kit";
-import { createCircleWalletsAdapter } from "@circle-fin/adapter-circle-wallets";
-import { inspect } from "util";
+import { AppKit } from '@circle-fin/app-kit';
+import { createCircleWalletsAdapter } from '@circle-fin/adapter-circle-wallets';
+import { inspect } from 'util';
 
 const kit = new AppKit();
 
@@ -36,10 +36,10 @@ const bridgeUSDC = async (): Promise<void> => {
   const evmWalletAddress = process.env.EVM_WALLET_ADDRESS;
   const solanaWalletAddress = process.env.SOLANA_WALLET_ADDRESS;
   if (!apiKey || !entitySecret) {
-    throw new Error("CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET env vars must be set");
+    throw new Error('CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET env vars must be set');
   }
   if (!evmWalletAddress || !solanaWalletAddress) {
-    throw new Error("EVM_WALLET_ADDRESS and SOLANA_WALLET_ADDRESS env vars must be set");
+    throw new Error('EVM_WALLET_ADDRESS and SOLANA_WALLET_ADDRESS env vars must be set');
   }
 
   try {
@@ -51,20 +51,20 @@ const bridgeUSDC = async (): Promise<void> => {
     const result = await kit.bridge({
       from: {
         adapter,
-        chain: "Arc_Testnet",
+        chain: 'Arc_Testnet',
         address: evmWalletAddress,
       },
       to: {
         adapter,
-        chain: "Solana_Devnet",
+        chain: 'Solana_Devnet',
         address: solanaWalletAddress,
       },
-      amount: "1.00",
+      amount: '1.00',
     });
 
-    console.log("RESULT", inspect(result, false, null, true));
+    console.log('RESULT', inspect(result, false, null, true));
   } catch (err) {
-    console.error("ERROR", err instanceof Error ? err.message : "Unknown error");
+    console.error('ERROR', err instanceof Error ? err.message : 'Unknown error');
   }
 };
 
@@ -74,9 +74,9 @@ void bridgeUSDC();
 ## Using Bridge Kit
 
 ```ts
-import { BridgeKit } from "@circle-fin/bridge-kit";
-import { createCircleWalletsAdapter } from "@circle-fin/adapter-circle-wallets";
-import { inspect } from "util";
+import { BridgeKit } from '@circle-fin/bridge-kit';
+import { createCircleWalletsAdapter } from '@circle-fin/adapter-circle-wallets';
+import { inspect } from 'util';
 
 const kit = new BridgeKit();
 
@@ -86,10 +86,10 @@ const bridgeUSDC = async (): Promise<void> => {
   const evmWalletAddress = process.env.EVM_WALLET_ADDRESS;
   const solanaWalletAddress = process.env.SOLANA_WALLET_ADDRESS;
   if (!apiKey || !entitySecret) {
-    throw new Error("CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET env vars must be set");
+    throw new Error('CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET env vars must be set');
   }
   if (!evmWalletAddress || !solanaWalletAddress) {
-    throw new Error("EVM_WALLET_ADDRESS and SOLANA_WALLET_ADDRESS env vars must be set");
+    throw new Error('EVM_WALLET_ADDRESS and SOLANA_WALLET_ADDRESS env vars must be set');
   }
 
   try {
@@ -101,20 +101,20 @@ const bridgeUSDC = async (): Promise<void> => {
     const result = await kit.bridge({
       from: {
         adapter,
-        chain: "Arc_Testnet",
+        chain: 'Arc_Testnet',
         address: evmWalletAddress,
       },
       to: {
         adapter,
-        chain: "Solana_Devnet",
+        chain: 'Solana_Devnet',
         address: solanaWalletAddress,
       },
-      amount: "1.00",
+      amount: '1.00',
     });
 
-    console.log("RESULT", inspect(result, false, null, true));
+    console.log('RESULT', inspect(result, false, null, true));
   } catch (err) {
-    console.error("ERROR", err instanceof Error ? err.message : "Unknown error");
+    console.error('ERROR', err instanceof Error ? err.message : 'Unknown error');
   }
 };
 

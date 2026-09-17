@@ -65,9 +65,9 @@ describe('StreamManifestService.getEligibleItemMetadata', () => {
     prisma.subscription.findUnique.mockResolvedValue({ plan: { minIsvcConfidence: 'VERY_HIGH' } });
     catalogue.getEligibleRecording.mockResolvedValue(null);
 
-    await expect(
-      service.getEligibleItemMetadata(orgWideKey, 'deck-1', 'rec-1'),
-    ).rejects.toThrow(NotFoundException);
+    await expect(service.getEligibleItemMetadata(orgWideKey, 'deck-1', 'rec-1')).rejects.toThrow(
+      NotFoundException,
+    );
   });
 });
 
@@ -180,7 +180,11 @@ describe('StreamManifestService.getManifest', () => {
 
   it('404s on an unknown version', async () => {
     const { service, prisma } = setup();
-    prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1', deckKey: 'X' });
+    prisma.streamDeck.findUnique.mockResolvedValue({
+      id: 'deck-1',
+      organizationId: 'org-1',
+      deckKey: 'X',
+    });
     prisma.streamDeckVersion.findUnique.mockResolvedValue(null);
 
     await expect(service.getManifest(orgWideKey, 'deck-1', 99)).rejects.toThrow(NotFoundException);
@@ -190,7 +194,11 @@ describe('StreamManifestService.getManifest', () => {
 describe('StreamManifestService.getChanges', () => {
   it('returns correct added/removed/updated counts across a version gap', async () => {
     const { service, prisma } = setup();
-    prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1', deckKey: 'X' });
+    prisma.streamDeck.findUnique.mockResolvedValue({
+      id: 'deck-1',
+      organizationId: 'org-1',
+      deckKey: 'X',
+    });
     prisma.streamDeckCurrentVersion.findUnique.mockResolvedValue({ version: { version: 3 } });
     prisma.streamDeckVersion.findUnique.mockImplementation(
       ({ where: { deckId_version } }: { where: { deckId_version: { version: number } } }) => {
@@ -198,16 +206,48 @@ describe('StreamManifestService.getChanges', () => {
           return Promise.resolve({
             version: 1,
             items: [
-              { recordingId: 'rec-kept', durationMs: 1000, dialectTag: 'ig', subdialectTag: null, dlCanonicalScore: '80.00', isvs: null, isvcVersion: null },
-              { recordingId: 'rec-removed', durationMs: 1000, dialectTag: 'ig', subdialectTag: null, dlCanonicalScore: '80.00', isvs: null, isvcVersion: null },
+              {
+                recordingId: 'rec-kept',
+                durationMs: 1000,
+                dialectTag: 'ig',
+                subdialectTag: null,
+                dlCanonicalScore: '80.00',
+                isvs: null,
+                isvcVersion: null,
+              },
+              {
+                recordingId: 'rec-removed',
+                durationMs: 1000,
+                dialectTag: 'ig',
+                subdialectTag: null,
+                dlCanonicalScore: '80.00',
+                isvs: null,
+                isvcVersion: null,
+              },
             ],
           });
         }
         return Promise.resolve({
           version: 3,
           items: [
-            { recordingId: 'rec-kept', durationMs: 1000, dialectTag: 'ig', subdialectTag: null, dlCanonicalScore: '95.00', isvs: null, isvcVersion: null },
-            { recordingId: 'rec-added', durationMs: 1000, dialectTag: 'ig', subdialectTag: null, dlCanonicalScore: '80.00', isvs: null, isvcVersion: null },
+            {
+              recordingId: 'rec-kept',
+              durationMs: 1000,
+              dialectTag: 'ig',
+              subdialectTag: null,
+              dlCanonicalScore: '95.00',
+              isvs: null,
+              isvcVersion: null,
+            },
+            {
+              recordingId: 'rec-added',
+              durationMs: 1000,
+              dialectTag: 'ig',
+              subdialectTag: null,
+              dlCanonicalScore: '80.00',
+              isvs: null,
+              isvcVersion: null,
+            },
           ],
         });
       },
@@ -220,7 +260,11 @@ describe('StreamManifestService.getChanges', () => {
 
   it('404s when afterVersion is not older than the current version', async () => {
     const { service, prisma } = setup();
-    prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1', deckKey: 'X' });
+    prisma.streamDeck.findUnique.mockResolvedValue({
+      id: 'deck-1',
+      organizationId: 'org-1',
+      deckKey: 'X',
+    });
     prisma.streamDeckCurrentVersion.findUnique.mockResolvedValue({ version: { version: 3 } });
 
     await expect(service.getChanges(orgWideKey, 'deck-1', 3)).rejects.toThrow(NotFoundException);
@@ -233,8 +277,8 @@ describe('StreamManifestService.getEligibleItemMetadata', () => {
     prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1' });
     prisma.streamDeckItem.findUnique.mockResolvedValue(null);
 
-    await expect(
-      service.getEligibleItemMetadata(orgWideKey, 'deck-1', 'rec-1'),
-    ).rejects.toThrow(NotFoundException);
+    await expect(service.getEligibleItemMetadata(orgWideKey, 'deck-1', 'rec-1')).rejects.toThrow(
+      NotFoundException,
+    );
   });
 });

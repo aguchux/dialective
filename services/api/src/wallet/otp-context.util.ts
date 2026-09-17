@@ -64,8 +64,18 @@ export function payoutAccountSetupContextHash(
   input:
     | { type: 'BANK'; bankCode: string; accountNumber: string; freeEntry: false }
     | { type: 'BANK'; bankName: string; accountNumber: string; freeEntry: true }
-    | { type: 'MOBILE_MONEY'; mobileMoneyNetwork: string; mobileMoneyNumber: string; freeEntry: boolean }
-    | { type: 'STABLECOIN_WALLET'; walletAddress: string; stablecoinAsset: string; stablecoinNetwork: string },
+    | {
+        type: 'MOBILE_MONEY';
+        mobileMoneyNetwork: string;
+        mobileMoneyNumber: string;
+        freeEntry: boolean;
+      }
+    | {
+        type: 'STABLECOIN_WALLET';
+        walletAddress: string;
+        stablecoinAsset: string;
+        stablecoinNetwork: string;
+      },
 ): string {
   const { type } = input;
   if (type === 'BANK') {

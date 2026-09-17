@@ -5,6 +5,7 @@ Use these TypeScript snippets to deploy a contract from compiled ABI + bytecode.
 ## Compile your Solidity contract
 
 Compile in Remix (or your own build tool), then copy:
+
 - ABI JSON
 - Raw bytecode (prefix with `0x` before deployment)
 
@@ -15,22 +16,22 @@ const abiJson = [
   // Paste full ABI JSON here
 ];
 
-const bytecode = "0xPASTE_COMPILED_BYTECODE_HERE";
+const bytecode = '0xPASTE_COMPILED_BYTECODE_HERE';
 
 const deployRes = await scpClient.deployContract({
-  name: "MyContract",
-  description: "Contract description",
-  blockchain: "ARC-TESTNET",
+  name: 'MyContract',
+  description: 'Contract description',
+  blockchain: 'ARC-TESTNET',
   walletId,
   abiJson: JSON.stringify(abiJson),
   bytecode,
   constructorParameters: [
     walletAddress,
-    "0x3600000000000000000000000000000000000000", // Arc Testnet USDC
+    '0x3600000000000000000000000000000000000000', // Arc Testnet USDC
   ],
   fee: {
-    type: "level",
-    config: { feeLevel: "MEDIUM" },
+    type: 'level',
+    config: { feeLevel: 'MEDIUM' },
   },
 });
 

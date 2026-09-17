@@ -129,7 +129,12 @@ export default function AdminCommunityTagsPage() {
               value={newName}
             />
           </label>
-          <ActionButton className={primaryButtonClass} pending={isCreating} pendingLabel="Adding" type="submit">
+          <ActionButton
+            className={primaryButtonClass}
+            pending={isCreating}
+            pendingLabel="Adding"
+            type="submit"
+          >
             Add topic
           </ActionButton>
         </form>

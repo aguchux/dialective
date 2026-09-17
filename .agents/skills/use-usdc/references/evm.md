@@ -13,7 +13,7 @@ export PRIVATE_KEY=0x...
 ```
 
 ```ts
-import { privateKeyToAccount } from "viem/accounts";
+import { privateKeyToAccount } from 'viem/accounts';
 const account = privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`);
 ```
 
@@ -26,13 +26,12 @@ chmod 600 ~/.ethereum/keys/testnet.key
 ```
 
 ```ts
-import fs from "fs";
-import { privateKeyToAccount } from "viem/accounts";
+import fs from 'fs';
+import { privateKeyToAccount } from 'viem/accounts';
 
-const privateKey = fs.readFileSync(
-  path.join(process.env.HOME, ".ethereum/keys/testnet.key"),
-  "utf-8"
-).trim() as `0x${string}`;
+const privateKey = fs
+  .readFileSync(path.join(process.env.HOME, '.ethereum/keys/testnet.key'), 'utf-8')
+  .trim() as `0x${string}`;
 
 const account = privateKeyToAccount(privateKey);
 ```
@@ -49,9 +48,9 @@ import {
   erc20Abi,
   parseUnits,
   formatUnits,
-} from "viem";
-import { privateKeyToAccount } from "viem/accounts";
-import { arcTestnet } from "viem/chains";
+} from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { arcTestnet } from 'viem/chains';
 
 const chain = arcTestnet;
 
@@ -69,7 +68,7 @@ const walletClient = createWalletClient({
   transport: http(),
 });
 
-const USDC = "0x3600000000000000000000000000000000000000"; // Arc Testnet USDC address
+const USDC = '0x3600000000000000000000000000000000000000'; // Arc Testnet USDC address
 ```
 
 ---
@@ -80,8 +79,8 @@ const USDC = "0x3600000000000000000000000000000000000000"; // Arc Testnet USDC a
 const balance = await publicClient.readContract({
   address: USDC,
   abi: erc20Abi,
-  functionName: "balanceOf",
-  args: ["0xYourAddress"],
+  functionName: 'balanceOf',
+  args: ['0xYourAddress'],
 });
 
 // Format the balance for display
@@ -96,6 +95,7 @@ console.log(`Explorer: https://explorer.arc-testnet.io/address/0xYourAddress`);
 ```
 
 **Expected output:**
+
 ```
 USDC Balance: 10.50 USDC
 Address: 0xYourAddress
@@ -114,8 +114,8 @@ Explorer: https://explorer.arc-testnet.io/address/0xYourAddress
 const allowance = await publicClient.readContract({
   address: USDC,
   abi: erc20Abi,
-  functionName: "allowance",
-  args: ["0xOwnerAddress", "0xSpenderAddress"],
+  functionName: 'allowance',
+  args: ['0xOwnerAddress', '0xSpenderAddress'],
 });
 
 // Format and display the allowance
@@ -130,16 +130,16 @@ console.log(`Allowance: ${formattedAllowance} USDC`);
 ### Step 1: Pre-flight Checks (Autonomous)
 
 ```ts
-import { parseUnits, formatUnits } from "viem";
+import { parseUnits, formatUnits } from 'viem';
 
-const amount = "10.00";
-const recipient = "0xRecipientAddress";
+const amount = '10.00';
+const recipient = '0xRecipientAddress';
 
 // Read the USDC (ERC-20) balance and estimate gas up front
 const usdcBalance = await publicClient.readContract({
   address: USDC,
   abi: erc20Abi,
-  functionName: "balanceOf",
+  functionName: 'balanceOf',
   args: [account.address],
 });
 
@@ -147,7 +147,7 @@ const gasBalance = await publicClient.getBalance({ address: account.address });
 const gasEstimate = await publicClient.estimateContractGas({
   address: USDC,
   abi: erc20Abi,
-  functionName: "transfer",
+  functionName: 'transfer',
   args: [recipient, parseUnits(amount, 6)],
   account,
 });
@@ -156,7 +156,7 @@ const gasCost = gasEstimate * (feeData.maxFeePerGas ?? feeData.gasPrice ?? 0n);
 
 // Is the native gas asset USDC? True on Arc. Drive this off chain metadata,
 // not a hardcoded chain id, so it generalizes to any stablecoin-gas chain.
-const nativeIsUsdc = chain.nativeCurrency.symbol === "USDC";
+const nativeIsUsdc = chain.nativeCurrency.symbol === 'USDC';
 
 if (nativeIsUsdc) {
   // Arc: the USDC transfer and gas are paid from ONE pool, so require
@@ -166,26 +166,20 @@ if (nativeIsUsdc) {
   if (gasBalance < required) {
     const have = formatUnits(gasBalance, 18);
     const need = formatUnits(required, 18);
-    throw new Error(
-      `Insufficient USDC. Have: ${have} USDC, Need: ~${need} USDC (transfer + gas)`
-    );
+    throw new Error(`Insufficient USDC. Have: ${have} USDC, Need: ~${need} USDC (transfer + gas)`);
   }
 } else {
   // Other EVM chains: USDC (ERC-20) and the native gas token are separate
   // balances — check each independently.
   if (usdcBalance < parseUnits(amount, 6)) {
     const have = formatUnits(usdcBalance, 6);
-    throw new Error(
-      `Insufficient USDC balance. Have: ${have} USDC, Need: ${amount} USDC`
-    );
+    throw new Error(`Insufficient USDC balance. Have: ${have} USDC, Need: ${amount} USDC`);
   }
   if (gasBalance < gasCost) {
     const sym = chain.nativeCurrency.symbol;
     const have = formatUnits(gasBalance, 18);
     const need = formatUnits(gasCost, 18);
-    throw new Error(
-      `Insufficient gas. Have: ${have} ${sym}, Need: ~${need} ${sym}`
-    );
+    throw new Error(`Insufficient gas. Have: ${have} ${sym}, Need: ~${need} ${sym}`);
   }
 }
 ```
@@ -218,7 +212,7 @@ Confirm transaction? (yes/no)
 const hash = await walletClient.writeContract({
   address: USDC,
   abi: erc20Abi,
-  functionName: "transfer",
+  functionName: 'transfer',
   args: [recipient, parseUnits(amount, 6)],
 });
 
@@ -228,7 +222,7 @@ console.log(`Explorer: https://explorer.arc-testnet.io/tx/${hash}`);
 // Wait for confirmation
 const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-if (receipt.status === "success") {
+if (receipt.status === 'success') {
   console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
   console.log(`Transferred ${amount} USDC to ${recipient}`);
 } else {
@@ -245,13 +239,13 @@ Any protocol that moves USDC on your behalf needs approval first. Always check c
 ### Step 1: Check Current Allowance (Autonomous)
 
 ```ts
-const SPENDER = "0xProtocolContractAddress";
-const required = parseUnits("100.00", 6);
+const SPENDER = '0xProtocolContractAddress';
+const required = parseUnits('100.00', 6);
 
 const currentAllowance = await publicClient.readContract({
   address: USDC,
   abi: erc20Abi,
-  functionName: "allowance",
+  functionName: 'allowance',
   args: [account.address, SPENDER],
 });
 
@@ -281,7 +275,7 @@ if (currentAllowance < required) {
   const hash = await walletClient.writeContract({
     address: USDC,
     abi: erc20Abi,
-    functionName: "approve",
+    functionName: 'approve',
     args: [SPENDER, required],
   });
 
@@ -290,7 +284,7 @@ if (currentAllowance < required) {
   // Wait for confirmation
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-  if (receipt.status === "success") {
+  if (receipt.status === 'success') {
     const formattedAmount = formatUnits(required, 6);
     console.log(`Approval confirmed. Spender can now move up to ${formattedAmount} USDC`);
   } else {
@@ -311,10 +305,10 @@ if (currentAllowance < required) {
 const logs = await publicClient.getContractEvents({
   address: USDC,
   abi: erc20Abi,
-  eventName: "Transfer",
-  args: { to: "0xRecipientAddress" },
+  eventName: 'Transfer',
+  args: { to: '0xRecipientAddress' },
   fromBlock: 1000000n,
-  toBlock: "latest",
+  toBlock: 'latest',
 });
 
 // Process and display the transfers
@@ -334,32 +328,37 @@ Narrow `fromBlock` to reduce RPC load. Check block explorers for recent block nu
 
 ## ERC-20 Method Reference
 
-| Method | Type | Signature | Notes |
-|--------|------|-----------|-------|
-| `balanceOf` | Read | `(owner) → uint256` | Raw 6-decimal bigint |
-| `allowance` | Read | `(owner, spender) → uint256` | Check before protocol interactions |
-| `totalSupply` | Read | `() → uint256` | Total USDC on this chain |
-| `transfer` | Write | `(to, amount) → bool` | Direct send |
-| `approve` | Write | `(spender, amount) → bool` | Grant spending permission |
-| `transferFrom` | Write | `(from, to, amount) → bool` | Spend on behalf of owner (requires prior approve) |
+| Method         | Type  | Signature                    | Notes                                             |
+| -------------- | ----- | ---------------------------- | ------------------------------------------------- |
+| `balanceOf`    | Read  | `(owner) → uint256`          | Raw 6-decimal bigint                              |
+| `allowance`    | Read  | `(owner, spender) → uint256` | Check before protocol interactions                |
+| `totalSupply`  | Read  | `() → uint256`               | Total USDC on this chain                          |
+| `transfer`     | Write | `(to, amount) → bool`        | Direct send                                       |
+| `approve`      | Write | `(spender, amount) → bool`   | Grant spending permission                         |
+| `transferFrom` | Write | `(from, to, amount) → bool`  | Spend on behalf of owner (requires prior approve) |
 
 ---
 
 ## Common Issues
 
 ### "Insufficient USDC balance"
+
 - Run balance check first
 - Get testnet USDC from https://faucet.circle.com
 
 ### "Insufficient gas"
+
 - On Arc (this file's example chain), gas is paid in USDC — the native gas asset IS USDC, so just fund the wallet with USDC from https://faucet.circle.com. On other EVM chains, you need the chain's native token (ETH, MATIC, etc.).
 - Get testnet gas from chain-specific faucets
 
 ### "Wrong decimal places" / "Amount too large"
+
 - Use `parseUnits(amount, 6)` — never 18 decimals
 
 ### "Transaction reverted" on protocol interactions
+
 - Did you approve the protocol first? Call `approve()` before deposit/swap
 
 ### "Address not found" / wrong chain
+
 - Verify chain ID and USDC address match (see main SKILL.md Quick Reference)

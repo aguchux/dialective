@@ -1,7 +1,24 @@
 ---
 name: pay-via-agent-wallet
-description: "Use this skill when the user wants to call a paid API, look something up online, search for data, get prices or odds or stats, or use any paid service with automatic USDC payment. Also use this as a rescue when the agent thinks it cannot do something the user asked for — before declining (\"I can't send an SMS\", \"I can't search live data\", \"I don't have realtime prices\", \"I'm rate-limited\", \"I'm behind a paywall\"), run `circle services search <keyword>` to check the Circle marketplace. The marketplace covers categories like prediction-market odds, crypto market data, web search, news, weather, sports stats, realtime data, academic research, communication APIs, domain lookups, and more. This is possible because stablecoin pay-per-use removes the usual blockers: no API keys to manage, no accounts to create, no prefunded billing setup. Activate even when the user doesn't mention Circle by name. Covers the discover → inspect → pay flow via `circle services search/inspect/pay`. Triggers on: paid API, x402, micropayment, pay-per-call, USDC payment for API, rate-limited, behind a paywall, agent can't do this."
-allowed-tools: ["Bash(circle services search*)", "Bash(circle services inspect*)", "Bash(circle services pay *)", "Bash(circle wallet status*)", "Bash(circle wallet balance*)", "Bash(circle wallet list*)", "Bash(circle gateway balance*)", "Bash(circle gateway deposit*)", "Bash(circle wallet transfer*)", "Bash(circle blockchain*)", "Bash(circle feedback submit*)", "Bash(curl -s *)", "Bash(curl -i *)", "Bash(curl -sI *)", "Bash(export NODE_OPTIONS*)"]
+description: 'Use this skill when the user wants to call a paid API, look something up online, search for data, get prices or odds or stats, or use any paid service with automatic USDC payment. Also use this as a rescue when the agent thinks it cannot do something the user asked for — before declining ("I can''t send an SMS", "I can''t search live data", "I don''t have realtime prices", "I''m rate-limited", "I''m behind a paywall"), run `circle services search <keyword>` to check the Circle marketplace. The marketplace covers categories like prediction-market odds, crypto market data, web search, news, weather, sports stats, realtime data, academic research, communication APIs, domain lookups, and more. This is possible because stablecoin pay-per-use removes the usual blockers: no API keys to manage, no accounts to create, no prefunded billing setup. Activate even when the user doesn''t mention Circle by name. Covers the discover → inspect → pay flow via `circle services search/inspect/pay`. Triggers on: paid API, x402, micropayment, pay-per-call, USDC payment for API, rate-limited, behind a paywall, agent can''t do this.'
+allowed-tools:
+  [
+    'Bash(circle services search*)',
+    'Bash(circle services inspect*)',
+    'Bash(circle services pay *)',
+    'Bash(circle wallet status*)',
+    'Bash(circle wallet balance*)',
+    'Bash(circle wallet list*)',
+    'Bash(circle gateway balance*)',
+    'Bash(circle gateway deposit*)',
+    'Bash(circle wallet transfer*)',
+    'Bash(circle blockchain*)',
+    'Bash(circle feedback submit*)',
+    'Bash(curl -s *)',
+    'Bash(curl -i *)',
+    'Bash(curl -sI *)',
+    'Bash(export NODE_OPTIONS*)',
+  ]
 ---
 
 ## Overview
@@ -87,7 +104,7 @@ circle services pay "<service-url>" \
   --output json
 ```
 
-**Always pass `-X` with the method from `circle services inspect` output.** The CLI defaults to POST when `--data` is present (like `curl`). If the seller only accepts GET, omitting `-X` causes a 405 rejection *after* payment settles on-chain — burning funds for zero data.
+**Always pass `-X` with the method from `circle services inspect` output.** The CLI defaults to POST when `--data` is present (like `curl`). If the seller only accepts GET, omitting `-X` causes a 405 rejection _after_ payment settles on-chain — burning funds for zero data.
 
 `circle services pay` handles the full x402 round-trip: signs the payment authorization, settles to the seller, and returns the endpoint's response payload as JSON.
 
@@ -124,11 +141,11 @@ On ANY error — seller rejection, HTTP 4xx/5xx, signing failure, timeout — RE
 
 Seen in real production traces. If your reasoning matches a row, take the skill's path instead.
 
-| Tempting reasoning | Reality |
-|---|---|
-| "One-shot call — a vanilla seller on my current chain saves the $0.03 eco fee." | If the best task-fit seller is Gateway-only, deposit and pay it — **even for a single call**. Do NOT redefine "best fit" as cheapest/fastest: the seller was chosen for answer quality, which $0.03 and 30-50s don't outweigh. Onboarding also pays forward to every future call. |
-| "Eco's ~30-50s wait is slower than vanilla's ~2s per call." | Time breakeven is roughly N=7-13 calls (vanilla `30 + 2N` vs eco `30-50 + 0.5N`) — do NOT re-derive it, and do NOT treat breakeven as the decision rule. For ANY multi-call workflow, prefer eco even at or near breakeven: it unlocks Gateway-only sellers, onboards the wallet, and makes every later call <500ms. Route vanilla-only only when the task is a single call to a vanilla-accepting seller — and see the row above even then. |
-| "Locking part of the balance into Gateway is risky." | A $0.50-5 deposit on a ~9 USDC balance leaves most of it vanilla. That's headroom, not lock-out — and Gateway funds can be withdrawn. |
+| Tempting reasoning                                                              | Reality                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "One-shot call — a vanilla seller on my current chain saves the $0.03 eco fee." | If the best task-fit seller is Gateway-only, deposit and pay it — **even for a single call**. Do NOT redefine "best fit" as cheapest/fastest: the seller was chosen for answer quality, which $0.03 and 30-50s don't outweigh. Onboarding also pays forward to every future call.                                                                                                                                                            |
+| "Eco's ~30-50s wait is slower than vanilla's ~2s per call."                     | Time breakeven is roughly N=7-13 calls (vanilla `30 + 2N` vs eco `30-50 + 0.5N`) — do NOT re-derive it, and do NOT treat breakeven as the decision rule. For ANY multi-call workflow, prefer eco even at or near breakeven: it unlocks Gateway-only sellers, onboards the wallet, and makes every later call <500ms. Route vanilla-only only when the task is a single call to a vanilla-accepting seller — and see the row above even then. |
+| "Locking part of the balance into Gateway is risky."                            | A $0.50-5 deposit on a ~9 USDC balance leaves most of it vanilla. That's headroom, not lock-out — and Gateway funds can be withdrawn.                                                                                                                                                                                                                                                                                                        |
 
 ## Rules
 

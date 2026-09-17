@@ -43,7 +43,12 @@ export class GoogleAnalyticsService {
     // parsing as JSON. Without this, a not-yet-replaced placeholder crashes
     // every 6-hour run forever (JSON.parse("changeme") throws) instead of
     // the intended graceful skip below.
-    if (!propertyId || !credentialsJson || propertyId === 'changeme' || credentialsJson === 'changeme') {
+    if (
+      !propertyId ||
+      !credentialsJson ||
+      propertyId === 'changeme' ||
+      credentialsJson === 'changeme'
+    ) {
       this.logger.log(
         'GOOGLE_ANALYTICS_PROPERTY_ID/GOOGLE_ANALYTICS_SERVICE_ACCOUNT_JSON not set -- skipping (not yet configured)',
       );

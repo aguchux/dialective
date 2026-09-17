@@ -76,7 +76,7 @@ sdk.setAuthentication({ userToken, encryptionKey });
 
 sdk.execute(challengeId, (error, result) => {
   if (error) {
-    console.error("Signing failed:", error);
+    console.error('Signing failed:', error);
     return;
   }
   // result contains the signature

@@ -4,7 +4,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { PortalContainerProvider } from '@/components/ui/PortalContainer';
-import { DashboardHeader, emailName, MobileNavigation } from '@/components/dashboard/DashboardShell';
+import {
+  DashboardHeader,
+  emailName,
+  MobileNavigation,
+} from '@/components/dashboard/DashboardShell';
 import { MarketActivity } from '@/components/p2p/MarketActivity';
 
 export default function MarketActivityPage() {

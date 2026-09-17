@@ -98,7 +98,9 @@ export default function AcceptInvitePage() {
           <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-catalogue-ink sm:text-[32px]">
             Join your team
           </h1>
-          <p className="mt-2 text-[15px] text-catalogue-muted">Set a password to accept your invite</p>
+          <p className="mt-2 text-[15px] text-catalogue-muted">
+            Set a password to accept your invite
+          </p>
         </div>
         <Suspense
           fallback={

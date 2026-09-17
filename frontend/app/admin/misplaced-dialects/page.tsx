@@ -88,7 +88,11 @@ export default function MisplacedDialectsPage() {
     if (!reassigning || !targetDialectTag) return;
     setError(null);
     try {
-      await resolve({ id: reassigning.id, action: 'REASSIGN', dialectTag: targetDialectTag }).unwrap();
+      await resolve({
+        id: reassigning.id,
+        action: 'REASSIGN',
+        dialectTag: targetDialectTag,
+      }).unwrap();
       setReassigning(null);
       setTargetDialectTag('');
     } catch (err) {
@@ -104,13 +108,16 @@ export default function MisplacedDialectsPage() {
         <div className="grid gap-2">
           <h1 className="text-3xl font-black">Misplaced Dialects</h1>
           <p className="leading-relaxed text-muted">
-            Recordings flagged as the wrong dialect by multiple trainers during Dialect
-            Validation. Listen, then delete it or reassign it to the correct dialect.
+            Recordings flagged as the wrong dialect by multiple trainers during Dialect Validation.
+            Listen, then delete it or reassign it to the correct dialect.
           </p>
         </div>
 
         {error && (
-          <p className="rounded-lg border border-danger/30 bg-[#fde8e8] px-4 py-3 text-sm font-bold text-danger" role="alert">
+          <p
+            className="rounded-lg border border-danger/30 bg-[#fde8e8] px-4 py-3 text-sm font-bold text-danger"
+            role="alert"
+          >
             {error}
           </p>
         )}

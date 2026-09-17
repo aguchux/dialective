@@ -62,9 +62,9 @@ export function AnalyticsSettingsPanel() {
         <h2 className="text-2xl leading-snug">Analytics &amp; Metrics</h2>
         <p className="leading-relaxed text-muted">
           Google Analytics (gtag.js) only loads for a visitor once they&rsquo;ve acknowledged the
-          cookie consent banner, and only once this toggle is on and a Measurement ID is set below --
-          a half-configured toggle never ships a broken tag to visitors, and nobody is tracked before
-          consenting.
+          cookie consent banner, and only once this toggle is on and a Measurement ID is set below
+          -- a half-configured toggle never ships a broken tag to visitors, and nobody is tracked
+          before consenting.
         </p>
       </div>
 
@@ -196,8 +196,8 @@ function LiveActivityPanel() {
 
       {!isLoading && data && !data.configured && (
         <p className="rounded-lg border border-line bg-surface-muted px-3 py-3 text-sm leading-relaxed text-muted">
-          Live activity needs the same GA4 credentials as the traffic report below (GA4 Property
-          ID + service account JSON) -- neither is set on the API yet.
+          Live activity needs the same GA4 credentials as the traffic report below (GA4 Property ID
+          + service account JSON) -- neither is set on the API yet.
         </p>
       )}
 
@@ -288,8 +288,12 @@ const analyticsReportApi = dialectivaApi.injectEndpoints({
     getAnalyticsSummary: builder.query<AnalyticsSummary, { days: number }>({
       query: ({ days }) => `/admin/analytics/summary?days=${days}`,
     }),
-    getAnalyticsBreakdown: builder.query<AnalyticsBreakdownRow[], { dimension: string; days: number }>({
-      query: ({ dimension, days }) => `/admin/analytics/breakdown?dimension=${dimension}&days=${days}`,
+    getAnalyticsBreakdown: builder.query<
+      AnalyticsBreakdownRow[],
+      { dimension: string; days: number }
+    >({
+      query: ({ dimension, days }) =>
+        `/admin/analytics/breakdown?dimension=${dimension}&days=${days}`,
     }),
   }),
 });
@@ -348,9 +352,8 @@ function AnalyticsReportPanel() {
 
       {!summaryLoading && summary && !summary.configured && (
         <p className="rounded-lg border border-line bg-surface-muted px-3 py-3 text-sm leading-relaxed text-muted">
-          No data ingested yet. The scheduled ingestion job
-          (google-analytics-job) needs a GCP service account and GA4
-          Property ID configured before it can pull traffic data -- this
+          No data ingested yet. The scheduled ingestion job (google-analytics-job) needs a GCP
+          service account and GA4 Property ID configured before it can pull traffic data -- this
           report will populate automatically once that job has run.
         </p>
       )}

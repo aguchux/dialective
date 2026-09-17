@@ -1,4 +1,12 @@
-import { ArrayNotEmpty, IsArray, IsDateString, IsEnum, IsIP, IsOptional, IsString } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsDateString,
+  IsEnum,
+  IsIP,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { StreamKeyScope } from '@dialectiva/db';
 
 export class CreateStreamKeyDto {

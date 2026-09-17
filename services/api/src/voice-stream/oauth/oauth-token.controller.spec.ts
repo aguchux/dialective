@@ -24,7 +24,11 @@ describe('OAuthTokenController.issueToken', () => {
     prisma.oAuthClient.findUnique.mockResolvedValue(null);
 
     await expect(
-      controller.issueToken({ grant_type: 'client_credentials', client_id: 'dlm2m_nope', client_secret: 'x' }),
+      controller.issueToken({
+        grant_type: 'client_credentials',
+        client_id: 'dlm2m_nope',
+        client_secret: 'x',
+      }),
     ).rejects.toThrow(UnauthorizedException);
   });
 

@@ -1,5 +1,12 @@
 import { Type } from 'class-transformer';
-import { ArrayNotEmpty, IsArray, IsBoolean, IsOptional, IsString, ValidateIf } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsBoolean,
+  IsOptional,
+  IsString,
+  ValidateIf,
+} from 'class-validator';
 
 /**
  * Two mutually exclusive modes, same as the admin sentences list's own

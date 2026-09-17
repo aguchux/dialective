@@ -26,22 +26,168 @@ const MIN_COMPOSITION_TOKENS = 3;
 // source vocabulary. This prevents a provider from inserting dialect words
 // into the English prompt/Word bank when it ignores the composition prompt.
 const ENGLISH_FUNCTION_WORDS = new Set([
-  'a', 'an', 'the', 'and', 'or', 'but', 'if', 'then', 'than', 'that', 'this', 'these', 'those',
-  'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them',
-  'my', 'your', 'his', 'its', 'our', 'their', 'mine', 'yours', 'ours', 'theirs',
-  'am', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'do', 'does', 'did',
-  'have', 'has', 'had', 'will', 'would', 'shall', 'should', 'can', 'could', 'may', 'might',
-  'must', 'not', 'no', 'yes', 'to', 'of', 'in', 'on', 'at', 'by', 'for', 'from', 'with',
-  'without', 'into', 'onto', 'over', 'under', 'before', 'after', 'between', 'through',
-  'during', 'about', 'as', 'like', 'near', 'around', 'up', 'down', 'out', 'off', 'away',
-  'here', 'there', 'where', 'when', 'why', 'how', 'who', 'what', 'which', 'while',
-  'very', 'more', 'most', 'less', 'least', 'all', 'any', 'some', 'many', 'much', 'each',
-  'every', 'both', 'either', 'neither', 'one', 'two', 'three', 'again', 'also', 'just',
-  'now', 'today', 'tomorrow', 'yesterday', 'please', 'not', 'never', 'always', 'often',
-  'can\'t', 'cannot', 'don\'t', 'doesn\'t', 'didn\'t', 'isn\'t', 'aren\'t', 'wasn\'t',
-  'weren\'t', 'won\'t', 'wouldn\'t', 'shouldn\'t', 'couldn\'t', 'i\'m', 'you\'re',
-  'we\'re', 'they\'re', 'it\'s', 'that\'s', 'there\'s', 'i\'ve', 'you\'ve', 'we\'ve',
-  'they\'ve', 'i\'ll', 'you\'ll', 'we\'ll', 'they\'ll', 'i\'d', 'you\'d', 'we\'d', 'they\'d',
+  'a',
+  'an',
+  'the',
+  'and',
+  'or',
+  'but',
+  'if',
+  'then',
+  'than',
+  'that',
+  'this',
+  'these',
+  'those',
+  'i',
+  'you',
+  'he',
+  'she',
+  'it',
+  'we',
+  'they',
+  'me',
+  'him',
+  'her',
+  'us',
+  'them',
+  'my',
+  'your',
+  'his',
+  'its',
+  'our',
+  'their',
+  'mine',
+  'yours',
+  'ours',
+  'theirs',
+  'am',
+  'is',
+  'are',
+  'was',
+  'were',
+  'be',
+  'been',
+  'being',
+  'do',
+  'does',
+  'did',
+  'have',
+  'has',
+  'had',
+  'will',
+  'would',
+  'shall',
+  'should',
+  'can',
+  'could',
+  'may',
+  'might',
+  'must',
+  'not',
+  'no',
+  'yes',
+  'to',
+  'of',
+  'in',
+  'on',
+  'at',
+  'by',
+  'for',
+  'from',
+  'with',
+  'without',
+  'into',
+  'onto',
+  'over',
+  'under',
+  'before',
+  'after',
+  'between',
+  'through',
+  'during',
+  'about',
+  'as',
+  'like',
+  'near',
+  'around',
+  'up',
+  'down',
+  'out',
+  'off',
+  'away',
+  'here',
+  'there',
+  'where',
+  'when',
+  'why',
+  'how',
+  'who',
+  'what',
+  'which',
+  'while',
+  'very',
+  'more',
+  'most',
+  'less',
+  'least',
+  'all',
+  'any',
+  'some',
+  'many',
+  'much',
+  'each',
+  'every',
+  'both',
+  'either',
+  'neither',
+  'one',
+  'two',
+  'three',
+  'again',
+  'also',
+  'just',
+  'now',
+  'today',
+  'tomorrow',
+  'yesterday',
+  'please',
+  'not',
+  'never',
+  'always',
+  'often',
+  "can't",
+  'cannot',
+  "don't",
+  "doesn't",
+  "didn't",
+  "isn't",
+  "aren't",
+  "wasn't",
+  "weren't",
+  "won't",
+  "wouldn't",
+  "shouldn't",
+  "couldn't",
+  "i'm",
+  "you're",
+  "we're",
+  "they're",
+  "it's",
+  "that's",
+  "there's",
+  "i've",
+  "you've",
+  "we've",
+  "they've",
+  "i'll",
+  "you'll",
+  "we'll",
+  "they'll",
+  "i'd",
+  "you'd",
+  "we'd",
+  "they'd",
 ]);
 
 /**
@@ -99,7 +245,10 @@ export class WordGeneratorService {
       this.getGeneratedSentenceCount(),
     ]);
     const remainingWordHeadroom = Math.max(0, maxWordGeneratedItems - generatedWordCount);
-    const remainingSentenceHeadroom = Math.max(0, maxSentenceGeneratedItems - generatedSentenceCount);
+    const remainingSentenceHeadroom = Math.max(
+      0,
+      maxSentenceGeneratedItems - generatedSentenceCount,
+    );
     const wordCapReached = remainingWordHeadroom <= 0;
     const sentenceCapReached = remainingSentenceHeadroom <= 0;
     if (wordCapReached) {
@@ -207,14 +356,19 @@ export class WordGeneratorService {
     }
 
     if (!settings.sentenceGenerationEnabled) {
-      this.logger.log('Sentence generation disabled (sentenceGenerationEnabled=false); skipping sentence branch');
+      this.logger.log(
+        'Sentence generation disabled (sentenceGenerationEnabled=false); skipping sentence branch',
+      );
     } else if (sentenceCapReached) {
       // Logged above (`Sentence generation skipped: cap reached`) -- nothing
       // further to log here, just skip the branch.
     } else {
       try {
         const { items, provider: sentenceProvider } = await this.chain.generate(
-          this.buildSentenceGenerationPrompt(effectiveSentenceItemsPerRun, settings.sentenceWordCount),
+          this.buildSentenceGenerationPrompt(
+            effectiveSentenceItemsPerRun,
+            settings.sentenceWordCount,
+          ),
           providerOrder,
         );
         const accepted = items
@@ -228,13 +382,22 @@ export class WordGeneratorService {
         );
         for (const sentenceRow of result.insertedRows) {
           for (const dialectTag of dialectTags) {
-            if ((await this.translateAndLinkSentence(sentenceRow.id, sentenceRow.text, dialectTag, providerOrder)) === 'failed') {
+            if (
+              (await this.translateAndLinkSentence(
+                sentenceRow.id,
+                sentenceRow.text,
+                dialectTag,
+                providerOrder,
+              )) === 'failed'
+            ) {
               translationFailures += 1;
             }
           }
         }
       } catch (err) {
-        this.logger.warn(`Sentence generation failed: ${err instanceof Error ? err.message : String(err)}`);
+        this.logger.warn(
+          `Sentence generation failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
     }
 
@@ -244,7 +407,6 @@ export class WordGeneratorService {
         `translationFailures=${translationFailures} ` +
         `backfilled=${backfilled} backfillSkippedDuplicate=${backfillSkippedDuplicate} backfillFailures=${backfillFailures}`,
     );
-
   }
 
   /**
@@ -366,7 +528,11 @@ export class WordGeneratorService {
     if (!text || isFlaggedContent(text)) return false;
     if (!/^[A-Za-z][A-Za-z' ,.?!-]*[.?!]$/.test(text)) return false;
     const tokens = text.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g) ?? [];
-    if (tokens.length < 2 || tokens.length > wordCount || tokens.some((token) => token.length > 15)) {
+    if (
+      tokens.length < 2 ||
+      tokens.length > wordCount ||
+      tokens.some((token) => token.length > 15)
+    ) {
       return false;
     }
     return true;
@@ -380,16 +546,24 @@ export class WordGeneratorService {
     if (items.length === 0) return { inserted: 0, skippedDuplicate: 0, insertedRows: [] };
     const existing = await this.prisma.sentence.findMany({ select: { text: true } });
     const existingSet = new Set(existing.map((row) => row.text.trim().toLowerCase()));
-    const unique = [...new Map(items.map((text) => [text.trim().toLowerCase(), text.trim()])).values()];
+    const unique = [
+      ...new Map(items.map((text) => [text.trim().toLowerCase(), text.trim()])).values(),
+    ];
     const newItems = unique.filter((text) => !existingSet.has(text.toLowerCase()));
     const insertedRows: { id: string; text: string }[] = [];
     for (const text of newItems) {
-      insertedRows.push(await this.prisma.sentence.create({
-        data: { text, wordCount: text.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g)?.length ?? 0 },
-        select: { id: true, text: true },
-      }));
+      insertedRows.push(
+        await this.prisma.sentence.create({
+          data: { text, wordCount: text.match(/[A-Za-z]+(?:'[A-Za-z]+)?/g)?.length ?? 0 },
+          select: { id: true, text: true },
+        }),
+      );
     }
-    return { inserted: insertedRows.length, skippedDuplicate: items.length - insertedRows.length, insertedRows };
+    return {
+      inserted: insertedRows.length,
+      skippedDuplicate: items.length - insertedRows.length,
+      insertedRows,
+    };
   }
 
   /**
@@ -479,10 +653,7 @@ export class WordGeneratorService {
    * translatable statement, but instructions alone aren't reliable enough
    * to trust without a code-level backstop.
    */
-  private isEnglishComposition(
-    text: string,
-    wordSet: { id: string; text: string }[],
-  ): boolean {
+  private isEnglishComposition(text: string, wordSet: { id: string; text: string }[]): boolean {
     if (!/^[A-Za-z\s'.,!?;:-]+$/.test(text)) return false;
     if (!/[.!?]$/.test(text.trim())) return false;
 
@@ -498,9 +669,7 @@ export class WordGeneratorService {
           ENGLISH_FUNCTION_WORDS.has(token) ||
           sourceWords.some((source) => this.isSourceWordVariant(token, source)),
       ) &&
-      sourceWords.every((source) =>
-        tokens.some((token) => this.isSourceWordVariant(token, source)),
-      )
+      sourceWords.every((source) => tokens.some((token) => this.isSourceWordVariant(token, source)))
     );
   }
 
@@ -739,10 +908,12 @@ export class WordGeneratorService {
   ): Promise<{ id: string; text: string; partOfSpeech: string }[][]> {
     if (count <= 0) return [];
 
-    const classified = (await this.prisma.word.findMany({
-      where: { partOfSpeech: { not: null } },
-      select: { id: true, text: true, partOfSpeech: true },
-    })).filter((word) => this.isEnglishWord(word.text));
+    const classified = (
+      await this.prisma.word.findMany({
+        where: { partOfSpeech: { not: null } },
+        select: { id: true, text: true, partOfSpeech: true },
+      })
+    ).filter((word) => this.isEnglishWord(word.text));
     if (classified.length < wordsPerItem) return [];
 
     const nouns = classified.filter((w) => w.partOfSpeech === 'NOUN');
@@ -917,7 +1088,12 @@ export class WordGeneratorService {
     });
 
     for (const word of words) {
-      const outcome = await this.translateAndLinkWord(word.id, word.text, dialectTag, providerOrder);
+      const outcome = await this.translateAndLinkWord(
+        word.id,
+        word.text,
+        dialectTag,
+        providerOrder,
+      );
       if (outcome === 'inserted') backfilled += 1;
       else if (outcome === 'duplicate') skippedDuplicate += 1;
       else failed += 1;

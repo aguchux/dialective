@@ -6,10 +6,18 @@ import { useSession } from 'next-auth/react';
 import { Download, Mail, Printer, RefreshCw } from 'lucide-react';
 import { PortalContainerProvider } from '@/components/ui/PortalContainer';
 import { cardClass } from '@/components/dashboard/shared';
-import { DashboardHeader, emailName, MobileNavigation } from '@/components/dashboard/DashboardShell';
+import {
+  DashboardHeader,
+  emailName,
+  MobileNavigation,
+} from '@/components/dashboard/DashboardShell';
 import { TrainerReportChart } from '@/components/reports/TrainerReportChart';
 import { formatCompactTokens } from '@/lib/format';
-import { normalizeErrorMessage, useEmailTrainerReportMutation, useGetTrainerReportQuery } from '@/store/api';
+import {
+  normalizeErrorMessage,
+  useEmailTrainerReportMutation,
+  useGetTrainerReportQuery,
+} from '@/store/api';
 
 type Preset = 'week' | 'month' | 'lifetime';
 
@@ -34,9 +42,10 @@ export default function TrainerReportsPage() {
   const reportRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
   const [emailTrainerReport, { isLoading: isEmailing }] = useEmailTrainerReportMutation();
-  const [emailNotice, setEmailNotice] = useState<{ kind: 'success' | 'error'; message: string } | null>(
-    null,
-  );
+  const [emailNotice, setEmailNotice] = useState<{
+    kind: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
   const { data, isLoading, isFetching, isError, refetch } = useGetTrainerReportQuery(
     { from: from || undefined, to: to || undefined },
@@ -193,7 +202,10 @@ export default function TrainerReportsPage() {
           )}
 
           <div className="no-print flex flex-wrap items-center gap-3">
-            <div className="inline-flex rounded-lg border border-line bg-surface p-1" role="tablist">
+            <div
+              className="inline-flex rounded-lg border border-line bg-surface p-1"
+              role="tablist"
+            >
               {(
                 [
                   { id: 'lifetime', label: 'Since signup' },
@@ -274,10 +286,16 @@ export default function TrainerReportsPage() {
                 <h3 className="text-sm font-extrabold uppercase tracking-wide text-muted">
                   Recordings &amp; earnings (selected range)
                 </h3>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-3" aria-label="Recordings and earnings summary">
+                <div
+                  className="grid grid-cols-2 gap-3 md:grid-cols-3"
+                  aria-label="Recordings and earnings summary"
+                >
                   <StatCard label="Recordings" value={String(totals.recordings)} />
                   <StatCard label="Scored" value={String(totals.scoredRecordings)} />
-                  <StatCard label="Avg. score" value={totals.avgScore ? `${totals.avgScore}%` : '—'} />
+                  <StatCard
+                    label="Avg. score"
+                    value={totals.avgScore ? `${totals.avgScore}%` : '—'}
+                  />
                   <StatCard
                     label="Training earnings"
                     value={formatCompactTokens(totals.trainingEarningsTokens)}
@@ -297,7 +315,10 @@ export default function TrainerReportsPage() {
                 <h3 className="text-sm font-extrabold uppercase tracking-wide text-muted">
                   Account balance (lifetime)
                 </h3>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-4" aria-label="Account balance summary">
+                <div
+                  className="grid grid-cols-2 gap-3 md:grid-cols-4"
+                  aria-label="Account balance summary"
+                >
                   <StatCard
                     label="Tokens earned"
                     value={formatCompactTokens(totals.totalTokensSinceJoin)}

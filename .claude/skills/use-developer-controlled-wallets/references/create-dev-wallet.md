@@ -6,7 +6,7 @@ Use these TypeScript snippets to create a wallet set, then create wallets in tha
 
 ```ts
 const walletSetResponse = await circleDeveloperSdk.createWalletSet({
-  name: "Entity WalletSet A",
+  name: 'Entity WalletSet A',
 });
 
 const walletSetId = walletSetResponse.data?.walletSet?.id;
@@ -18,10 +18,10 @@ Creates a wallet set and stores `walletSetId` for the next step.
 
 ```ts
 const walletsResponse = await circleDeveloperSdk.createWallets({
-  accountType: "SCA",
-  blockchains: ["MATIC-AMOY"],
+  accountType: 'SCA',
+  blockchains: ['MATIC-AMOY'],
   count: 2,
-  walletSetId: "<wallet-set-id>",
+  walletSetId: '<wallet-set-id>',
 });
 
 const wallets = walletsResponse.data?.wallets ?? [];
@@ -35,10 +35,10 @@ Creates two wallets and captures source/destination wallets for transfer workflo
 
 ```ts
 const solWalletResponse = await circleDeveloperSdk.createWallets({
-  accountType: "EOA",
-  blockchains: ["SOL-DEVNET"],
+  accountType: 'EOA',
+  blockchains: ['SOL-DEVNET'],
   count: 1,
-  walletSetId: "<wallet-set-id>",
+  walletSetId: '<wallet-set-id>',
 });
 ```
 

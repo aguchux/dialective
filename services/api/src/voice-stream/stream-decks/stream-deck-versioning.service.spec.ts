@@ -7,13 +7,19 @@ function setup() {
     streamDeckCurrentVersion: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn() },
     streamDeckVersion: { create: jest.fn() },
     streamDeck: {
-      findUnique: jest.fn().mockResolvedValue({ organizationId: 'org-1', deckKey: 'DLSD-GEN-GEN-GEN-ABCDEF' }),
+      findUnique: jest
+        .fn()
+        .mockResolvedValue({ organizationId: 'org-1', deckKey: 'DLSD-GEN-GEN-GEN-ABCDEF' }),
     },
   };
   prisma.$transaction = jest.fn((cb: (tx: unknown) => unknown) => cb(prisma));
   const catalogue = { getEligibleRecording: jest.fn() };
   const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
-  const service = new StreamDeckVersioningService(prisma as never, catalogue as never, webhookEvents as never);
+  const service = new StreamDeckVersioningService(
+    prisma as never,
+    catalogue as never,
+    webhookEvents as never,
+  );
   return { service, prisma, catalogue, webhookEvents };
 }
 
@@ -76,7 +82,10 @@ describe('StreamDeckVersioningService.writeNewVersionIfMaterial', () => {
 
   it('increments off the existing pointer version when material', async () => {
     const { prisma, catalogue, service } = setup();
-    prisma.streamDeckItem.findMany.mockResolvedValue([{ recordingId: 'rec-1' }, { recordingId: 'rec-2' }]);
+    prisma.streamDeckItem.findMany.mockResolvedValue([
+      { recordingId: 'rec-1' },
+      { recordingId: 'rec-2' },
+    ]);
     catalogue.getEligibleRecording.mockImplementation((id: string) =>
       Promise.resolve({ ...baseRecording, id }),
     );

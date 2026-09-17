@@ -126,10 +126,7 @@ describe('P2PService.createOffer -- multi-account payment methods', () => {
 
   it('writes one P2POfferPaymentMethod row per selected account, and sets the first as primary', async () => {
     const { service, prisma } = setup();
-    prisma.payoutAccount.findMany.mockResolvedValue([
-      makeAccount('acct-1'),
-      makeAccount('acct-2'),
-    ]);
+    prisma.payoutAccount.findMany.mockResolvedValue([makeAccount('acct-1'), makeAccount('acct-2')]);
 
     await service.createOffer('seller-1', {
       ...baseCreateOfferDto,
@@ -192,7 +189,9 @@ describe('P2PService.acceptOffer -- buyer picks the seller account to pay into',
     await service.acceptOffer('buyer-1', 'offer-1', { sellerPaymentMethodId: 'acct-2' } as never);
 
     expect(prisma.p2PTokenTrade.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ sellerPaymentMethodId: 'acct-2' }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ sellerPaymentMethodId: 'acct-2' }),
+      }),
     );
   });
 
@@ -201,7 +200,9 @@ describe('P2PService.acceptOffer -- buyer picks the seller account to pay into',
     prisma.p2PTokenOffer.findUnique.mockResolvedValue(makeOffer());
 
     await expect(
-      service.acceptOffer('buyer-1', 'offer-1', { sellerPaymentMethodId: 'acct-not-listed' } as never),
+      service.acceptOffer('buyer-1', 'offer-1', {
+        sellerPaymentMethodId: 'acct-not-listed',
+      } as never),
     ).rejects.toThrow(BadRequestException);
     expect(prisma.p2PTokenTrade.create).not.toHaveBeenCalled();
   });
@@ -213,7 +214,9 @@ describe('P2PService.acceptOffer -- buyer picks the seller account to pay into',
     await service.acceptOffer('buyer-1', 'offer-1', {} as never);
 
     expect(prisma.p2PTokenTrade.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ sellerPaymentMethodId: 'acct-1' }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({ sellerPaymentMethodId: 'acct-1' }),
+      }),
     );
   });
 });

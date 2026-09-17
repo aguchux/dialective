@@ -2,16 +2,7 @@
 
 import { FormEvent, useMemo, useState } from 'react';
 import { useSession } from 'next-auth/react';
-import {
-  Clock3,
-  Mail,
-  Search,
-  Shield,
-  Trash2,
-  UserPlus,
-  UsersRound,
-  X,
-} from 'lucide-react';
+import { Clock3, Mail, Search, Shield, Trash2, UserPlus, UsersRound, X } from 'lucide-react';
 import {
   useInviteMemberMutation,
   useListMembersQuery,
@@ -57,9 +48,13 @@ const ROLE_BADGE_CLASS: Record<SubscriberOrgRole, string> = {
   AUDITOR: 'bg-catalogue-surface-hover text-catalogue-muted ring-catalogue-line-strong',
 };
 
-const ACTIVITY_LABEL: Record<OrgActivityEvent['eventType'], (m: Record<string, unknown>) => string> = {
+const ACTIVITY_LABEL: Record<
+  OrgActivityEvent['eventType'],
+  (m: Record<string, unknown>) => string
+> = {
   MEMBER_INVITED: (m) => `Invited ${m.email ?? 'a new member'} as ${roleLabel(m.role)}`,
-  MEMBER_ROLE_CHANGED: (m) => `Changed a member's role from ${roleLabel(m.oldRole)} to ${roleLabel(m.newRole)}`,
+  MEMBER_ROLE_CHANGED: (m) =>
+    `Changed a member's role from ${roleLabel(m.oldRole)} to ${roleLabel(m.newRole)}`,
   MEMBER_REMOVED: () => 'Removed a member from the organization',
   KEY_CREATED: () => 'Created a new stream key',
   KEY_ROTATED: () => 'Rotated a stream key',
@@ -98,7 +93,11 @@ function formatRelativeTime(iso: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.round(hours / 24);
   if (days < 30) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 function RoleBadge({ role }: { role: SubscriberOrgRole }) {
@@ -197,7 +196,10 @@ export function TeamView() {
       </div>
 
       {error && (
-        <p className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-2.5 text-sm font-semibold text-danger" role="alert">
+        <p
+          className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-2.5 text-sm font-semibold text-danger"
+          role="alert"
+        >
           {error}
         </p>
       )}
@@ -283,7 +285,9 @@ export function TeamView() {
                             <p className="truncate font-semibold text-catalogue-ink">
                               {member.user.firstName} {member.user.lastName}
                             </p>
-                            <p className="truncate text-xs text-catalogue-dim">{member.user.email}</p>
+                            <p className="truncate text-xs text-catalogue-dim">
+                              {member.user.email}
+                            </p>
                           </div>
                         </div>
                       </td>
@@ -291,7 +295,9 @@ export function TeamView() {
                         {canManage ? (
                           <select
                             className="min-h-8 rounded-md border border-catalogue-line bg-catalogue-bg px-2 text-xs font-semibold text-catalogue-ink focus:border-catalogue-blue focus:outline-none"
-                            onChange={(e) => void handleRoleChange(member.id, e.target.value as SubscriberOrgRole)}
+                            onChange={(e) =>
+                              void handleRoleChange(member.id, e.target.value as SubscriberOrgRole)
+                            }
                             onClick={(e) => e.stopPropagation()}
                             value={member.role}
                           >
@@ -456,13 +462,7 @@ function MemberDetailsPanel({
   );
 }
 
-function ActivityPanel({
-  activity,
-  loading,
-}: {
-  activity?: OrgActivityEvent[];
-  loading: boolean;
-}) {
+function ActivityPanel({ activity, loading }: { activity?: OrgActivityEvent[]; loading: boolean }) {
   return (
     <div className="rounded-lg border border-catalogue-line bg-catalogue-surface p-4">
       <div className="flex items-center gap-2">
@@ -478,13 +478,19 @@ function ActivityPanel({
           activity.slice(0, 8).map((event) => (
             <div className="flex items-start gap-2.5" key={event.id}>
               <span className="grid size-7 shrink-0 place-items-center rounded-full bg-catalogue-surface-hover text-[10px] font-bold text-catalogue-muted">
-                {event.actor ? initials(event.actor.firstName, event.actor.lastName) : <Clock3 aria-hidden="true" className="size-3.5" />}
+                {event.actor ? (
+                  initials(event.actor.firstName, event.actor.lastName)
+                ) : (
+                  <Clock3 aria-hidden="true" className="size-3.5" />
+                )}
               </span>
               <div className="min-w-0">
                 <p className="text-xs leading-snug text-catalogue-ink">
                   {ACTIVITY_LABEL[event.eventType]?.(event.metadata) ?? event.eventType}
                 </p>
-                <p className="mt-0.5 text-[11px] text-catalogue-dim">{formatRelativeTime(event.createdAt)}</p>
+                <p className="mt-0.5 text-[11px] text-catalogue-dim">
+                  {formatRelativeTime(event.createdAt)}
+                </p>
               </div>
             </div>
           ))
@@ -543,7 +549,10 @@ function InviteDialog({
         </div>
         <div className="mt-4 grid gap-3">
           <div>
-            <label className="mb-1 block text-xs font-semibold text-catalogue-muted" htmlFor="invite-email">
+            <label
+              className="mb-1 block text-xs font-semibold text-catalogue-muted"
+              htmlFor="invite-email"
+            >
               Email
             </label>
             <input
@@ -557,7 +566,10 @@ function InviteDialog({
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs font-semibold text-catalogue-muted" htmlFor="invite-role">
+            <label
+              className="mb-1 block text-xs font-semibold text-catalogue-muted"
+              htmlFor="invite-role"
+            >
               Role
             </label>
             <select

@@ -19,7 +19,12 @@ describe('SubscriptionPlansService.upsert', () => {
   it('rejects a blank key', async () => {
     const { service } = setup();
     await expect(
-      service.upsert({ key: '  ', name: 'Starter', stripePriceId: 'price_1', monthlyUsdAmount: 10 }),
+      service.upsert({
+        key: '  ',
+        name: 'Starter',
+        stripePriceId: 'price_1',
+        monthlyUsdAmount: 10,
+      }),
     ).rejects.toThrow('key is required');
   });
 
@@ -40,7 +45,12 @@ describe('SubscriptionPlansService.upsert', () => {
   it('requires a Stripe Price id for a paid plan', async () => {
     const { service } = setup();
     await expect(
-      service.upsert({ key: 'starter', name: 'Starter', stripePriceId: '  ', monthlyUsdAmount: 10 }),
+      service.upsert({
+        key: 'starter',
+        name: 'Starter',
+        stripePriceId: '  ',
+        monthlyUsdAmount: 10,
+      }),
     ).rejects.toThrow('stripePriceId is required for a paid plan');
   });
 
@@ -127,7 +137,10 @@ describe('SubscriptionPlansService.upsert', () => {
   it('stringifies the BigInt monthlyByteQuota in the returned row (JSON.stringify cannot serialize a raw bigint)', async () => {
     const { service, prisma } = setup();
     prisma.subscriptionPlan.findFirst.mockResolvedValue(null);
-    prisma.subscriptionPlan.upsert.mockResolvedValue({ key: 'starter', monthlyByteQuota: BigInt(500_000_000) });
+    prisma.subscriptionPlan.upsert.mockResolvedValue({
+      key: 'starter',
+      monthlyByteQuota: BigInt(500_000_000),
+    });
 
     const result = await service.upsert({
       key: 'starter',
@@ -142,7 +155,7 @@ describe('SubscriptionPlansService.upsert', () => {
 });
 
 describe('SubscriptionPlansService.list', () => {
-  it('stringifies each plan row\'s BigInt monthlyByteQuota', async () => {
+  it("stringifies each plan row's BigInt monthlyByteQuota", async () => {
     const { service, prisma } = setup();
     prisma.subscriptionPlan.findMany.mockResolvedValue([
       { key: 'starter', monthlyByteQuota: null },

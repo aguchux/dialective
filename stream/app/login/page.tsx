@@ -198,7 +198,9 @@ function LoginForm() {
               role="separator"
             >
               <span aria-hidden="true" className="h-px flex-1 bg-catalogue-line" />
-              <span className="shrink-0 text-xs font-medium lowercase text-catalogue-muted">or</span>
+              <span className="shrink-0 text-xs font-medium lowercase text-catalogue-muted">
+                or
+              </span>
               <span aria-hidden="true" className="h-px flex-1 bg-catalogue-line" />
             </div>
 
@@ -238,11 +240,17 @@ function LoginForm() {
       </p>
       <p className="mt-4 text-center text-xs leading-relaxed text-catalogue-muted">
         By signing in, you agree to our{' '}
-        <a className="text-catalogue-blue-bright hover:text-catalogue-ink hover:underline" href="/terms">
+        <a
+          className="text-catalogue-blue-bright hover:text-catalogue-ink hover:underline"
+          href="/terms"
+        >
           Terms of Service
         </a>{' '}
         and{' '}
-        <a className="text-catalogue-blue-bright hover:text-catalogue-ink hover:underline" href="/privacy">
+        <a
+          className="text-catalogue-blue-bright hover:text-catalogue-ink hover:underline"
+          href="/privacy"
+        >
           Privacy Policy
         </a>
         .
@@ -259,7 +267,9 @@ function LoginFormSkeleton() {
           <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-catalogue-ink sm:text-[32px]">
             Welcome back
           </h1>
-          <p className="mt-2 text-[15px] text-catalogue-muted">Sign in to access Dialect Library Stream</p>
+          <p className="mt-2 text-[15px] text-catalogue-muted">
+            Sign in to access Dialect Library Stream
+          </p>
         </div>
         <div aria-hidden="true" className="grid min-w-0 animate-pulse gap-4">
           <div className="h-[46px] rounded-[7px] bg-catalogue-surface-raised" />

@@ -1,7 +1,19 @@
 ---
 name: accept-agent-payments
-description: "Use when a developer wants to monetize an API, endpoint, service, model, dataset, tool, or agent-facing resource with Circle USDC pay-per-call payments, Gateway Nanopayments, x402, HTTP 402, or Agent Marketplace listing. Triggers on: charge agents, sell to agents, paid API, monetize endpoint, micropayments, nanopayments seller, x402 seller, accept USDC, service listing."
-allowed-tools: ["Read", "Glob", "Grep", "Edit", "Write", "Bash(npm view @circle-fin/x402-batching version)", "Bash(curl -s https://developers.circle.com/llms.txt)", "Bash(curl -s https://agents.circle.com/services)", "Bash(circle --version)", "Bash(command -v circle)"]
+description: 'Use when a developer wants to monetize an API, endpoint, service, model, dataset, tool, or agent-facing resource with Circle USDC pay-per-call payments, Gateway Nanopayments, x402, HTTP 402, or Agent Marketplace listing. Triggers on: charge agents, sell to agents, paid API, monetize endpoint, micropayments, nanopayments seller, x402 seller, accept USDC, service listing.'
+allowed-tools:
+  [
+    'Read',
+    'Glob',
+    'Grep',
+    'Edit',
+    'Write',
+    'Bash(npm view @circle-fin/x402-batching version)',
+    'Bash(curl -s https://developers.circle.com/llms.txt)',
+    'Bash(curl -s https://agents.circle.com/services)',
+    'Bash(circle --version)',
+    'Bash(command -v circle)',
+  ]
 ---
 
 # Accept Agent Payments
@@ -28,13 +40,13 @@ Those are generic x402 seller instincts, not this Circle seller path. The defaul
 
 Use Circle Gateway Nanopayments unless the user explicitly needs vanilla x402 compatibility or a non-Gateway facilitator. Generic x402.org examples, FastAPI middleware, Bazaar metadata, and Base-mainnet vanilla `exact` are not Circle's default seller path for agent nanopayments.
 
-| Situation | Path |
-|---|---|
-| Sub-cent, cent-level, high-frequency, or agentic API calls | Gateway Nanopayments |
-| Existing Express or Node API | Add `@circle-fin/x402-batching` middleware |
-| FastAPI, Rails, Go, or other non-Node API | Prefer a thin Express payment proxy for Circle Gateway unless current Circle docs provide a native library |
-| Existing x402 seller stack with its own facilitator | Vanilla x402 may be acceptable |
-| Marketplace distribution | Prepare listing metadata; do not invent a `services publish` CLI command |
+| Situation                                                  | Path                                                                                                       |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Sub-cent, cent-level, high-frequency, or agentic API calls | Gateway Nanopayments                                                                                       |
+| Existing Express or Node API                               | Add `@circle-fin/x402-batching` middleware                                                                 |
+| FastAPI, Rails, Go, or other non-Node API                  | Prefer a thin Express payment proxy for Circle Gateway unless current Circle docs provide a native library |
+| Existing x402 seller stack with its own facilitator        | Vanilla x402 may be acceptable                                                                             |
+| Marketplace distribution                                   | Prepare listing metadata; do not invent a `services publish` CLI command                                   |
 
 ## First Checks
 
@@ -87,8 +99,8 @@ npm install @circle-fin/x402-batching @x402/core @x402/evm viem express
 ```
 
 ```ts
-import express from "express";
-import { createGatewayMiddleware } from "@circle-fin/x402-batching/server";
+import express from 'express';
+import { createGatewayMiddleware } from '@circle-fin/x402-batching/server';
 
 const app = express();
 app.use(express.json());
@@ -97,8 +109,8 @@ const gateway = createGatewayMiddleware({
   sellerAddress: process.env.SELLER_ADDRESS!,
 });
 
-app.post("/summarize", gateway.require("$0.01"), async (req, res) => {
-  res.json({ summary: "paid result" });
+app.post('/summarize', gateway.require('$0.01'), async (req, res) => {
+  res.json({ summary: 'paid result' });
 });
 ```
 
@@ -187,17 +199,17 @@ Prepare:
 
 ## Common Mistakes
 
-| Mistake | Fix |
-|---|---|
-| Building a buyer-wallet tutorial instead of monetizing the seller endpoint | Keep buyer setup to final verification only |
-| Defaulting to vanilla x402 because the user said "x402" | Use Gateway Nanopayments unless they need vanilla compatibility |
-| Hardcoding `BASE`, `MATIC`, Polygon, or Arc from older docs or habits | Verify current docs and use inspect/402 accepted chains |
-| Saying "register/list the service" without a real publish flow | Prepare marketplace submission metadata and use the seller path from current docs |
-| Promising instant marketplace publication | Prepare submission metadata; only use a publish API if docs prove it exists |
-| Writing Python-native crypto verification from scratch | Use the Node middleware/proxy path unless official Python docs exist |
-| Replacing Circle Gateway with generic x402.org FastAPI docs | Only use generic vanilla x402 when the user explicitly chooses the vanilla fallback |
-| Testing only HTTP 200 | Require unpaid 402, inspect output, estimate, and paid 200 |
-| Treating the seller receive address as a buyer agent wallet | Seller needs an EVM receive address; buyer wallet is for testing |
+| Mistake                                                                    | Fix                                                                                 |
+| -------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Building a buyer-wallet tutorial instead of monetizing the seller endpoint | Keep buyer setup to final verification only                                         |
+| Defaulting to vanilla x402 because the user said "x402"                    | Use Gateway Nanopayments unless they need vanilla compatibility                     |
+| Hardcoding `BASE`, `MATIC`, Polygon, or Arc from older docs or habits      | Verify current docs and use inspect/402 accepted chains                             |
+| Saying "register/list the service" without a real publish flow             | Prepare marketplace submission metadata and use the seller path from current docs   |
+| Promising instant marketplace publication                                  | Prepare submission metadata; only use a publish API if docs prove it exists         |
+| Writing Python-native crypto verification from scratch                     | Use the Node middleware/proxy path unless official Python docs exist                |
+| Replacing Circle Gateway with generic x402.org FastAPI docs                | Only use generic vanilla x402 when the user explicitly chooses the vanilla fallback |
+| Testing only HTTP 200                                                      | Require unpaid 402, inspect output, estimate, and paid 200                          |
+| Treating the seller receive address as a buyer agent wallet                | Seller needs an EVM receive address; buyer wallet is for testing                    |
 
 ## Alternatives
 

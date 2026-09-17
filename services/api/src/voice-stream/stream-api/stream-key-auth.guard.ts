@@ -51,7 +51,7 @@ export class StreamKeyAuthGuard implements CanActivate {
       throw new UnauthorizedException('This Stream Key has expired');
     }
     if (key.allowedIps.length > 0 && request.ip && !key.allowedIps.includes(request.ip)) {
-      throw new UnauthorizedException('Request IP is not on this Stream Key\'s allowlist');
+      throw new UnauthorizedException("Request IP is not on this Stream Key's allowlist");
     }
 
     request.streamKey = {

@@ -3,7 +3,13 @@ import request from 'supertest';
 import { PrismaClient } from '@dialectiva/db';
 import { createTestApp, apiPath, closeTestApp } from './support/test-app';
 import { PrismaService } from '../src/prisma/prisma.service';
-import { seedOrg, seedStreamableRecording, cleanupOrgs, cleanupRecordings, SeededOrg } from './support/fixtures';
+import {
+  seedOrg,
+  seedStreamableRecording,
+  cleanupOrgs,
+  cleanupRecordings,
+  SeededOrg,
+} from './support/fixtures';
 
 /**
  * Section 64: "private object-storage tests" + "signed URL exposure tests"
@@ -84,20 +90,23 @@ describe('storage exposure and SQL injection', () => {
     const injectionPayloads = [
       "' OR '1'='1",
       "'; DROP TABLE subscriber_organizations; --",
-      "\" OR \"\"=\"",
+      '" OR ""="',
       "' UNION SELECT NULL--",
     ];
 
-    it.each(injectionPayloads)('countryCode=%j does not error and does not return unfiltered results', async (payload) => {
-      const res = await request(app.getHttpServer())
-        .get(apiPath('voice-stream/catalogue/search'))
-        .query({ countryCode: payload })
-        .set('Authorization', `Bearer ${orgA.subscriberJwt}`);
-      // Must not 500 (would indicate the string broke a query) and must not
-      // behave as a tautology that returns all rows regardless of filter.
-      expect(res.status).toBe(200);
-      expect(Array.isArray(res.body.results ?? res.body.items ?? res.body)).toBe(true);
-    });
+    it.each(injectionPayloads)(
+      'countryCode=%j does not error and does not return unfiltered results',
+      async (payload) => {
+        const res = await request(app.getHttpServer())
+          .get(apiPath('voice-stream/catalogue/search'))
+          .query({ countryCode: payload })
+          .set('Authorization', `Bearer ${orgA.subscriberJwt}`);
+        // Must not 500 (would indicate the string broke a query) and must not
+        // behave as a tautology that returns all rows regardless of filter.
+        expect(res.status).toBe(200);
+        expect(Array.isArray(res.body.results ?? res.body.items ?? res.body)).toBe(true);
+      },
+    );
 
     it('confirms the subscriber_organizations table still exists after a DROP TABLE payload (Prisma parameterizes, no raw SQL sinks exist in this codebase)', async () => {
       await request(app.getHttpServer())

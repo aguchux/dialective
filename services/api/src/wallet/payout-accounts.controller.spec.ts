@@ -28,9 +28,11 @@ function setup(
   const prisma = {
     payoutAccount: {
       findUnique: jest.fn().mockResolvedValue(account),
-      create: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) =>
-        Promise.resolve({ id: ACCOUNT_ID, ...data }),
-      ),
+      create: jest
+        .fn()
+        .mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve({ id: ACCOUNT_ID, ...data }),
+        ),
       delete: jest.fn().mockResolvedValue({ id: ACCOUNT_ID }),
     },
     withdrawalRequest: {
@@ -68,15 +70,14 @@ function setup(
     getOtpChannel: jest.fn().mockResolvedValue('sms'),
     isWhatsappOtpEnabled: jest.fn().mockResolvedValue(false),
     isFlutterwaveV4Enabled: jest.fn().mockResolvedValue(false),
-    isPlatformPayoutEnabled: jest
-      .fn()
-      .mockResolvedValue(overrides.platformPayoutEnabled ?? true),
+    isPlatformPayoutEnabled: jest.fn().mockResolvedValue(overrides.platformPayoutEnabled ?? true),
   };
   const flutterwave = {
     resolveAccount: jest.fn().mockResolvedValue({ accountName: 'Ada Lovelace' }),
-    listBanks: jest
-      .fn()
-      .mockResolvedValue([{ code: '044', name: 'Access Bank' }, { code: '057', name: 'Zenith Bank' }]),
+    listBanks: jest.fn().mockResolvedValue([
+      { code: '044', name: 'Access Bank' },
+      { code: '057', name: 'Zenith Bank' },
+    ]),
   };
   const flutterwaveV4 = { createRecipient: jest.fn() };
   const controller = new PayoutAccountsController(
@@ -128,9 +129,7 @@ describe('PayoutAccountsController.requestDeleteOtp', () => {
   it('rejects issuing an OTP for an account the caller does not own', async () => {
     const { controller } = setup({ account: { id: ACCOUNT_ID, userId: 'someone-else' } });
 
-    await expect(controller.requestDeleteOtp(req, ACCOUNT_ID)).rejects.toThrow(
-      ForbiddenException,
-    );
+    await expect(controller.requestDeleteOtp(req, ACCOUNT_ID)).rejects.toThrow(ForbiddenException);
   });
 
   it('404s issuing an OTP for a nonexistent account', async () => {
@@ -458,7 +457,10 @@ describe('PayoutAccountsController.create (MOBILE_MONEY)', () => {
     });
     expect(prisma.payoutAccount.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        data: expect.objectContaining({ provider: 'flutterwave', verificationStatus: 'UNVERIFIED' }),
+        data: expect.objectContaining({
+          provider: 'flutterwave',
+          verificationStatus: 'UNVERIFIED',
+        }),
       }),
     );
     expect((result as { verificationStatus: string }).verificationStatus).toBe('UNVERIFIED');

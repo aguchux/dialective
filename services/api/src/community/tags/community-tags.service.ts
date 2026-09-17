@@ -70,7 +70,9 @@ export class CommunityTagsService {
       where: { name: { equals: dto.name, mode: 'insensitive' } },
     });
     if (existing) throw new ConflictException('A tag with this name already exists');
-    return this.prisma.communityTag.create({ data: { name: dto.name, slug: slugifyBase(dto.name, 40) } });
+    return this.prisma.communityTag.create({
+      data: { name: dto.name, slug: slugifyBase(dto.name, 40) },
+    });
   }
 
   async renameForAdmin(id: string, name: string) {

@@ -1,13 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  Post,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { SubscriberOrgRole } from '@dialectiva/db';
 import { SubscriberAuthGuard } from '../subscriber-auth/subscriber-auth.guard';
 import { SubscriberRolesGuard } from '../subscriber-auth/subscriber-roles.guard';
@@ -110,7 +101,10 @@ export class StreamDecksController {
   }
 
   @Get(':id/versions')
-  listVersions(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims, @Param('id') id: string) {
+  listVersions(
+    @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,
+    @Param('id') id: string,
+  ) {
     return this.decks.listVersions(subscriber.organizationId, id);
   }
 
@@ -122,7 +116,12 @@ export class StreamDecksController {
     @Param('id') id: string,
     @Body() dto: SetDeckVisibilityDto,
   ) {
-    return this.publicDecks.setVisibility(subscriber.organizationId, id, subscriber.sub, dto.visibility);
+    return this.publicDecks.setVisibility(
+      subscriber.organizationId,
+      id,
+      subscriber.sub,
+      dto.visibility,
+    );
   }
 
   @Post(':id/license')
@@ -139,7 +138,10 @@ export class StreamDecksController {
   @Delete(':id/license')
   @UseGuards(SubscriberRolesGuard)
   @SubscriberRoles(...CAN_MANAGE_DECKS)
-  removeLicense(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims, @Param('id') id: string) {
+  removeLicense(
+    @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,
+    @Param('id') id: string,
+  ) {
     return this.publicDecks.removeLicense(subscriber.organizationId, id);
   }
 }

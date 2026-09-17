@@ -39,9 +39,7 @@ export function useAuthGate() {
     run?.();
   }, []);
 
-  const dialog = (
-    <AuthGateDialog onClose={close} onSuccess={handleSuccess} open={open} />
-  );
+  const dialog = <AuthGateDialog onClose={close} onSuccess={handleSuccess} open={open} />;
 
   return { guard, dialog, isAuthenticated: status === 'authenticated' };
 }

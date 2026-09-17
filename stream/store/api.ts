@@ -37,12 +37,7 @@ export interface BillingUsage {
 }
 
 export type SubscriptionStatus =
-  | 'TRIAL'
-  | 'ACTIVE'
-  | 'PAST_DUE'
-  | 'GRACE_PERIOD'
-  | 'SUSPENDED'
-  | 'CANCELED';
+  'TRIAL' | 'ACTIVE' | 'PAST_DUE' | 'GRACE_PERIOD' | 'SUSPENDED' | 'CANCELED';
 
 export interface Subscription {
   id: string;
@@ -299,12 +294,7 @@ export interface ValidationQueueItem {
 }
 
 export type StreamKeyScope =
-  | 'DECK_READ'
-  | 'DECK_LIST'
-  | 'AUDIO_STREAM'
-  | 'METADATA_READ'
-  | 'MANIFEST_READ'
-  | 'USAGE_READ';
+  'DECK_READ' | 'DECK_LIST' | 'AUDIO_STREAM' | 'METADATA_READ' | 'MANIFEST_READ' | 'USAGE_READ';
 
 export interface StreamApiKeySummary {
   id: string;
@@ -552,7 +542,10 @@ export const streamApi = createApi({
       providesTags: ['Subscription'],
     }),
 
-    createCheckoutSession: builder.mutation<{ checkoutUrl?: string; activated?: true }, { planKey: string }>({
+    createCheckoutSession: builder.mutation<
+      { checkoutUrl?: string; activated?: true },
+      { planKey: string }
+    >({
       query: (body) => ({ url: '/billing/checkout-session', method: 'POST', body }),
     }),
 
@@ -633,7 +626,10 @@ export const streamApi = createApi({
       invalidatesTags: ['Validations'],
     }),
 
-    rejectValidation: builder.mutation<SubscriberValidation, { validationId: string; reason: string }>({
+    rejectValidation: builder.mutation<
+      SubscriberValidation,
+      { validationId: string; reason: string }
+    >({
       query: ({ validationId, reason }) => ({
         url: `/isvp/${validationId}/reject`,
         method: 'POST',
@@ -708,7 +704,10 @@ export const streamApi = createApi({
       invalidatesTags: (_result, _error, { deckId }) => [{ type: 'StreamDecks', id: deckId }],
     }),
 
-    setStreamDeckVisibility: builder.mutation<StreamDeck, { id: string; visibility: StreamDeckVisibility }>({
+    setStreamDeckVisibility: builder.mutation<
+      StreamDeck,
+      { id: string; visibility: StreamDeckVisibility }
+    >({
       query: ({ id, visibility }) => ({
         url: `/stream-decks/${id}/visibility`,
         method: 'PATCH',
@@ -719,7 +718,12 @@ export const streamApi = createApi({
 
     setStreamDeckLicense: builder.mutation<
       DeckLicense,
-      { id: string; termsSummary: string; attributionRequired?: boolean; redistributionAllowed?: boolean }
+      {
+        id: string;
+        termsSummary: string;
+        attributionRequired?: boolean;
+        redistributionAllowed?: boolean;
+      }
     >({
       query: ({ id, ...body }) => ({ url: `/stream-decks/${id}/license`, method: 'POST', body }),
       invalidatesTags: (_result, _error, { id }) => [{ type: 'StreamDecks', id }, 'PublicDecks'],
@@ -749,7 +753,10 @@ export const streamApi = createApi({
       invalidatesTags: ['StreamDecks'],
     }),
 
-    importPublicDeckToValidationQueue: builder.mutation<{ queued: number; alreadyQueued: number }, string>({
+    importPublicDeckToValidationQueue: builder.mutation<
+      { queued: number; alreadyQueued: number },
+      string
+    >({
       query: (id) => ({ url: `/public-decks/${id}/import-to-validation-queue`, method: 'POST' }),
       invalidatesTags: ['ValidationQueue'],
     }),

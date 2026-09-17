@@ -269,10 +269,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   @Throttle({ default: { limit: 10, ttl: 60 * 1000 } })
-  confirmManualPhoneVerification(
-    @CurrentUser() admin: AccessTokenClaims,
-    @Param('id') id: string,
-  ) {
+  confirmManualPhoneVerification(@CurrentUser() admin: AccessTokenClaims, @Param('id') id: string) {
     return this.auth.confirmManualPhoneVerificationRequest(admin.sub, id);
   }
 

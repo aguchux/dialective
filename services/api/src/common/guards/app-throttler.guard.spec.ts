@@ -20,9 +20,9 @@ function contextWith(handlerGuards: unknown[], classGuards: unknown[] = []): Exe
 describe('AppThrottlerGuard', () => {
   function shouldSkip(context: ExecutionContext) {
     const guard = new AppThrottlerGuard({} as never, {} as never, {} as never);
-    return (guard as unknown as { shouldSkip: (c: ExecutionContext) => Promise<boolean> }).shouldSkip(
-      context,
-    );
+    return (
+      guard as unknown as { shouldSkip: (c: ExecutionContext) => Promise<boolean> }
+    ).shouldSkip(context);
   }
 
   it('skips routes already guarded by SubmissionRateLimitGuard', async () => {

@@ -19,12 +19,14 @@ function baseNotice(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-function setup(overrides: {
-  settings?: Partial<Record<string, unknown>>;
-  notices?: ReturnType<typeof baseNotice>[];
-  state?: Partial<Record<string, unknown>> | null;
-  course?: { id: string } | null;
-} = {}) {
+function setup(
+  overrides: {
+    settings?: Partial<Record<string, unknown>>;
+    notices?: ReturnType<typeof baseNotice>[];
+    state?: Partial<Record<string, unknown>> | null;
+    course?: { id: string } | null;
+  } = {},
+) {
   const settings = {
     id: 'default',
     enabled: true,
@@ -53,40 +55,88 @@ function setup(overrides: {
     },
     dykNotice: {
       findMany: jest.fn().mockImplementation(({ where }: { where?: { active?: boolean } } = {}) => {
-        const filtered = where?.active === undefined ? notices : notices.filter((n) => n.active === where.active);
+        const filtered =
+          where?.active === undefined ? notices : notices.filter((n) => n.active === where.active);
         return Promise.resolve(
-          filtered.map((n) => ({ ...n, states: overrides.state && n.id === NOTICE_ID ? [stateByKey.get(`${USER_ID}:${NOTICE_ID}`)] : [] })),
+          filtered.map((n) => ({
+            ...n,
+            states:
+              overrides.state && n.id === NOTICE_ID
+                ? [stateByKey.get(`${USER_ID}:${NOTICE_ID}`)]
+                : [],
+          })),
         );
       }),
-      findUnique: jest.fn().mockImplementation(({ where }: { where: { id: string } }) =>
-        Promise.resolve(notices.find((n) => n.id === where.id) ?? null),
-      ),
-      create: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) =>
-        Promise.resolve({ id: 'new-notice', ...data }),
-      ),
-      update: jest.fn().mockImplementation(({ where, data }: { where: { id: string }; data: Record<string, unknown> }) =>
-        Promise.resolve({ ...notices.find((n) => n.id === where.id), ...data }),
-      ),
+      findUnique: jest
+        .fn()
+        .mockImplementation(({ where }: { where: { id: string } }) =>
+          Promise.resolve(notices.find((n) => n.id === where.id) ?? null),
+        ),
+      create: jest
+        .fn()
+        .mockImplementation(({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve({ id: 'new-notice', ...data }),
+        ),
+      update: jest
+        .fn()
+        .mockImplementation(
+          ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) =>
+            Promise.resolve({ ...notices.find((n) => n.id === where.id), ...data }),
+        ),
       delete: jest.fn().mockResolvedValue({ id: NOTICE_ID }),
     },
     dykUserState: {
-      findFirst: jest.fn().mockImplementation(() => Promise.resolve(overrides.state ? stateByKey.get(`${USER_ID}:${NOTICE_ID}`) ?? null : null)),
-      findUnique: jest.fn().mockImplementation(({ where }: { where: { userId_noticeId: { userId: string; noticeId: string } } }) =>
-        Promise.resolve(stateByKey.get(`${where.userId_noticeId.userId}:${where.userId_noticeId.noticeId}`) ?? null),
-      ),
-      upsert: jest.fn().mockImplementation(({ where, create, update }: { where: { userId_noticeId: { userId: string; noticeId: string } }; create: Record<string, unknown>; update: Record<string, unknown> }) => {
-        const key = `${where.userId_noticeId.userId}:${where.userId_noticeId.noticeId}`;
-        const existing = stateByKey.get(key);
-        const next = existing ? { ...existing, ...update, ...(update.displays !== undefined ? { displays: (existing.displays as number) + 1 } : {}) } : { ...create };
-        stateByKey.set(key, next);
-        return Promise.resolve(next);
-      }),
+      findFirst: jest
+        .fn()
+        .mockImplementation(() =>
+          Promise.resolve(
+            overrides.state ? (stateByKey.get(`${USER_ID}:${NOTICE_ID}`) ?? null) : null,
+          ),
+        ),
+      findUnique: jest
+        .fn()
+        .mockImplementation(
+          ({ where }: { where: { userId_noticeId: { userId: string; noticeId: string } } }) =>
+            Promise.resolve(
+              stateByKey.get(`${where.userId_noticeId.userId}:${where.userId_noticeId.noticeId}`) ??
+                null,
+            ),
+        ),
+      upsert: jest
+        .fn()
+        .mockImplementation(
+          ({
+            where,
+            create,
+            update,
+          }: {
+            where: { userId_noticeId: { userId: string; noticeId: string } };
+            create: Record<string, unknown>;
+            update: Record<string, unknown>;
+          }) => {
+            const key = `${where.userId_noticeId.userId}:${where.userId_noticeId.noticeId}`;
+            const existing = stateByKey.get(key);
+            const next = existing
+              ? {
+                  ...existing,
+                  ...update,
+                  ...(update.displays !== undefined
+                    ? { displays: (existing.displays as number) + 1 }
+                    : {}),
+                }
+              : { ...create };
+            stateByKey.set(key, next);
+            return Promise.resolve(next);
+          },
+        ),
     },
     course: {
       findUnique: jest.fn().mockResolvedValue(overrides.course ?? null),
     },
     user: {
-      findUnique: jest.fn().mockResolvedValue({ phoneVerifiedAt: null, kycStatus: 'PENDING', pwaInstalledAt: null }),
+      findUnique: jest
+        .fn()
+        .mockResolvedValue({ phoneVerifiedAt: null, kycStatus: 'PENDING', pwaInstalledAt: null }),
     },
     $queryRaw: jest.fn().mockResolvedValue([{ id: USER_ID }]),
     $transaction: undefined as unknown as (fn: (tx: unknown) => unknown) => Promise<unknown>,
@@ -94,8 +144,16 @@ function setup(overrides: {
   prisma.$transaction = jest.fn((fn: (tx: unknown) => unknown) => Promise.resolve(fn(prisma)));
 
   const storage = {
-    getPublicObjectUrl: jest.fn((bucket: string, key: string) => `https://cdn.example.com/${bucket}/${key}`),
-    createPresignedUploadUrl: jest.fn().mockResolvedValue({ url: 'https://upload.example.com', key: 'dyk/new.jpg', expiresInSeconds: 900 }),
+    getPublicObjectUrl: jest.fn(
+      (bucket: string, key: string) => `https://cdn.example.com/${bucket}/${key}`,
+    ),
+    createPresignedUploadUrl: jest
+      .fn()
+      .mockResolvedValue({
+        url: 'https://upload.example.com',
+        key: 'dyk/new.jpg',
+        expiresInSeconds: 900,
+      }),
   };
 
   const service = new DykService(prisma as never, storage as never);
@@ -253,7 +311,12 @@ describe('DykService.saveNotice validation', () => {
       sortOrder: 0,
     });
     expect(prisma.dykNotice.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ targetId: 'course-1', stopConditions: ['CLICKED', 'COURSE'] }) }),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          targetId: 'course-1',
+          stopConditions: ['CLICKED', 'COURSE'],
+        }),
+      }),
     );
   });
 
@@ -288,17 +351,26 @@ describe('DykService.feed', () => {
   });
 
   it('excludes a CLICKED-stop notice the user has already clicked', async () => {
-    const { service } = setup({ notices: [baseNotice({ stopConditions: ['CLICKED'] })], state: { clickedAt: new Date() } });
+    const { service } = setup({
+      notices: [baseNotice({ stopConditions: ['CLICKED'] })],
+      state: { clickedAt: new Date() },
+    });
     const result = await service.feed(USER_ID);
     expect(result.items).toHaveLength(0);
   });
 
   it('excludes a VISITED-stop notice the user has actually landed on', async () => {
-    const { service } = setup({ notices: [baseNotice({ stopConditions: ['VISITED'] })], state: { clickedAt: new Date(), visitedAt: null } });
+    const { service } = setup({
+      notices: [baseNotice({ stopConditions: ['VISITED'] })],
+      state: { clickedAt: new Date(), visitedAt: null },
+    });
     const clicked = await service.feed(USER_ID);
     expect(clicked.items).toHaveLength(1); // clicked but not yet visited -- still shown
 
-    const { service: service2 } = setup({ notices: [baseNotice({ stopConditions: ['VISITED'] })], state: { visitedAt: new Date() } });
+    const { service: service2 } = setup({
+      notices: [baseNotice({ stopConditions: ['VISITED'] })],
+      state: { visitedAt: new Date() },
+    });
     const visited = await service2.feed(USER_ID);
     expect(visited.items).toHaveLength(0);
   });
@@ -320,7 +392,10 @@ describe('DykService.feed', () => {
   });
 
   it('excludes a notice still inside its reminder interval', async () => {
-    const { service } = setup({ settings: { intervalMinutes: 60 }, state: { lastShownAt: new Date() } });
+    const { service } = setup({
+      settings: { intervalMinutes: 60 },
+      state: { lastShownAt: new Date() },
+    });
     const result = await service.feed(USER_ID);
     expect(result.items).toHaveLength(0);
   });
@@ -361,12 +436,18 @@ describe('DykService.impression', () => {
   });
 
   it('denies a CLICKED-stop notice already clicked', async () => {
-    const { service } = setup({ notices: [baseNotice({ stopConditions: ['CLICKED'] })], state: { clickedAt: new Date() } });
+    const { service } = setup({
+      notices: [baseNotice({ stopConditions: ['CLICKED'] })],
+      state: { clickedAt: new Date() },
+    });
     await expect(service.impression(USER_ID, NOTICE_ID)).resolves.toEqual({ allowed: false });
   });
 
   it('denies while still inside the reminder interval', async () => {
-    const { service } = setup({ settings: { intervalMinutes: 60 }, state: { lastShownAt: new Date() } });
+    const { service } = setup({
+      settings: { intervalMinutes: 60 },
+      state: { lastShownAt: new Date() },
+    });
     await expect(service.impression(USER_ID, NOTICE_ID)).resolves.toEqual({ allowed: false });
   });
 
@@ -382,7 +463,11 @@ describe('DykService.impression', () => {
 
   it('navigation=true bypasses the global cross-notice throttle', async () => {
     const { service, prisma } = setup();
-    (prisma.dykUserState.findFirst as jest.Mock).mockResolvedValueOnce({ userId: USER_ID, noticeId: 'other-notice', lastShownAt: new Date() });
+    (prisma.dykUserState.findFirst as jest.Mock).mockResolvedValueOnce({
+      userId: USER_ID,
+      noticeId: 'other-notice',
+      lastShownAt: new Date(),
+    });
     const result = await service.impression(USER_ID, NOTICE_ID, true);
     expect(result).toEqual({ allowed: true });
   });
@@ -397,7 +482,9 @@ describe('DykService.click', () => {
   });
 
   it('also marks an external link visited at click time, since arrival cannot be observed after leaving the app', async () => {
-    const { service, stateByKey } = setup({ notices: [baseNotice({ href: 'https://wa.me/1234567890' })] });
+    const { service, stateByKey } = setup({
+      notices: [baseNotice({ href: 'https://wa.me/1234567890' })],
+    });
     await service.click(USER_ID, NOTICE_ID);
     expect(stateByKey.get(`${USER_ID}:${NOTICE_ID}`)?.visitedAt).toBeInstanceOf(Date);
   });
@@ -431,6 +518,8 @@ describe('DykService.visit', () => {
 
   it('no-ops silently for an unknown notice id', async () => {
     const { service } = setup();
-    await expect(service.visit(USER_ID, 'unknown-notice', '/dashboard')).resolves.toEqual({ recorded: false });
+    await expect(service.visit(USER_ID, 'unknown-notice', '/dashboard')).resolves.toEqual({
+      recorded: false,
+    });
   });
 });

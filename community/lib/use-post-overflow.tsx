@@ -75,7 +75,11 @@ export function usePostOverflow() {
             >
               Cancel
             </button>
-            <PrimaryButton className="bg-danger hover:bg-danger" onClick={() => void confirmDelete()} type="button">
+            <PrimaryButton
+              className="bg-danger hover:bg-danger"
+              onClick={() => void confirmDelete()}
+              type="button"
+            >
               Delete
             </PrimaryButton>
           </div>

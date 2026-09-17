@@ -18,7 +18,12 @@ function setup() {
   const streams = { publish: jest.fn().mockResolvedValue('1-0') };
   const catalogue = { isEligible: jest.fn().mockResolvedValue(true) };
   const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
-  const service = new IsvpService(prisma as any, streams as any, catalogue as any, webhookEvents as any);
+  const service = new IsvpService(
+    prisma as any,
+    streams as any,
+    catalogue as any,
+    webhookEvents as any,
+  );
   return { prisma, streams, catalogue, webhookEvents, service };
 }
 
@@ -132,7 +137,9 @@ describe('IsvpService', () => {
         status: 'PENDING',
       });
 
-      await expect(service.approve('org-1', 'reviewer-1', 'val-1')).rejects.toThrow(NotFoundException);
+      await expect(service.approve('org-1', 'reviewer-1', 'val-1')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('marks APPROVED, records the reviewer, and publishes to isvc-jobs', async () => {
@@ -173,7 +180,9 @@ describe('IsvpService', () => {
       });
       prisma.subscriberValidation.update.mockResolvedValue({ id: 'val-1', status: 'REJECTED' });
 
-      await service.reject('org-1', 'reviewer-1', 'val-1', { reason: 'Score does not match audio' });
+      await service.reject('org-1', 'reviewer-1', 'val-1', {
+        reason: 'Score does not match audio',
+      });
 
       expect(prisma.subscriberValidation.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -232,7 +241,10 @@ describe('IsvpService', () => {
   describe('getOrgContribution', () => {
     it('only counts APPROVED validations', async () => {
       const { prisma, service } = setup();
-      prisma.subscriberValidation.findMany.mockResolvedValue([{ recordingId: 'rec-1' }, { recordingId: 'rec-2' }]);
+      prisma.subscriberValidation.findMany.mockResolvedValue([
+        { recordingId: 'rec-1' },
+        { recordingId: 'rec-2' },
+      ]);
       prisma.subscriberValidation.count.mockResolvedValue(5);
 
       const result = await service.getOrgContribution('org-1');

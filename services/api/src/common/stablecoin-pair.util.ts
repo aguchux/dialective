@@ -9,7 +9,10 @@ import { isValidStablecoinPair } from '../wallet/stablecoin-networks';
  * the sibling asset field named by `assetProperty` off the same DTO
  * instance, the same cross-field pattern as IsCryptoAddress.
  */
-export function IsValidStablecoinPair(assetProperty: string, validationOptions?: ValidationOptions) {
+export function IsValidStablecoinPair(
+  assetProperty: string,
+  validationOptions?: ValidationOptions,
+) {
   return function (object: object, propertyName: string) {
     registerDecorator({
       name: 'isValidStablecoinPair',

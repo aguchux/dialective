@@ -73,7 +73,10 @@ describe('StreamKeyRateLimitGuard', () => {
 
     await guard.canActivate(ctxWith({ id: 'key-1', organizationId: 'org-1' }));
 
-    expect(redis.expire).toHaveBeenCalledWith(expect.stringContaining('stream-key-rate-limit:key-1:'), 65);
+    expect(redis.expire).toHaveBeenCalledWith(
+      expect.stringContaining('stream-key-rate-limit:key-1:'),
+      65,
+    );
   });
 
   it('does not re-set the expiry on subsequent requests in the same window', async () => {
@@ -93,7 +96,9 @@ describe('StreamKeyRateLimitGuard', () => {
 
     await guard.canActivate(ctxWith({ id: 'key-abc', organizationId: 'org-1' }, '9.9.9.9'));
 
-    expect(redis.incr).toHaveBeenCalledWith(expect.stringContaining('stream-key-rate-limit:key-abc:'));
+    expect(redis.incr).toHaveBeenCalledWith(
+      expect.stringContaining('stream-key-rate-limit:key-abc:'),
+    );
   });
 
   it('fails open when Redis errors', async () => {

@@ -190,9 +190,7 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
   {
     code: 'SZ',
     name: 'Eswatini',
-    dialects: [
-      { tag: 'ss', name: 'Swati' },
-    ],
+    dialects: [{ tag: 'ss', name: 'Swati' }],
   },
   {
     code: 'ET',
@@ -262,9 +260,7 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
   {
     code: 'LS',
     name: 'Lesotho',
-    dialects: [
-      { tag: 'st', name: 'Sesotho' },
-    ],
+    dialects: [{ tag: 'st', name: 'Sesotho' }],
   },
   {
     code: 'LR',
@@ -440,9 +436,7 @@ export const AFRICA_COUNTRIES: CountrySeed[] = [
   {
     code: 'SD',
     name: 'Sudan',
-    dialects: [
-      { tag: 'ar-sd', name: 'Arabic (Sudanese)' },
-    ],
+    dialects: [{ tag: 'ar-sd', name: 'Arabic (Sudanese)' }],
   },
   {
     code: 'TZ',

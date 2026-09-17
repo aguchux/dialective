@@ -90,7 +90,10 @@ function PendingApprovalRow({ deck }: { deck: ValidatorDeckSummary }) {
     <div className={`${cardClass} grid gap-2 p-4`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <Link className="truncate font-black hover:underline" href={`/validator/decks/${deck.id}`}>
+          <Link
+            className="truncate font-black hover:underline"
+            href={`/validator/decks/${deck.id}`}
+          >
             {deck.name}
           </Link>
           <p className="text-xs font-bold text-muted">
@@ -117,7 +120,13 @@ function PendingApprovalRow({ deck }: { deck: ValidatorDeckSummary }) {
         </div>
       </div>
       {error && <p className="text-xs font-bold text-danger">{error}</p>}
-      {rejectOpen && <RejectDeckDialog deckId={deck.id} deckName={deck.name} onClose={() => setRejectOpen(false)} />}
+      {rejectOpen && (
+        <RejectDeckDialog
+          deckId={deck.id}
+          deckName={deck.name}
+          onClose={() => setRejectOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -148,8 +157,15 @@ function RejectDeckDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-40 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true">
-      <form className={`${cardClass} grid w-full max-w-sm gap-3 p-5`} onSubmit={(e) => void handleSubmit(e)}>
+    <div
+      className="fixed inset-0 z-40 grid place-items-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      <form
+        className={`${cardClass} grid w-full max-w-sm gap-3 p-5`}
+        onSubmit={(e) => void handleSubmit(e)}
+      >
         <h2 className="text-lg font-black">Reject &ldquo;{deckName}&rdquo;</h2>
         <p className="text-sm text-muted">
           A reason is required so the owner knows what to fix before resubmitting.
@@ -166,7 +182,11 @@ function RejectDeckDialog({
         </label>
         {error && <p className="text-sm font-bold text-danger">{error}</p>}
         <div className="mt-1 flex justify-end gap-2">
-          <button className="min-h-10 rounded-lg border border-line px-3 font-bold" onClick={onClose} type="button">
+          <button
+            className="min-h-10 rounded-lg border border-line px-3 font-bold"
+            onClick={onClose}
+            type="button"
+          >
             Cancel
           </button>
           <button
@@ -206,10 +226,15 @@ function MySubmissions() {
         <div className={`${cardClass} p-4`} key={deck.id}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
-              <Link className="truncate font-black hover:underline" href={`/validator/decks/${deck.id}`}>
+              <Link
+                className="truncate font-black hover:underline"
+                href={`/validator/decks/${deck.id}`}
+              >
                 {deck.name}
               </Link>
-              <p className="text-xs font-bold text-muted">{STATUS_LABELS[deck.status] ?? deck.status}</p>
+              <p className="text-xs font-bold text-muted">
+                {STATUS_LABELS[deck.status] ?? deck.status}
+              </p>
             </div>
             <button
               className="min-h-8 shrink-0 rounded-lg border border-line px-3 text-xs font-bold hover:bg-surface-muted"

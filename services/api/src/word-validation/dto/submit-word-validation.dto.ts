@@ -1,4 +1,12 @@
-import { ArrayUnique, IsArray, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  ArrayUnique,
+  IsArray,
+  IsIn,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 import { WordValidationFlag } from '@dialectiva/db';
 
 const WORD_VALIDATION_FLAGS = Object.values(WordValidationFlag);

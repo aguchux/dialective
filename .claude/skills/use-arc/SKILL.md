@@ -24,26 +24,26 @@ PRIVATE_KEY=         # Deployer wallet private key
 
 ### Network Details
 
-| Field | Value |
-|-------|-------|
-| Network | Arc Testnet |
-| Chain ID | `5042002` (hex: `0x4CEF52`) |
-| RPC | `https://rpc.testnet.arc.network` |
-| WebSocket | `wss://rpc.testnet.arc.network` |
-| Explorer | https://testnet.arcscan.app |
-| Faucet | https://faucet.circle.com |
-| CCTP Domain | `26` |
+| Field       | Value                             |
+| ----------- | --------------------------------- |
+| Network     | Arc Testnet                       |
+| Chain ID    | `5042002` (hex: `0x4CEF52`)       |
+| RPC         | `https://rpc.testnet.arc.network` |
+| WebSocket   | `wss://rpc.testnet.arc.network`   |
+| Explorer    | https://testnet.arcscan.app       |
+| Faucet      | https://faucet.circle.com         |
+| CCTP Domain | `26`                              |
 
 ### Token Addresses for Arc
 
-| Token | Address | Decimals |
-|-------|---------|----------|
-| USDC | `0x3600000000000000000000000000000000000000` | 6 (ERC-20) |
-| EURC | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` | 6 |
+| Token | Address                                      | Decimals   |
+| ----- | -------------------------------------------- | ---------- |
+| USDC  | `0x3600000000000000000000000000000000000000` | 6 (ERC-20) |
+| EURC  | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` | 6          |
 
 ## Core Concepts
 
-- **Native gas IS USDC — one balance, two interfaces (not two assets)**: On Arc the native gas asset is USDC itself. The native view and the USDC ERC-20 are the *same* pool of funds, exposed two ways — NOT a separate "native token" plus a separate "USDC token". Drop the ETH-style mental model from other chains.
+- **Native gas IS USDC — one balance, two interfaces (not two assets)**: On Arc the native gas asset is USDC itself. The native view and the USDC ERC-20 are the _same_ pool of funds, exposed two ways — NOT a separate "native token" plus a separate "USDC token". Drop the ETH-style mental model from other chains.
   - **Native view**: 18 decimals. Used only for gas and `msg.value`. wagmi `useBalance` returns this (its `symbol` is `USDC`).
   - **ERC-20 view**: 6 decimals, at `0x3600000000000000000000000000000000000000`. Use this for all balances, transfers, approvals, and display.
 - **Never double-count, convert, or swap between the two views**:
@@ -61,13 +61,13 @@ PRIVATE_KEY=         # Deployer wallet private key
 Use the `arcTestnet` chain definition from Prerequisites / Setup. Pass it to your wagmi config:
 
 ```typescript
-import { createConfig, http } from 'wagmi'
-import { arcTestnet } from 'viem/chains'
+import { createConfig, http } from 'wagmi';
+import { arcTestnet } from 'viem/chains';
 
 const config = createConfig({
   chains: [arcTestnet],
   transports: { [arcTestnet.id]: http() },
-})
+});
 ```
 
 ### 2. Smart Contracts (Foundry)
@@ -88,12 +88,12 @@ forge create src/MyContract.sol:MyContract \
 
 Deploy via Circle's Smart Contract Platform API:
 
-| Template | Use Case |
-|----------|----------|
-| ERC-20 | Fungible tokens |
-| ERC-721 | NFTs, unique assets |
+| Template | Use Case                |
+| -------- | ----------------------- |
+| ERC-20   | Fungible tokens         |
+| ERC-721  | NFTs, unique assets     |
 | ERC-1155 | Multi-token collections |
-| Airdrop | Token distribution |
+| Airdrop  | Token distribution      |
 
 See: https://developers.circle.com/contracts
 
@@ -123,15 +123,15 @@ Use CCTP to bridge USDC from other chains. Arc's CCTP domain is `26`. See the `b
 
 Arc is natively supported across Circle's product suite. Once your app is running on Arc, you can extend it with any of the following:
 
-| Product | Skill | What It Does |
-|---------|-------|--------------|
-| **Wallets (overview)** | `use-circle-wallets` | Compare wallet types and choose the right one for your app |
-| **Modular Wallets** | `use-modular-wallets` | Passkey-authenticated smart accounts with gasless transactions and batch operations |
-| **User-Controlled Wallets** | `use-user-controlled-wallets` | Non-custodial wallets with social login, email OTP, and PIN authentication |
-| **Developer-Controlled Wallets** | `use-developer-controlled-wallets` | Custodial wallets your app manages on behalf of users |
-| **Smart Contract Platform** | `use-smart-contract-platform` | Deploy, interact with, and monitor smart contracts using audited templates or custom bytecode |
-| **CCTP Bridge** | `bridge-stablecoin` | Bridge USDC to and from Arc using Crosschain Transfer Protocol |
-| **Gateway** | `use-gateway` | Unified USDC balance across chains with instant crosschain transfers |
+| Product                          | Skill                              | What It Does                                                                                  |
+| -------------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------- |
+| **Wallets (overview)**           | `use-circle-wallets`               | Compare wallet types and choose the right one for your app                                    |
+| **Modular Wallets**              | `use-modular-wallets`              | Passkey-authenticated smart accounts with gasless transactions and batch operations           |
+| **User-Controlled Wallets**      | `use-user-controlled-wallets`      | Non-custodial wallets with social login, email OTP, and PIN authentication                    |
+| **Developer-Controlled Wallets** | `use-developer-controlled-wallets` | Custodial wallets your app manages on behalf of users                                         |
+| **Smart Contract Platform**      | `use-smart-contract-platform`      | Deploy, interact with, and monitor smart contracts using audited templates or custom bytecode |
+| **CCTP Bridge**                  | `bridge-stablecoin`                | Bridge USDC to and from Arc using Crosschain Transfer Protocol                                |
+| **Gateway**                      | `use-gateway`                      | Unified USDC balance across chains with instant crosschain transfers                          |
 
 ## Reference Links
 

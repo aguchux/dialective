@@ -1,6 +1,7 @@
 # Query Unified Gateway Balances
 
 Canonical runnable references:
+
 - Unified balance EVM quickstart: https://developers.circle.com/gateway/quickstarts/unified-balance-evm.md
 - Unified balance Solana quickstart: https://developers.circle.com/gateway/quickstarts/unified-balance-solana.md
 
@@ -15,6 +16,7 @@ This request:
 ## Critical notes
 
 Each source is a pair of:
+
 - `domain`: the Gateway domain ID for the source chain
 - `depositor`: the depositor address on that chain
 
@@ -60,4 +62,3 @@ Domains with zero balance may still be returned.
   ]
 }
 ```
-

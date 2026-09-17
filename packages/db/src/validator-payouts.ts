@@ -49,7 +49,8 @@ type PrismaClientOrTx = PrismaClient | Prisma.TransactionClient;
  *     constraint the same way creditTestimonyReward/creditStartupBonus do.
  */
 
-export type ValidatorPayoutRole = 'creator' | 'reassigned-owner' | 'l1-approver' | 'l2-approver' | 'l3-approver';
+export type ValidatorPayoutRole =
+  'creator' | 'reassigned-owner' | 'l1-approver' | 'l2-approver' | 'l3-approver';
 
 export interface ValidatorPayoutLine {
   userId: string;
@@ -207,7 +208,10 @@ export function computeValidatorPayoutBreakdown(
  * per-line idempotency instead of an all-or-nothing retry should use
  * creditValidatorPayout (below), which swallows P2002 per line.
  */
-export async function buildValidatorPayoutOps(prisma: PrismaClientOrTx, breakdown: ValidatorPayoutBreakdown) {
+export async function buildValidatorPayoutOps(
+  prisma: PrismaClientOrTx,
+  breakdown: ValidatorPayoutBreakdown,
+) {
   const ops: Prisma.PrismaPromise<unknown>[] = [];
   for (const line of breakdown.lines) {
     const wallet = await getOrCreateWallet(prisma, line.userId);

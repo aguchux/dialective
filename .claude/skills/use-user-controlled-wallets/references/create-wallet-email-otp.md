@@ -51,7 +51,7 @@ Returns a `challengeId` if the user needs to create a wallet. Error code 155106 
 const response = await circleClient.createUserPinWithWallets({
   userToken,
   blockchains: [Blockchain.ArcTestnet],
-  accountType: "SCA",
+  accountType: 'SCA',
 });
 // response.data: { challengeId }
 ```
@@ -78,14 +78,15 @@ const response = await circleClient.getWalletTokenBalance({
 The SDK must be initialized with a login callback to handle OTP verification results.
 
 The frontend implements four button handlers mapping to the User Flow steps:
+
 1. `handleRequestOtp` -- Send OTP to email
 2. `handleVerifyOtp` -- Verify OTP code
 3. `handleInitializeUser` -- Initialize user (get challenge)
 4. `handleCreateWallet` -- Create wallet (execute challenge)
 
 ```tsx
-import { useState, useEffect, useRef } from "react";
-import { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
+import { useState, useEffect, useRef } from 'react';
+import { W3SSdk } from '@circle-fin/w3s-pw-web-sdk';
 
 interface LoginResult {
   userToken: string;
@@ -100,56 +101,53 @@ interface OtpTokens {
 
 export default function EmailOtpWallet({
   circleAppId,
-  apiBaseUrl = "",
+  apiBaseUrl = '',
 }: {
   circleAppId: string;
   apiBaseUrl?: string;
 }) {
   const sdkRef = useRef<W3SSdk | null>(null);
-  const [deviceId, setDeviceId] = useState("");
-  const [email, setEmail] = useState("");
+  const [deviceId, setDeviceId] = useState('');
+  const [email, setEmail] = useState('');
   const [otpTokens, setOtpTokens] = useState<OtpTokens | null>(null);
   const [loginResult, setLoginResult] = useState<LoginResult | null>(null);
   const [challengeId, setChallengeId] = useState<string | null>(null);
-  const [status, setStatus] = useState("Ready");
+  const [status, setStatus] = useState('Ready');
 
   useEffect(() => {
     const initSdk = async () => {
       try {
         const onLoginComplete = (error: unknown, result: unknown) => {
           if (error) {
-            setStatus("Login failed: " + ((error as Error).message || "Unknown error"));
+            setStatus('Login failed: ' + ((error as Error).message || 'Unknown error'));
             return;
           }
           const loginRes = result as LoginResult;
           setLoginResult(loginRes);
-          localStorage.setItem("userToken", loginRes.userToken);
-          localStorage.setItem("encryptionKey", loginRes.encryptionKey);
-          setStatus("Email verified. Ready to initialize user.");
+          localStorage.setItem('userToken', loginRes.userToken);
+          localStorage.setItem('encryptionKey', loginRes.encryptionKey);
+          setStatus('Email verified. Ready to initialize user.');
         };
 
-        const sdk = new W3SSdk(
-          { appSettings: { appId: circleAppId } },
-          onLoginComplete
-        );
+        const sdk = new W3SSdk({ appSettings: { appId: circleAppId } }, onLoginComplete);
         sdkRef.current = sdk;
 
-        const storedDeviceId = localStorage.getItem("deviceId");
+        const storedDeviceId = localStorage.getItem('deviceId');
         if (storedDeviceId) {
           setDeviceId(storedDeviceId);
         } else {
           const id = await sdk.getDeviceId();
           setDeviceId(id);
-          localStorage.setItem("deviceId", id);
+          localStorage.setItem('deviceId', id);
         }
 
-        const storedUserToken = localStorage.getItem("userToken");
-        const storedEncryptionKey = localStorage.getItem("encryptionKey");
+        const storedUserToken = localStorage.getItem('userToken');
+        const storedEncryptionKey = localStorage.getItem('encryptionKey');
         if (storedUserToken && storedEncryptionKey) {
           setLoginResult({ userToken: storedUserToken, encryptionKey: storedEncryptionKey });
         }
       } catch {
-        setStatus("Failed to initialize Web SDK");
+        setStatus('Failed to initialize Web SDK');
       }
     };
 
@@ -161,8 +159,8 @@ export default function EmailOtpWallet({
     if (!deviceId || !email) return;
 
     const response = await fetch(`${apiBaseUrl}/api/wallet/request-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deviceId, email }),
     });
     const data = await response.json();
@@ -194,8 +192,8 @@ export default function EmailOtpWallet({
     if (!loginResult?.userToken) return;
 
     const response = await fetch(`${apiBaseUrl}/api/wallet/initialize`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userToken: loginResult.userToken }),
     });
     const data = await response.json();
@@ -220,7 +218,7 @@ export default function EmailOtpWallet({
 
     sdk.execute(challengeId, (error) => {
       if (error) {
-        setStatus("Failed: " + ((error as Error).message || "Unknown error"));
+        setStatus('Failed: ' + ((error as Error).message || 'Unknown error'));
         return;
       }
       setChallengeId(null);
@@ -234,16 +232,16 @@ export default function EmailOtpWallet({
 
 ## Error Handling
 
-| Error Code | Meaning | Action |
-|------------|---------|--------|
-| 155106 | User already initialized | Fetch existing wallets instead of creating |
-| 155104 | Invalid user token | Re-authenticate user via OTP |
-| 155101 | Invalid device token | Request new OTP |
-| 155130 | OTP token expired | Request new OTP |
-| 155131 | OTP token invalid | Request new OTP |
-| 155133 | OTP value invalid | User should re-enter code |
-| 155134 | OTP value not matched | User should re-enter code |
-| 155146 | OTP invalid after 3 attempts | Request new OTP (locked out) |
+| Error Code | Meaning                      | Action                                     |
+| ---------- | ---------------------------- | ------------------------------------------ |
+| 155106     | User already initialized     | Fetch existing wallets instead of creating |
+| 155104     | Invalid user token           | Re-authenticate user via OTP               |
+| 155101     | Invalid device token         | Request new OTP                            |
+| 155130     | OTP token expired            | Request new OTP                            |
+| 155131     | OTP token invalid            | Request new OTP                            |
+| 155133     | OTP value invalid            | User should re-enter code                  |
+| 155134     | OTP value not matched        | User should re-enter code                  |
+| 155146     | OTP invalid after 3 attempts | Request new OTP (locked out)               |
 
 ## Reference Links
 

@@ -1,6 +1,6 @@
 ---
 name: use-modular-wallets
-description: "Build crypto wallets using Circle Modular Wallets SDK with passkey authentication, gasless transactions, and extensible module architecture. Use when: creating crypto wallets with passkey-based (WebAuthn) registration and login, sending gasless transactions using Circle Gas Station paymaster, batching multiple transactions into a single user operation, implementing passkey recovery using BIP-39 mnemonic phrases, building advanced onchain wallets with custom modules (multisig, subscriptions, session keys). Triggers on: MSCA, passkey authentication, WebAuthn, paymaster, Gas Station, ERC-4337, ERC-6900, toCircleSmartAccount, toModularTransport, sendUserOperation, 2D nonce, passkey recovery, EIP-1193 provider."
+description: 'Build crypto wallets using Circle Modular Wallets SDK with passkey authentication, gasless transactions, and extensible module architecture. Use when: creating crypto wallets with passkey-based (WebAuthn) registration and login, sending gasless transactions using Circle Gas Station paymaster, batching multiple transactions into a single user operation, implementing passkey recovery using BIP-39 mnemonic phrases, building advanced onchain wallets with custom modules (multisig, subscriptions, session keys). Triggers on: MSCA, passkey authentication, WebAuthn, paymaster, Gas Station, ERC-4337, ERC-6900, toCircleSmartAccount, toModularTransport, sendUserOperation, 2D nonce, passkey recovery, EIP-1193 provider.'
 ---
 
 ## Overview
@@ -45,16 +45,16 @@ Before using the SDK, complete the [Console Setup](https://developers.circle.com
 
 ### Supported Chains
 
-| Chain | Mainnet | Testnet |
-|-------|---------|---------|
-| Arc | No | Yes |
-| Arbitrum | Yes | Yes |
-| Avalanche | Yes | Yes |
-| Base | Yes | Yes |
-| Monad | Yes | Yes |
-| Optimism | Yes | Yes |
-| Polygon | Yes | Yes |
-| Unichain | Yes | Yes |
+| Chain     | Mainnet | Testnet |
+| --------- | ------- | ------- |
+| Arc       | No      | Yes     |
+| Arbitrum  | Yes     | Yes     |
+| Avalanche | Yes     | Yes     |
+| Base      | Yes     | Yes     |
+| Monad     | Yes     | Yes     |
+| Optimism  | Yes     | Yes     |
+| Polygon   | Yes     | Yes     |
+| Unichain  | Yes     | Yes     |
 
 For the latest supported blockchains: https://developers.circle.com/wallets/account-types.md (MSCA chain restrictions are in Rules below.)
 
@@ -62,16 +62,16 @@ For the latest supported blockchains: https://developers.circle.com/wallets/acco
 
 The `toModularTransport` URL requires the chain path segment appended to the client URL:
 
-| Chain | Mainnet Path | Testnet Path |
-|-------|-------------|-------------|
-| Arbitrum | `/arbitrum` | `/arbitrumSepolia` |
-| Arc | -- | `/arcTestnet` |
-| Avalanche | `/avalanche` | `/avalancheFuji` |
-| Base | `/base` | `/baseSepolia` |
-| Monad | `/monad` | `/monadTestnet` |
-| Optimism | `/optimism` | `/optimismSepolia` |
-| Polygon | `/polygon` | `/polygonAmoy` |
-| Unichain | `/unichain` | `/unichainSepolia` |
+| Chain     | Mainnet Path | Testnet Path       |
+| --------- | ------------ | ------------------ |
+| Arbitrum  | `/arbitrum`  | `/arbitrumSepolia` |
+| Arc       | --           | `/arcTestnet`      |
+| Avalanche | `/avalanche` | `/avalancheFuji`   |
+| Base      | `/base`      | `/baseSepolia`     |
+| Monad     | `/monad`     | `/monadTestnet`    |
+| Optimism  | `/optimism`  | `/optimismSepolia` |
+| Polygon   | `/polygon`   | `/polygonAmoy`     |
+| Unichain  | `/unichain`  | `/unichainSepolia` |
 
 Example: `toModularTransport(\`${clientUrl}/polygonAmoy\`, clientKey)` for Polygon Amoy testnet.
 
@@ -101,31 +101,33 @@ User operations submitted via `sendUserOperation` follow an asynchronous state m
 **Happy path:** `SENT` -> `CONFIRMED` -> `COMPLETE`
 
 **States:**
+
 - `SENT` -- Submitted to the bundler, awaiting inclusion in a block.
 - `CONFIRMED` -- Included in a block, awaiting finality.
 - `COMPLETE` -- Finalized on-chain.
 - `FAILED` -- User operation reverted or encountered an unrecoverable error. Check `errorReason` and `revertReason`.
 
 **Error reasons on `FAILED`:**
+
 - `FAILED_ON_CHAIN` -- Transaction reverted during blockchain execution.
 - `FAILED_REPLACED` -- User operation was replaced (e.g., by a higher-fee operation with the same nonce).
 
 ## Error Handling
 
-| Error Code | Meaning | Action |
-|------------|---------|--------|
-| `NotAllowedError` | User cancelled the passkey prompt or timed out | Re-prompt the user; for login, confirm a credential exists for this domain |
-| `SecurityError` | Passkey domain mismatch -- bound to a different origin | Verify app domain matches Passkey Domain in Circle Console |
-| `InvalidStateError` | Credential already registered (duplicate registration) | Switch to `WebAuthnMode.Login` instead of `Register` |
-| 155203 | User op nonce cannot be >0 when smart contract wallet hasn't been deployed | Send the first user operation with nonce 0; the MSCA deploys lazily on the first transaction |
-| 155505 | SCA wallet needs to wait for first-time transaction to be queued | Wait for the initial deployment transaction to complete before sending additional operations |
-| 155507 | SCA account not supported on the given blockchain | Use a [supported chain](https://developers.circle.com/wallets/account-types.md); MSCAs are not available on Ethereum mainnet, Solana, Aptos, or NEAR |
-| 155509 | Paymaster policy required on mainnet before SCA account creation | Configure a Gas Station paymaster policy in Circle Console before creating mainnet accounts |
-| 155512 | Owner of the SCA wallet cannot be found | Verify the passkey credential or EOA owner is valid and accessible |
-| AA21 | Sender didn't pay prefund | Verify `paymaster: true` is set, or fund the smart account with native tokens for gas (USDC on Arc) |
-| AA23 | Account validation reverted or out of gas | Check signature validity; increase `verificationGasLimit` if out of gas |
-| AA25 | Invalid account nonce | Get the current nonce from EntryPoint; ensure correct nonce key for 2D nonces |
-| AA33 | Paymaster validation reverted or out of gas | Verify paymaster policy is active and correctly configured in Console |
+| Error Code          | Meaning                                                                    | Action                                                                                                                                               |
+| ------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NotAllowedError`   | User cancelled the passkey prompt or timed out                             | Re-prompt the user; for login, confirm a credential exists for this domain                                                                           |
+| `SecurityError`     | Passkey domain mismatch -- bound to a different origin                     | Verify app domain matches Passkey Domain in Circle Console                                                                                           |
+| `InvalidStateError` | Credential already registered (duplicate registration)                     | Switch to `WebAuthnMode.Login` instead of `Register`                                                                                                 |
+| 155203              | User op nonce cannot be >0 when smart contract wallet hasn't been deployed | Send the first user operation with nonce 0; the MSCA deploys lazily on the first transaction                                                         |
+| 155505              | SCA wallet needs to wait for first-time transaction to be queued           | Wait for the initial deployment transaction to complete before sending additional operations                                                         |
+| 155507              | SCA account not supported on the given blockchain                          | Use a [supported chain](https://developers.circle.com/wallets/account-types.md); MSCAs are not available on Ethereum mainnet, Solana, Aptos, or NEAR |
+| 155509              | Paymaster policy required on mainnet before SCA account creation           | Configure a Gas Station paymaster policy in Circle Console before creating mainnet accounts                                                          |
+| 155512              | Owner of the SCA wallet cannot be found                                    | Verify the passkey credential or EOA owner is valid and accessible                                                                                   |
+| AA21                | Sender didn't pay prefund                                                  | Verify `paymaster: true` is set, or fund the smart account with native tokens for gas (USDC on Arc)                                                  |
+| AA23                | Account validation reverted or out of gas                                  | Check signature validity; increase `verificationGasLimit` if out of gas                                                                              |
+| AA25                | Invalid account nonce                                                      | Get the current nonce from EntryPoint; ensure correct nonce key for 2D nonces                                                                        |
+| AA33                | Paymaster validation reverted or out of gas                                | Verify paymaster policy is active and correctly configured in Console                                                                                |
 
 Passkey errors (`NotAllowedError`, `SecurityError`, `InvalidStateError`) are standard `DOMException` errors thrown by the browser's WebAuthn API during `toWebAuthnCredential`. Wallet errors (155xxx) are returned by the Circle API. AA errors are ERC-4337 EntryPoint errors returned by the bundler. For the full error reference, see [Error Codes](https://developers.circle.com/wallets/error-codes.md). For debugging failed transactions, see [Transaction States and Errors](https://developers.circle.com/wallets/asynchronous-states-and-statuses.md).
 

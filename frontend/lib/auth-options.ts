@@ -200,7 +200,8 @@ export const authOptions: NextAuthOptions = {
       // useSession() call including proxy.ts's route protection -- a
       // client-side-only check could be bypassed by disabling JS.
       if (token.authError !== 'SessionExpired') {
-        const idleTimeoutMs = (token.sessionIdleTimeoutMinutes ?? DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES) * 60_000;
+        const idleTimeoutMs =
+          (token.sessionIdleTimeoutMinutes ?? DEFAULT_SESSION_IDLE_TIMEOUT_MINUTES) * 60_000;
         const maxSessionMs = (token.sessionMaxHours ?? DEFAULT_SESSION_MAX_HOURS) * 60 * 60_000;
         const now = Date.now();
         const lastActiveAt = token.lastActiveAt ?? token.signedInAt ?? now;

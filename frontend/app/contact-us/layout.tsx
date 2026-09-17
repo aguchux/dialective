@@ -7,7 +7,8 @@ export const metadata: Metadata = {
   openGraph: {
     url: '/contact-us',
     title: 'Contact Us | Dialect Library',
-    description: 'Get in touch with Dialect Library -- send us a message and we’ll get back to you.',
+    description:
+      'Get in touch with Dialect Library -- send us a message and we’ll get back to you.',
   },
 };
 

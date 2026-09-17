@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  Patch,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { SubscriberOrgRole } from '@dialectiva/db';
 import { SubscriberAuthGuard } from '../subscriber-auth/subscriber-auth.guard';
 import { SubscriberRolesGuard } from '../subscriber-auth/subscriber-roles.guard';
@@ -71,7 +63,12 @@ export class SubscriberOrgsController {
     @Param('id') membershipId: string,
     @Body() dto: UpdateSubscriberMemberRoleDto,
   ) {
-    return this.orgs.updateMemberRole(subscriber.organizationId, membershipId, dto.role, subscriber.sub);
+    return this.orgs.updateMemberRole(
+      subscriber.organizationId,
+      membershipId,
+      dto.role,
+      subscriber.sub,
+    );
   }
 
   @Delete('organization/members/:id')

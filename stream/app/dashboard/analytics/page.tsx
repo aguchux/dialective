@@ -38,7 +38,10 @@ export default function AnalyticsPage() {
   async function handleExport() {
     setDownloading(true);
     try {
-      await downloadCsvReport('/reports/subscriber-analytics?format=csv', 'subscriber-analytics-report.csv');
+      await downloadCsvReport(
+        '/reports/subscriber-analytics?format=csv',
+        'subscriber-analytics-report.csv',
+      );
     } finally {
       setDownloading(false);
     }
@@ -51,7 +54,11 @@ export default function AnalyticsPage() {
           subtitle="How your organization is using Voice Stream -- requests, audio streamed, and denial rate."
           title="Analytics"
         />
-        <SecondaryButton disabled={downloading || !data} onClick={() => void handleExport()} type="button">
+        <SecondaryButton
+          disabled={downloading || !data}
+          onClick={() => void handleExport()}
+          type="button"
+        >
           <Download aria-hidden="true" className="size-3.5" />
           {downloading ? 'Exporting...' : 'Export CSV'}
         </SecondaryButton>
@@ -64,7 +71,9 @@ export default function AnalyticsPage() {
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Card className="p-5">
               <p className="text-xs font-bold uppercase tracking-wide text-muted">Total requests</p>
-              <p className="mt-1 text-2xl font-black text-ink">{data.totalRequests.toLocaleString()}</p>
+              <p className="mt-1 text-2xl font-black text-ink">
+                {data.totalRequests.toLocaleString()}
+              </p>
             </Card>
             <Card className="p-5">
               <p className="text-xs font-bold uppercase tracking-wide text-muted">Audio streamed</p>
@@ -87,7 +96,11 @@ export default function AnalyticsPage() {
             {dailyBytes.length > 0 ? (
               <ResponsiveContainer height={260} width="100%">
                 <BarChart data={dailyBytes}>
-                  <CartesianGrid stroke="var(--color-line, #e5e7eb)" strokeDasharray="3 3" vertical={false} />
+                  <CartesianGrid
+                    stroke="var(--color-line, #e5e7eb)"
+                    strokeDasharray="3 3"
+                    vertical={false}
+                  />
                   <XAxis dataKey="day" fontSize={11} tickLine={false} />
                   <YAxis fontSize={11} tickLine={false} />
                   <Tooltip />
@@ -100,11 +113,16 @@ export default function AnalyticsPage() {
           </Card>
 
           <Card className="p-5">
-            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-muted">Top decks by requests</p>
+            <p className="mb-3 text-xs font-bold uppercase tracking-wide text-muted">
+              Top decks by requests
+            </p>
             {data.topDecksByRequests.length > 0 ? (
               <div className="divide-y divide-line">
                 {data.topDecksByRequests.map((row) => (
-                  <div className="flex items-center justify-between py-2 text-sm" key={row.deckId ?? 'none'}>
+                  <div
+                    className="flex items-center justify-between py-2 text-sm"
+                    key={row.deckId ?? 'none'}
+                  >
                     <span className="text-ink">{row.deckId ?? 'Unscoped'}</span>
                     <span className="font-bold text-ink">{row.requests.toLocaleString()}</span>
                   </div>

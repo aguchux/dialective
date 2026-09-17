@@ -100,7 +100,11 @@ export class ValidatorRecordingsService {
           ? { dialectTag: query.dialectTag }
           : {}
         : query.dialectTag
-          ? { dialectTag: assignedDialectTags.includes(query.dialectTag) ? query.dialectTag : '__none__' }
+          ? {
+              dialectTag: assignedDialectTags.includes(query.dialectTag)
+                ? query.dialectTag
+                : '__none__',
+            }
           : { dialectTag: { in: assignedDialectTags } };
     return {
       ...dialectFilter,
@@ -152,7 +156,12 @@ export class ValidatorRecordingsService {
       compositeScore: recording.compositeScore?.toString() ?? null,
       audioUrl:
         recording.audioBucket && recording.audioKey
-          ? (await this.storage.createPresignedDownloadUrl(recording.audioBucket, recording.audioKey)).url
+          ? (
+              await this.storage.createPresignedDownloadUrl(
+                recording.audioBucket,
+                recording.audioKey,
+              )
+            ).url
           : null,
       createdAt: recording.createdAt,
     };

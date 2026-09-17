@@ -652,7 +652,10 @@ export function DomainConversationDialog({
                 <section className="mx-auto grid w-full max-w-2xl gap-6">
                   {isLoadingNext || !prompt ? (
                     <div className="mx-auto grid place-items-center gap-3 text-center">
-                      <LoaderCircle className="size-8 animate-spin text-accent" aria-hidden="true" />
+                      <LoaderCircle
+                        className="size-8 animate-spin text-accent"
+                        aria-hidden="true"
+                      />
                       <p className="font-bold text-muted">Loading your next prompt...</p>
                     </div>
                   ) : (
@@ -669,9 +672,12 @@ export function DomainConversationDialog({
                             English → {prompt.dialectName}
                           </span>
                         </div>
-                        <p className="text-lg font-extrabold leading-relaxed">{prompt.promptText}</p>
+                        <p className="text-lg font-extrabold leading-relaxed">
+                          {prompt.promptText}
+                        </p>
                         <p className="text-xs font-bold text-muted">
-                          Record in {prompt.dialectName} -- {minDurationSeconds}-{maxDurationSeconds}s
+                          Record in {prompt.dialectName} -- {minDurationSeconds}-
+                          {maxDurationSeconds}s
                         </p>
                       </div>
 
@@ -715,7 +721,11 @@ export function DomainConversationDialog({
                             else if (recorderState === 'recording') stopRecording();
                             else togglePlayback();
                           }}
-                          style={micButtonBackground ? { backgroundColor: micButtonBackground } : undefined}
+                          style={
+                            micButtonBackground
+                              ? { backgroundColor: micButtonBackground }
+                              : undefined
+                          }
                           type="button"
                         >
                           {recorderState === 'recording' ? (

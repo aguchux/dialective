@@ -1,4 +1,15 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { Role, ValidatorRecordKind } from '@dialectiva/db';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -31,7 +42,10 @@ export class ValidatorDecksController {
   }
 
   @Get()
-  list(@Req() req: AuthenticatedRequest, @Query('filter') filter?: 'mine' | 'all' | 'pendingMyApproval') {
+  list(
+    @Req() req: AuthenticatedRequest,
+    @Query('filter') filter?: 'mine' | 'all' | 'pendingMyApproval',
+  ) {
     const resolved = filter === 'all' || filter === 'pendingMyApproval' ? filter : 'mine';
     return this.decks.list(resolved, req.user.sub);
   }
@@ -42,12 +56,20 @@ export class ValidatorDecksController {
   }
 
   @Patch(':id')
-  update(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() dto: UpdateValidatorDeckDto) {
+  update(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: UpdateValidatorDeckDto,
+  ) {
     return this.decks.update(id, req.user.sub, req.user.role, dto);
   }
 
   @Post(':id/items')
-  addItem(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() dto: AddValidatorDeckItemDto) {
+  addItem(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: AddValidatorDeckItemDto,
+  ) {
     return this.decks.addItem(
       id,
       req.user.sub,
@@ -138,7 +160,11 @@ export class ValidatorDecksController {
   }
 
   @Post(':id/reject')
-  reject(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() dto: RejectValidatorDeckDto) {
+  reject(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: RejectValidatorDeckDto,
+  ) {
     return this.decks.reject(id, req.user.sub, req.user.role, dto.reason);
   }
 

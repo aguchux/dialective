@@ -25,7 +25,11 @@ function partyName(party: P2PDisputeParty): string {
   return [party.firstName, party.lastName].filter(Boolean).join(' ') || party.email;
 }
 
-function counterpartyName(party: { firstName: string | null; lastName: string | null; email: string }): string {
+function counterpartyName(party: {
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+}): string {
   return [party.firstName, party.lastName].filter(Boolean).join(' ') || party.email;
 }
 
@@ -267,7 +271,12 @@ export default function AdminP2PPage() {
 function TraderCell({
   trader,
 }: {
-  trader: { firstName: string | null; lastName: string | null; email: string; phoneNumber: string | null };
+  trader: {
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    phoneNumber: string | null;
+  };
 }) {
   return (
     <div className="min-w-0">
@@ -305,7 +314,8 @@ function PartyBadge({
 }) {
   const name = partyName(party);
   const trade = tradeLabel(dispute.trade);
-  const otherPartyName = role === 'reporter' ? partyName(dispute.defaulter) : partyName(dispute.raisedBy);
+  const otherPartyName =
+    role === 'reporter' ? partyName(dispute.defaulter) : partyName(dispute.raisedBy);
   const message =
     role === 'reporter'
       ? `You raised a dispute against ${otherPartyName} for the trade ${trade}.`

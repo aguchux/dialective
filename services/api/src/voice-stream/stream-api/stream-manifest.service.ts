@@ -76,8 +76,13 @@ export class StreamManifestService {
     );
     return items
       .map((item, i) => ({ item, recording: recordings[i] }))
-      .filter((row): row is { item: (typeof items)[number]; recording: NonNullable<(typeof recordings)[number]> } =>
-        row.recording !== null,
+      .filter(
+        (
+          row,
+        ): row is {
+          item: (typeof items)[number];
+          recording: NonNullable<(typeof recordings)[number]>;
+        } => row.recording !== null,
       );
   }
 

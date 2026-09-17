@@ -40,7 +40,11 @@ export class KycEvidenceRedactionService {
   }
 }
 
-function grayscaleInPlace(ctx: CanvasModule.CanvasRenderingContext2D, width: number, height: number): void {
+function grayscaleInPlace(
+  ctx: CanvasModule.CanvasRenderingContext2D,
+  width: number,
+  height: number,
+): void {
   const imageData = ctx.getImageData(0, 0, width, height);
   const pixels = imageData.data;
   for (let i = 0; i < pixels.length; i += 4) {
@@ -53,7 +57,11 @@ function grayscaleInPlace(ctx: CanvasModule.CanvasRenderingContext2D, width: num
   ctx.putImageData(imageData, 0, 0);
 }
 
-function stampWatermark(ctx: CanvasModule.CanvasRenderingContext2D, width: number, height: number): void {
+function stampWatermark(
+  ctx: CanvasModule.CanvasRenderingContext2D,
+  width: number,
+  height: number,
+): void {
   const fontSize = Math.max(14, Math.round(width / 28));
   ctx.save();
   ctx.font = `bold ${fontSize}px sans-serif`;
@@ -67,7 +75,12 @@ function stampWatermark(ctx: CanvasModule.CanvasRenderingContext2D, width: numbe
   // across the frame -- a single corner stamp is trivially croppable.
   ctx.globalAlpha = 0.55;
   ctx.fillStyle = '#000000';
-  ctx.fillRect(0, height - fontSize - padding * 2, Math.min(width, textWidth + padding * 2), fontSize + padding * 2);
+  ctx.fillRect(
+    0,
+    height - fontSize - padding * 2,
+    Math.min(width, textWidth + padding * 2),
+    fontSize + padding * 2,
+  );
   ctx.globalAlpha = 0.9;
   ctx.fillStyle = '#ffffff';
   ctx.fillText(WATERMARK_TEXT, padding, height - padding);

@@ -157,9 +157,7 @@ describe('TokenomicsService', () => {
         // User-held supply is read from Wallet (see summarizeSupply) --
         // TokenAccount only supplies TREASURY/BURN.
         wallet: {
-          aggregate: jest
-            .fn()
-            .mockResolvedValue({ _sum: { balance: null, lockedBalance: null } }),
+          aggregate: jest.fn().mockResolvedValue({ _sum: { balance: null, lockedBalance: null } }),
         },
         valuationSnapshot: { findFirst: jest.fn().mockResolvedValue(null) },
       };

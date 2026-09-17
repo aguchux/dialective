@@ -6,8 +6,8 @@ Use these TypeScript snippets to sign a message from a developer-controlled wall
 
 ```ts
 const signResponse = await circleDeveloperSdk.signMessage({
-  walletId: "<wallet-id>",
-  message: "Hello, Circle!",
+  walletId: '<wallet-id>',
+  message: 'Hello, Circle!',
 });
 
 const signature = signResponse.data?.signature;
@@ -19,8 +19,8 @@ Signs using EIP-191 on EVM chains, or the native signing scheme on Solana and Ap
 
 ```ts
 const signResponse = await circleDeveloperSdk.signMessage({
-  walletId: "<wallet-id>",
-  message: "0x48656c6c6f",
+  walletId: '<wallet-id>',
+  message: '0x48656c6c6f',
   encodedByHex: true,
 });
 
@@ -33,9 +33,9 @@ Set `encodedByHex: true` when the message is already hex-encoded.
 
 ```ts
 const signResponse = await circleDeveloperSdk.signMessage({
-  walletAddress: "<wallet-address>",
-  blockchain: "ARC-TESTNET",
-  message: "Sign ARC-TESTNET message",
+  walletAddress: '<wallet-address>',
+  blockchain: 'ARC-TESTNET',
+  message: 'Sign ARC-TESTNET message',
 });
 
 const signature = signResponse.data?.signature;
@@ -51,7 +51,7 @@ The SDK also supports these additional signing methods. They follow the same pat
 
 ```ts
 const signResponse = await circleDeveloperSdk.signTypedData({
-  walletId: "<wallet-id>",
+  walletId: '<wallet-id>',
   data: JSON.stringify(eip712TypedData), // EIP-712 structured data as string
 });
 
@@ -64,8 +64,8 @@ Use for EIP-2612 permit approvals, off-chain order signing (e.g., Seaport), and 
 
 ```ts
 const signResponse = await circleDeveloperSdk.signTransaction({
-  walletId: "<wallet-id>",
-  rawTransaction: "<base64-or-hex-encoded-transaction>",
+  walletId: '<wallet-id>',
+  rawTransaction: '<base64-or-hex-encoded-transaction>',
 });
 
 const signature = signResponse.data?.signature;
@@ -78,8 +78,8 @@ Use when you build transactions externally and only need Circle to sign. Accepts
 
 ```ts
 const signResponse = await circleDeveloperSdk.signDelegateAction({
-  walletId: "<wallet-id>",
-  unsignedDelegateAction: "<base64-encoded-delegate-action>",
+  walletId: '<wallet-id>',
+  unsignedDelegateAction: '<base64-encoded-delegate-action>',
 });
 
 const signature = signResponse.data?.signature;

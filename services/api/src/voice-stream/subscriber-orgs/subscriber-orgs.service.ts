@@ -104,11 +104,16 @@ export class SubscriberOrgsService {
         data: { revokedAt: new Date() },
       }),
     ]);
-    void this.orgActivity.record(organizationId, ActivityEventType.MEMBER_ROLE_CHANGED, actorUserId, {
-      targetUserId: updated.userId,
-      oldRole: membership.role,
-      newRole: role,
-    });
+    void this.orgActivity.record(
+      organizationId,
+      ActivityEventType.MEMBER_ROLE_CHANGED,
+      actorUserId,
+      {
+        targetUserId: updated.userId,
+        oldRole: membership.role,
+        newRole: role,
+      },
+    );
     return updated;
   }
 
@@ -173,7 +178,9 @@ export class SubscriberOrgsService {
       orderBy: { createdAt: 'desc' },
       take: Math.min(limit, 100),
     });
-    const actorIds = [...new Set(events.map((e) => e.actorUserId).filter((id): id is string => id !== null))];
+    const actorIds = [
+      ...new Set(events.map((e) => e.actorUserId).filter((id): id is string => id !== null)),
+    ];
     const actors = actorIds.length
       ? await this.prisma.subscriberUser.findMany({
           where: { id: { in: actorIds } },

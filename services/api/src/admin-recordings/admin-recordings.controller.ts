@@ -30,11 +30,7 @@ export class AdminRecordingsController {
   }
 
   @Post(':id/audit')
-  audit(
-    @Req() req: AuthenticatedRequest,
-    @Param('id') id: string,
-    @Body() dto: AuditRecordingDto,
-  ) {
+  audit(@Req() req: AuthenticatedRequest, @Param('id') id: string, @Body() dto: AuditRecordingDto) {
     return this.recordings.audit(req.user.sub, id, dto);
   }
 }

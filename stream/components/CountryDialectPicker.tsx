@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { leadsApi, type Country, type DataAccessLeadInterestInput, type Dialect, type DialectVariant } from '@/lib/leads-api';
+import {
+  leadsApi,
+  type Country,
+  type DataAccessLeadInterestInput,
+  type Dialect,
+  type DialectVariant,
+} from '@/lib/leads-api';
 
 /**
  * Hierarchical multi-select: check a country -> its dialects appear ->

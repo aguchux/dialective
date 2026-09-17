@@ -8,11 +8,11 @@ Use these TypeScript snippets to receive webhook notifications when a contract e
 import crypto from 'node:crypto';
 
 const importRes = await scpClient.importContract({
-  address: "0xYourContractAddress",
-  blockchain: "ARC-TESTNET",
+  address: '0xYourContractAddress',
+  blockchain: 'ARC-TESTNET',
   idempotencyKey: crypto.randomUUID(),
-  name: "MyToken",
-  description: "Imported contract for event monitoring",
+  name: 'MyToken',
+  description: 'Imported contract for event monitoring',
 });
 
 console.log(importRes.data?.contract);
@@ -22,9 +22,9 @@ console.log(importRes.data?.contract);
 
 ```ts
 const monitorRes = await scpClient.createEventMonitor({
-  blockchain: "ARC-TESTNET",
-  contractAddress: "0xYourContractAddress",
-  eventSignature: "Transfer(address,address,uint256)",
+  blockchain: 'ARC-TESTNET',
+  contractAddress: '0xYourContractAddress',
+  eventSignature: 'Transfer(address,address,uint256)',
   idempotencyKey: crypto.randomUUID(),
 });
 
@@ -35,9 +35,9 @@ console.log(monitorRes.data?.eventMonitor);
 
 ```ts
 const historyRes = await scpClient.getEventHistory({
-  contractAddress: "0xYourContractAddress",
-  blockchain: "ARC-TESTNET",
-  eventSignature: "Transfer(address,address,uint256)",
+  contractAddress: '0xYourContractAddress',
+  blockchain: 'ARC-TESTNET',
+  eventSignature: 'Transfer(address,address,uint256)',
 });
 
 console.log(historyRes.data?.eventLogs ?? []);

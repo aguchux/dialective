@@ -1,6 +1,6 @@
 ---
 name: bridge-stablecoin
-description: "Build USDC bridging with Circle App Kit or standalone Bridge Kit SDK and Crosschain Transfer Protocol (CCTP). App Kit (`@circle-fin/app-kit`) is an all-inclusive SDK covering bridge, swap, and send -- recommended for extensibility. Bridge Kit (`@circle-fin/bridge-kit`) is a standalone package for bridge-only use cases. Neither requires a kit key for bridge operations. Supports bridging USDC between EVM chains, between EVM chains and Solana, and between any two chains on Circle Wallets (i.e Developer-Controlled Wallets or Programmable wallets). Use when: bridge USDC, setting up Bridge Kit adapters (Viem, Ethers, Solana Kit, Circle Wallets), handling bridge events, collecting custom fees, configuring transfer speed, or using the Forwarding Service. Triggers on: bridge USDC, CCTP, move USDC between chains, @circle-fin/bridge-kit, @circle-fin/app-kit, forwarding service."
+description: 'Build USDC bridging with Circle App Kit or standalone Bridge Kit SDK and Crosschain Transfer Protocol (CCTP). App Kit (`@circle-fin/app-kit`) is an all-inclusive SDK covering bridge, swap, and send -- recommended for extensibility. Bridge Kit (`@circle-fin/bridge-kit`) is a standalone package for bridge-only use cases. Neither requires a kit key for bridge operations. Supports bridging USDC between EVM chains, between EVM chains and Solana, and between any two chains on Circle Wallets (i.e Developer-Controlled Wallets or Programmable wallets). Use when: bridge USDC, setting up Bridge Kit adapters (Viem, Ethers, Solana Kit, Circle Wallets), handling bridge events, collecting custom fees, configuring transfer speed, or using the Forwarding Service. Triggers on: bridge USDC, CCTP, move USDC between chains, @circle-fin/bridge-kit, @circle-fin/app-kit, forwarding service.'
 ---
 
 ## Overview
@@ -54,7 +54,7 @@ No `KIT_KEY` is needed for bridge operations. A kit key is only required if you 
 **App Kit** (recommended):
 
 ```ts
-import { AppKit } from "@circle-fin/app-kit";
+import { AppKit } from '@circle-fin/app-kit';
 
 const kit = new AppKit();
 ```
@@ -62,7 +62,7 @@ const kit = new AppKit();
 **Bridge Kit** (standalone):
 
 ```ts
-import { BridgeKit } from "@circle-fin/bridge-kit";
+import { BridgeKit } from '@circle-fin/bridge-kit';
 
 const kit = new BridgeKit();
 ```
@@ -74,17 +74,20 @@ ALWAYS walk through these questions with the user before writing any code. Do no
 ### SDK Choice
 
 **Question 1 -- Will you need swap or send functionality in the future?**
+
 - Yes, or unsure -> **App Kit** (recommended) -- single SDK covers bridge + swap + send, easier to extend later
 - No, bridge-only and will never need swap or send -> **Bridge Kit** -- standalone, lighter package for bridge-only use cases
 
 ### Wallet / Adapter Choice
 
 **Question 2 -- How do you manage your wallet/keys?**
+
 - Managing your own private key (self-custodied, stored in env var or secrets manager) -> Question 3
 - Using Circle developer-controlled wallets (Circle manages key storage and signing) -> Use Circle Wallets adapter. READ `references/adapter-circle-wallets.md`
 - Using browser wallets (wagmi, ConnectKit, RainbowKit) -> Use wagmi adapter. READ `references/adapter-wagmi.md`
 
 **Question 3 -- Which chains are you bridging between?**
+
 - EVM-to-EVM or EVM-to-Solana -> Use Viem and/or Solana Kit adapters. READ `references/adapter-private-key.md`
 
 ## Core Concepts
@@ -169,6 +172,7 @@ When the task uses `useForwarder: true` (no destination wallet / no attestation 
 ## Error Handling & Recovery
 
 Both App Kit and Bridge Kit have two error categories:
+
 - **Hard errors** throw exceptions (validation, config, auth) -- catch in try/catch.
 - **Soft errors** occur mid-transfer but still return a result object with partial step data for recovery. NEVER re-run `kit.bridge()` from scratch after a soft error — `kit.retry(result, ...)` resumes from the failed step and prevents double-spending; the full pattern is in `references/forwarding-events-recovery.md`.
 
@@ -206,10 +210,12 @@ Both App Kit and Bridge Kit have two error categories:
 ## Alternatives
 
 Trigger the `swap-tokens` skill instead when:
+
 - You need to swap tokens (e.g., USDT to USDC) on the same chain.
 - You need to move non-USDC tokens across chains. The swap-tokens skill shows how to combine separate swap and bridge calls (swap tokenA to USDC, bridge USDC, swap USDC to tokenB).
 
 Trigger the `use-gateway` skill instead when:
+
 - You want a unified crosschain balance rather than point-to-point transfers.
 - Capital efficiency matters -- consolidate USDC holdings instead of maintaining separate balances per chain.
 - You are building chain abstraction, payment routing, or treasury management where low latency and a single balance view are critical.

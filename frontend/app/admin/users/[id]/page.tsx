@@ -80,7 +80,9 @@ export default function AdminUserDetailPage() {
   const { data: validatorDialects } = useGetValidatorDialectAssignmentsQuery(userId, {
     skip: user?.role !== 'VALIDATOR',
   });
-  const { data: dialectCountries } = useGetCountriesQuery(undefined, { skip: user?.role !== 'VALIDATOR' });
+  const { data: dialectCountries } = useGetCountriesQuery(undefined, {
+    skip: user?.role !== 'VALIDATOR',
+  });
   const [activityBatch, setActivityBatch] = useState(1);
   const ACTIVITY_BATCH_SIZE = 100;
   const { data: activity, isLoading: isLoadingActivity } = useGetUserActivityQuery({
@@ -104,9 +106,12 @@ export default function AdminUserDetailPage() {
   const [resetDialectDialogOpen, setResetDialectDialogOpen] = useState(false);
 
   const [sendReport, { isLoading: isSendingReport }] = useSendInstantTrainerReportMutation();
-  const [updateTrainerRating, { isLoading: isUpdatingTrainerRating }] = useUpdateTrainerRatingMutation();
-  const [updateValidatorLevel, { isLoading: isUpdatingValidatorLevel }] = useUpdateValidatorLevelMutation();
-  const [assignValidatorDialect, { isLoading: isAssigningDialect }] = useAssignValidatorDialectMutation();
+  const [updateTrainerRating, { isLoading: isUpdatingTrainerRating }] =
+    useUpdateTrainerRatingMutation();
+  const [updateValidatorLevel, { isLoading: isUpdatingValidatorLevel }] =
+    useUpdateValidatorLevelMutation();
+  const [assignValidatorDialect, { isLoading: isAssigningDialect }] =
+    useAssignValidatorDialectMutation();
   const [unassignValidatorDialect] = useUnassignValidatorDialectMutation();
   const [reportMessage, setReportMessage] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
@@ -318,7 +323,8 @@ export default function AdminUserDetailPage() {
               {(user.potentialDuplicateNameMatches?.length ?? 0) > 0 ? (
                 <>
                   <p className="text-sm leading-relaxed text-amber-900">
-                    Potential same-name match. This is a review warning only; a matching name does not prove the accounts belong to one person.
+                    Potential same-name match. This is a review warning only; a matching name does
+                    not prove the accounts belong to one person.
                   </p>
                   <div className="grid gap-2">
                     {user.potentialDuplicateNameMatches!.map((match) => (
@@ -328,18 +334,24 @@ export default function AdminUserDetailPage() {
                         key={match.id}
                       >
                         <span className="font-extrabold text-ink">
-                          {[match.firstName, match.lastName].filter(Boolean).join(' ') || 'Name not provided'}
+                          {[match.firstName, match.lastName].filter(Boolean).join(' ') ||
+                            'Name not provided'}
                         </span>
                         <span className="text-muted">{match.email}</span>
                         <span className="text-muted">
-                          {match.phoneNumber ?? 'No mobile'} | {match.phoneVerified ? 'Mobile verified' : 'Mobile unverified'} | {match.status} | DIDIT {match.kycStatus.replace(/_/g, ' ')}
+                          {match.phoneNumber ?? 'No mobile'} |{' '}
+                          {match.phoneVerified ? 'Mobile verified' : 'Mobile unverified'} |{' '}
+                          {match.status} | DIDIT {match.kycStatus.replace(/_/g, ' ')}
                         </span>
                       </Link>
                     ))}
                   </div>
                 </>
               ) : (
-                <p className="text-sm text-amber-900">No potential same-name matches found. DIDIT-approved identities and mobile numbers are enforced as unique.</p>
+                <p className="text-sm text-amber-900">
+                  No potential same-name matches found. DIDIT-approved identities and mobile numbers
+                  are enforced as unique.
+                </p>
               )}
             </section>
 
@@ -500,10 +512,15 @@ export default function AdminUserDetailPage() {
                 <div className="grid gap-1">
                   <h2 className="text-lg font-black">Trainer quality rating</h2>
                   <p className="text-sm leading-relaxed text-muted">
-                    Apply an administrative quality label. It is informational only and never changes scoring or payouts.
+                    Apply an administrative quality label. It is informational only and never
+                    changes scoring or payouts.
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2" role="group" aria-label="Trainer quality rating">
+                <div
+                  className="flex flex-wrap gap-2"
+                  role="group"
+                  aria-label="Trainer quality rating"
+                >
                   {trainerRatingOptions.map((rating) => {
                     const selected = user.trainerRating === rating;
                     return (
@@ -538,8 +555,8 @@ export default function AdminUserDetailPage() {
                 <h2 className="text-lg font-black text-[#8a4b0f]">Training dialect</h2>
                 <p className="text-sm leading-relaxed text-[#8a4b0f]">
                   Reset this selection when the trainer must move to another dialect or sub-dialect.
-                  Their country of origin and historical recordings remain unchanged. Their next login
-                  starts at dialect onboarding before they can train again.
+                  Their country of origin and historical recordings remain unchanged. Their next
+                  login starts at dialect onboarding before they can train again.
                 </p>
                 <div>
                   <button
@@ -631,8 +648,8 @@ export default function AdminUserDetailPage() {
                 <div className="grid gap-1">
                   <h2 className="text-lg font-black">Pending scoring</h2>
                   <p className="text-sm leading-relaxed text-muted">
-                    Recordings whose stake is still held: awaiting the scoring pipeline (PENDING)
-                    or scored but not yet paid out by the settlement job (SCORED). Settling a SCORED
+                    Recordings whose stake is still held: awaiting the scoring pipeline (PENDING) or
+                    scored but not yet paid out by the settlement job (SCORED). Settling a SCORED
                     row here pays it out immediately using the same formula the automated job uses.
                   </p>
                 </div>
@@ -725,7 +742,10 @@ export default function AdminUserDetailPage() {
         <ReleaseAuditHoldDialog user={user} onClose={() => setReleaseHoldDialogOpen(false)} />
       )}
       {user && revokePhoneDialogOpen && (
-        <RevokePhoneVerificationDialog user={user} onClose={() => setRevokePhoneDialogOpen(false)} />
+        <RevokePhoneVerificationDialog
+          user={user}
+          onClose={() => setRevokePhoneDialogOpen(false)}
+        />
       )}
       {user && deleteDialogOpen && (
         <DeleteUserDialog
@@ -872,7 +892,11 @@ const pendingScoringColumns: DataTableColumn<UnsettledRow>[] = [
               : 'bg-red-50 text-danger'
         }`}
       >
-        {row.status === 'PENDING' ? 'Awaiting scoring' : row.pendingDelay ? 'Pending delay' : 'Stuck'}
+        {row.status === 'PENDING'
+          ? 'Awaiting scoring'
+          : row.pendingDelay
+            ? 'Pending delay'
+            : 'Stuck'}
       </span>
     ),
     sortValue: (row) => row.status,
