@@ -6,8 +6,9 @@ export function formatContact(firstName: string | null, lastName: string | null,
   return name ? `${name} · ${phoneNumber}` : phoneNumber;
 }
 
-export function waLink(phoneNumber: string): string {
-  return `https://wa.me/${phoneNumber.replace(/\D/g, '')}`;
+export function waLink(phoneNumber: string, prefilledMessage?: string): string {
+  const base = `https://wa.me/${phoneNumber.replace(/\D/g, '')}`;
+  return prefilledMessage ? `${base}?text=${encodeURIComponent(prefilledMessage)}` : base;
 }
 
 /**
@@ -24,17 +25,20 @@ export function WhatsAppContactLink({
   firstName,
   lastName,
   phoneNumber,
+  prefilledMessage,
   className = '',
 }: {
   firstName: string | null;
   lastName: string | null;
   phoneNumber: string;
+  /** Pre-fills the WhatsApp message compose box -- e.g. an admin's dispute context so they don't have to retype it. */
+  prefilledMessage?: string;
   className?: string;
 }) {
   return (
     <a
       className={`inline-flex items-center gap-1.5 underline decoration-dotted underline-offset-2 hover:text-accent ${className}`}
-      href={waLink(phoneNumber)}
+      href={waLink(phoneNumber, prefilledMessage)}
       rel="noreferrer"
       target="_blank"
     >

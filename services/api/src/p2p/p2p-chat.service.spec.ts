@@ -41,6 +41,10 @@ function setup(trade: unknown) {
       findMany: jest.fn().mockResolvedValue([]),
       findFirst: jest.fn(),
       create: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
+    },
+    user: {
+      findUnique: jest.fn().mockResolvedValue({ email: 'party@example.com' }),
     },
   };
   const storage = {
@@ -54,8 +58,16 @@ function setup(trade: unknown) {
       expiresInSeconds: 900,
     }),
   };
-  const service = new P2PChatService(prisma as never, storage as never);
-  return { service, prisma, storage };
+  const mail = {
+    sendP2PAdminJoinedDisputeEmail: jest.fn().mockResolvedValue(undefined),
+  };
+  const service = new P2PChatService(prisma as never, storage as never, mail as never);
+  return { service, prisma, storage, mail };
+}
+
+/** notifyPartiesAdminJoined is fire-and-forget (void this.notify...) -- flush microtasks so its assertions are observable before the test checks them. */
+async function flushMicrotasks() {
+  await new Promise((resolve) => setImmediate(resolve));
 }
 
 describe('P2PChatService -- access control', () => {
@@ -147,6 +159,75 @@ describe('P2PChatService.sendMessage', () => {
     expect(prisma.p2PTradeMessage.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ isFromAdmin: false }) }),
     );
+  });
+
+  describe('admin-joined-dispute notification', () => {
+    it('emails both buyer and seller on the admin\'s first message in the thread', async () => {
+      const { service, prisma, mail } = setup(
+        makeTrade({ disputedAt: new Date(), status: 'DISPUTED' }),
+      );
+      prisma.p2PTradeMessage.count.mockResolvedValue(0);
+      prisma.p2PTradeMessage.create.mockResolvedValue(
+        makeMessage({ senderId: 'admin-1', isFromAdmin: true, body: 'Please share your receipt' }),
+      );
+
+      await service.sendMessage('admin-1', Role.ADMIN, 'trade-1', { body: 'Please share your receipt' });
+      await flushMicrotasks();
+
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({
+        where: { id: 'buyer-1' },
+        select: { email: true },
+      });
+      expect(prisma.user.findUnique).toHaveBeenCalledWith({
+        where: { id: 'seller-1' },
+        select: { email: true },
+      });
+      expect(mail.sendP2PAdminJoinedDisputeEmail).toHaveBeenCalledTimes(2);
+      expect(mail.sendP2PAdminJoinedDisputeEmail).toHaveBeenCalledWith('party@example.com', 'trade-1');
+    });
+
+    it('does not email again on a second admin message in the same thread', async () => {
+      const { service, prisma, mail } = setup(
+        makeTrade({ disputedAt: new Date(), status: 'DISPUTED' }),
+      );
+      // A prior admin message already exists in this thread.
+      prisma.p2PTradeMessage.count.mockResolvedValue(1);
+      prisma.p2PTradeMessage.create.mockResolvedValue(
+        makeMessage({ senderId: 'admin-1', isFromAdmin: true, body: 'Follow-up' }),
+      );
+
+      await service.sendMessage('admin-1', Role.ADMIN, 'trade-1', { body: 'Follow-up' });
+      await flushMicrotasks();
+
+      expect(mail.sendP2PAdminJoinedDisputeEmail).not.toHaveBeenCalled();
+    });
+
+    it('does not email when the message is from a trade participant, not an admin', async () => {
+      const { service, prisma, mail } = setup(makeTrade());
+      prisma.p2PTradeMessage.create.mockResolvedValue(makeMessage({ body: 'I have paid' }));
+
+      await service.sendMessage('buyer-1', Role.TRAINER, 'trade-1', { body: 'I have paid' });
+      await flushMicrotasks();
+
+      expect(prisma.p2PTradeMessage.count).not.toHaveBeenCalled();
+      expect(mail.sendP2PAdminJoinedDisputeEmail).not.toHaveBeenCalled();
+    });
+
+    it('never lets an email-send failure reject the sendMessage call', async () => {
+      const { service, prisma, mail } = setup(
+        makeTrade({ disputedAt: new Date(), status: 'DISPUTED' }),
+      );
+      prisma.p2PTradeMessage.count.mockResolvedValue(0);
+      prisma.p2PTradeMessage.create.mockResolvedValue(
+        makeMessage({ senderId: 'admin-1', isFromAdmin: true, body: 'hi' }),
+      );
+      mail.sendP2PAdminJoinedDisputeEmail.mockRejectedValue(new Error('mail provider down'));
+
+      await expect(
+        service.sendMessage('admin-1', Role.ADMIN, 'trade-1', { body: 'hi' }),
+      ).resolves.toBeDefined();
+      await flushMicrotasks();
+    });
   });
 });
 

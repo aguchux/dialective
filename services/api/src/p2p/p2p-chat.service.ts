@@ -1,8 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Prisma, Role } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { MailService } from '../mail/mail.service';
 import { CreateP2PChatUploadUrlDto, SendP2PTradeMessageDto } from './dto/p2p-chat.dto';
 
 const P2P_CHAT_BUCKET = process.env.SPACES_P2P_CHAT_BUCKET ?? 'dialectiva-p2p-chat';
@@ -33,9 +34,12 @@ type MessageWithSender = Prisma.P2PTradeMessageGetPayload<{
  */
 @Injectable()
 export class P2PChatService {
+  private readonly logger = new Logger(P2PChatService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly mail: MailService,
   ) {}
 
   async listMessages(userId: string, userRole: Role, tradeId: string) {
@@ -55,18 +59,57 @@ export class P2PChatService {
     if (!body && !dto.attachmentKey) {
       throw new BadRequestException('Message must include text or an attachment');
     }
+    const isFromAdmin =
+      userRole === Role.ADMIN && trade.buyerId !== userId && trade.sellerId !== userId;
+    // Checked BEFORE the insert, not after -- "is this the first admin
+    // message" must reflect the state the sender actually walked into, not
+    // a state that already includes the message being created right now.
+    const isAdminsFirstMessageInThisThread =
+      isFromAdmin &&
+      (await this.prisma.p2PTradeMessage.count({ where: { tradeId: trade.id, isFromAdmin: true } })) ===
+        0;
     const message = await this.prisma.p2PTradeMessage.create({
       data: {
         tradeId: trade.id,
         senderId: userId,
-        isFromAdmin: userRole === Role.ADMIN && trade.buyerId !== userId && trade.sellerId !== userId,
+        isFromAdmin,
         body,
         attachmentKey: dto.attachmentKey,
         attachmentContentType: dto.attachmentKey ? dto.attachmentContentType : undefined,
       },
       include: { sender: messageSenderSelect },
     });
+    if (isAdminsFirstMessageInThisThread) {
+      void this.notifyPartiesAdminJoined(trade.id, trade.buyerId, trade.sellerId);
+    }
     return serializeMessage(message);
+  }
+
+  /**
+   * Best-effort, fire-and-forget -- an email delivery failure must never
+   * fail the admin's message send itself. Notifies BOTH parties, not just
+   * whoever raised the dispute, since either side may need to respond once
+   * an admin is reviewing.
+   */
+  private async notifyPartiesAdminJoined(
+    tradeId: string,
+    buyerId: string,
+    sellerId: string,
+  ): Promise<void> {
+    try {
+      const [buyer, seller] = await Promise.all([
+        this.prisma.user.findUnique({ where: { id: buyerId }, select: { email: true } }),
+        this.prisma.user.findUnique({ where: { id: sellerId }, select: { email: true } }),
+      ]);
+      await Promise.all([
+        buyer ? this.mail.sendP2PAdminJoinedDisputeEmail(buyer.email, tradeId) : Promise.resolve(),
+        seller ? this.mail.sendP2PAdminJoinedDisputeEmail(seller.email, tradeId) : Promise.resolve(),
+      ]);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to notify trade=${tradeId} parties that an admin joined the dispute: ${String(err)}`,
+      );
+    }
   }
 
   /**

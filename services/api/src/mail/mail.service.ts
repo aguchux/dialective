@@ -323,6 +323,17 @@ export class MailService {
     );
   }
 
+  /** Fired from P2PChatService.sendMessage the first time an admin posts in a disputed trade's thread -- both the buyer and seller get this, not just the party who raised the dispute, since either side may need to respond. */
+  async sendP2PAdminJoinedDisputeEmail(email: string, tradeId: string): Promise<void> {
+    const tradeUrl = `${frontendUrl()}/dashboard/market-activity`;
+    await this.send(
+      email,
+      'A Dialect Library admin has joined your P2P dispute',
+      p2pAdminJoinedDisputeHtml(tradeUrl),
+      p2pAdminJoinedDisputeText(tradeUrl),
+    );
+  }
+
   /** Fired from WhatsAppValidatorService.claim once a peer validator picks up the requester's pending verification, so the requester knows to watch for a WhatsApp message instead of only finding out by opening the app again. */
   async sendWhatsAppValidationClaimedEmail(
     email: string,
@@ -731,6 +742,18 @@ function phoneVerifiedText(phoneNumber: string, dashboardUrl: string): string {
   return `Your phone number ${phoneNumber} has been verified.
 You can now request withdrawals and trade on the P2P market.
 Go to your dashboard: ${dashboardUrl}`;
+}
+
+function p2pAdminJoinedDisputeHtml(tradeUrl: string): string {
+  return `<p>A Dialect Library admin has joined the conversation on your disputed P2P trade.</p>
+<p>Reply in the trade conversation with any additional details or proof -- the admin will review and resolve the dispute from there.</p>
+<p><a href="${tradeUrl}">View the trade</a></p>`;
+}
+
+function p2pAdminJoinedDisputeText(tradeUrl: string): string {
+  return `A Dialect Library admin has joined the conversation on your disputed P2P trade.
+Reply in the trade conversation with any additional details or proof -- the admin will review and resolve the dispute from there.
+View the trade: ${tradeUrl}`;
 }
 
 function whatsAppValidationClaimedHtml(

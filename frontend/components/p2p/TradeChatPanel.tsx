@@ -18,6 +18,10 @@ import {
 const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 
+function tradePartyName(party: { firstName: string | null; lastName: string | null; email: string }): string {
+  return [party.firstName, party.lastName].filter(Boolean).join(' ') || party.email;
+}
+
 /**
  * The trade details screen: a shared chat thread for the two trade
  * participants (payment coordination, proof-of-payment uploads), plus a
@@ -105,14 +109,22 @@ export function TradeChatPanel({
     >
       <div className="flex h-[min(88dvh,720px)] w-full max-w-xl flex-col overflow-hidden rounded-t-xl border border-line bg-white shadow-2xl sm:rounded-xl">
         <header className="flex items-center justify-between gap-3 border-b border-line bg-surface-muted px-4 py-3">
-          <div>
-            <p className="font-black">Trade conversation</p>
+          <div className="min-w-0">
+            <p className="truncate font-black">
+              {tradePartyName(trade.seller)} <span aria-hidden="true">&rArr;</span>{' '}
+              {tradePartyName(trade.buyer)}
+            </p>
             <p className="text-xs font-bold text-muted">
               {formatCompactNumber(trade.tokenAmount)} DL ·{' '}
               {Number(trade.fiatAmount).toLocaleString()} {trade.fiatCurrency}
             </p>
           </div>
-          <button aria-label="Close" className="rounded p-1 hover:bg-white" onClick={onClose} type="button">
+          <button
+            aria-label="Close"
+            className="shrink-0 rounded p-1 hover:bg-white"
+            onClick={onClose}
+            type="button"
+          >
             <X className="size-5" />
           </button>
         </header>

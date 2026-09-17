@@ -274,6 +274,83 @@ describe('P2PService.adminListTrades -- counterparty phone number reveal', () =>
     expect(result.buyer.phoneNumber).toBe('+15550001111');
     expect(result.seller.phoneNumber).toBe('+15550002222');
   });
+
+  describe('P2PService.adminListDisputes -- defaulter derivation', () => {
+    function makeDispute(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'dispute-1',
+        status: 'OPEN',
+        reason: "The buyer didn't send me the money",
+        evidenceUrl: null,
+        resolutionNote: null,
+        createdAt: new Date(),
+        resolvedAt: null,
+        raisedByUserId: 'seller-1',
+        raisedByUser: {
+          id: 'seller-1',
+          email: 'seller@example.com',
+          firstName: 'Grace',
+          lastName: 'Hopper',
+          phoneNumber: '+15550002222',
+        },
+        resolvedByAdmin: null,
+        trade: makeTrade(),
+        ...overrides,
+      };
+    }
+
+    it('derives the defaulter as the OTHER trade party, not whoever raised the dispute', async () => {
+      const prisma = {
+        p2PDispute: { findMany: jest.fn().mockResolvedValue([makeDispute()]) },
+      };
+      const service = new P2PService(prisma as never, {} as never, {} as never, {} as never);
+
+      const [result] = await service.adminListDisputes({} as any);
+
+      // Seller raised it (raisedByUserId: 'seller-1') -- the buyer is the defaulter.
+      expect(result.raisedBy.id).toBe('seller-1');
+      expect(result.defaulter.id).toBe('buyer-1');
+      expect(result.defaulter.email).toBe('buyer@example.com');
+    });
+
+    it('derives the defaulter as the seller when the buyer raised the dispute', async () => {
+      const prisma = {
+        p2PDispute: {
+          findMany: jest.fn().mockResolvedValue([
+            makeDispute({
+              raisedByUserId: 'buyer-1',
+              raisedByUser: {
+                id: 'buyer-1',
+                email: 'buyer@example.com',
+                firstName: 'Ada',
+                lastName: 'Lovelace',
+                phoneNumber: '+15550001111',
+              },
+            }),
+          ]),
+        },
+      };
+      const service = new P2PService(prisma as never, {} as never, {} as never, {} as never);
+
+      const [result] = await service.adminListDisputes({} as any);
+
+      expect(result.raisedBy.id).toBe('buyer-1');
+      expect(result.defaulter.id).toBe('seller-1');
+      expect(result.defaulter.email).toBe('seller@example.com');
+    });
+
+    it('includes the reporter\'s phone number for the admin WhatsApp deep-link', async () => {
+      const prisma = {
+        p2PDispute: { findMany: jest.fn().mockResolvedValue([makeDispute()]) },
+      };
+      const service = new P2PService(prisma as never, {} as never, {} as never, {} as never);
+
+      const [result] = await service.adminListDisputes({} as any);
+
+      expect(result.raisedBy.phoneNumber).toBe('+15550002222');
+      expect(result.defaulter.phoneNumber).toBe('+15550001111');
+    });
+  });
 });
 
 describe('P2PService trade-notification SMS', () => {

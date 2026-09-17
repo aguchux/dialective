@@ -1005,18 +1005,35 @@ export class P2PService {
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
-    return disputes.map((dispute) => ({
-      id: dispute.id,
-      status: dispute.status,
-      reason: dispute.reason,
-      evidenceUrl: dispute.evidenceUrl,
-      resolutionNote: dispute.resolutionNote,
-      createdAt: dispute.createdAt,
-      resolvedAt: dispute.resolvedAt,
-      raisedBy: dispute.raisedByUser,
-      resolvedByAdmin: dispute.resolvedByAdmin,
-      trade: serializeTrade(dispute.trade),
-    }));
+    return disputes.map((dispute) => {
+      // The "defaulter" is whichever trade party did NOT raise the dispute
+      // -- a dispute is inherently one party reporting the other, so this is
+      // always derivable from the trade's own buyer/seller ids rather than
+      // needing a separate stored field. Admin UI uses this to show a clear
+      // red (defaulter) / green (reporter) distinction instead of two
+      // unlabeled emails.
+      const defaulter =
+        dispute.trade.buyerId === dispute.raisedByUserId ? dispute.trade.seller : dispute.trade.buyer;
+      return {
+        id: dispute.id,
+        status: dispute.status,
+        reason: dispute.reason,
+        evidenceUrl: dispute.evidenceUrl,
+        resolutionNote: dispute.resolutionNote,
+        createdAt: dispute.createdAt,
+        resolvedAt: dispute.resolvedAt,
+        raisedBy: dispute.raisedByUser,
+        defaulter: {
+          id: defaulter.id,
+          firstName: defaulter.firstName,
+          lastName: defaulter.lastName,
+          email: defaulter.email,
+          phoneNumber: defaulter.phoneNumber,
+        },
+        resolvedByAdmin: dispute.resolvedByAdmin,
+        trade: serializeTrade(dispute.trade),
+      };
+    });
   }
 
   async resolveDispute(adminId: string, disputeId: string, dto: ResolveDisputeDto) {

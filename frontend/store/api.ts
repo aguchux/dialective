@@ -1143,6 +1143,14 @@ export interface P2PTradeMessage {
   sender: { id: string; firstName: string | null; lastName: string | null; email: string };
 }
 
+export interface P2PDisputeParty {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  phoneNumber: string | null;
+}
+
 export interface P2PDispute {
   id: string;
   status: P2PDisputeStatus;
@@ -1151,7 +1159,9 @@ export interface P2PDispute {
   resolutionNote: string | null;
   createdAt: string;
   resolvedAt: string | null;
-  raisedBy: { id: string; email: string; firstName: string | null; lastName: string | null };
+  raisedBy: P2PDisputeParty;
+  /** The trade party who did NOT raise this dispute -- derived server-side, see P2PService.adminListDisputes. */
+  defaulter: P2PDisputeParty;
   trade: P2PTrade;
 }
 
