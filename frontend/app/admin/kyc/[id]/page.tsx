@@ -146,12 +146,14 @@ export default function AdminKycDetailPage() {
     }
   }
 
-  async function approveRow() {
+  async function approveRow(): Promise<boolean> {
     setError(null);
     try {
       await approve(id).unwrap();
+      return true;
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to approve this verification.'));
+      return false;
     }
   }
 
@@ -238,7 +240,15 @@ export default function AdminKycDetailPage() {
             {row.provider === 'self' && (
               <section className="grid gap-3 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
                 <h2 className="text-lg font-black">Captured evidence</h2>
-                <EvidencePanel verificationId={row.id} />
+                <EvidencePanel
+                  verificationId={row.id}
+                  canApprove={row.status === 'IN_PROGRESS' || row.status === 'IN_REVIEW'}
+                  approving={approving}
+                  onApproveAndContinue={async () => {
+                    const ok = await approveRow();
+                    if (ok) router.push('/admin/kyc');
+                  }}
+                />
               </section>
             )}
 
@@ -392,7 +402,17 @@ export default function AdminKycDetailPage() {
   );
 }
 
-function EvidencePanel({ verificationId }: { verificationId: string }) {
+function EvidencePanel({
+  verificationId,
+  canApprove,
+  approving,
+  onApproveAndContinue,
+}: {
+  verificationId: string;
+  canApprove: boolean;
+  approving: boolean;
+  onApproveAndContinue: () => void | Promise<void>;
+}) {
   const { data: evidence, isLoading } = useListKycEvidenceQuery(verificationId);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -425,27 +445,47 @@ function EvidencePanel({ verificationId }: { verificationId: string }) {
         onOpenChange={(open) => !open && setSelectedId(null)}
         verificationId={verificationId}
         evidenceId={selectedId}
+        canApprove={canApprove}
+        approving={approving}
+        onApproveAndContinue={onApproveAndContinue}
       />
     </div>
   );
 }
 
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 3;
+const ZOOM_STEP = 0.5;
+
 function EvidenceImageDialog({
   verificationId,
   evidenceId,
   onOpenChange,
+  canApprove,
+  approving,
+  onApproveAndContinue,
 }: {
   verificationId: string;
   evidenceId: string | null;
   onOpenChange: (open: boolean) => void;
+  canApprove: boolean;
+  approving: boolean;
+  onApproveAndContinue: () => void | Promise<void>;
 }) {
   const [fetchImage, { data: imageUrl, isFetching }] = useLazyGetKycEvidenceImageQuery();
   const previousUrlRef = useRef<string | null>(null);
+  const [zoom, setZoom] = useState(1);
 
   useEffect(() => {
     if (!evidenceId) return;
     void fetchImage({ verificationId, evidenceId });
   }, [evidenceId, fetchImage, verificationId]);
+
+  // Reset zoom whenever a different piece of evidence is opened -- a leftover
+  // zoom level from the last image would be confusing here.
+  useEffect(() => {
+    setZoom(1);
+  }, [evidenceId]);
 
   useEffect(() => {
     if (previousUrlRef.current && previousUrlRef.current !== imageUrl) {
@@ -465,8 +505,60 @@ function EvidenceImageDialog({
       >
         {isFetching && <p className="text-muted">Loading...</p>}
         {imageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element -- this is a blob: object URL, not an optimizable remote asset
-          <img alt="Redacted KYC evidence" className="w-full rounded-lg border border-line" src={imageUrl} />
+          <>
+            <div className="flex items-center justify-end gap-1.5">
+              <button
+                className="grid size-8 place-items-center rounded-lg border border-line text-lg font-black hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Zoom out"
+                disabled={zoom <= ZOOM_MIN}
+                onClick={() => setZoom((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP))}
+                type="button"
+              >
+                &minus;
+              </button>
+              <span className="min-w-11 text-center text-xs font-bold text-muted">
+                {Math.round(zoom * 100)}%
+              </span>
+              <button
+                className="grid size-8 place-items-center rounded-lg border border-line text-lg font-black hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Zoom in"
+                disabled={zoom >= ZOOM_MAX}
+                onClick={() => setZoom((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP))}
+                type="button"
+              >
+                +
+              </button>
+              {zoom !== 1 && (
+                <button
+                  className="min-h-8 rounded-lg border border-line px-2 text-xs font-bold hover:bg-surface-muted"
+                  onClick={() => setZoom(1)}
+                  type="button"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+            <div className="max-h-[60vh] overflow-auto rounded-lg border border-line">
+              <img
+                alt="Redacted KYC evidence"
+                className="origin-top-left transition-transform"
+                // eslint-disable-next-line @next/next/no-img-element -- this is a blob: object URL, not an optimizable remote asset
+                src={imageUrl}
+                style={{ width: '100%', transform: `scale(${zoom})` }}
+              />
+            </div>
+          </>
+        )}
+        {canApprove && (
+          <ActionButton
+            className="min-h-11 w-full rounded-lg border border-accent bg-accent font-extrabold text-white hover:bg-accent-dark disabled:opacity-60"
+            onClick={() => void onApproveAndContinue()}
+            pending={approving}
+            pendingLabel="Approving"
+            type="button"
+          >
+            Approve and continue
+          </ActionButton>
         )}
       </DialogContent>
     </Dialog>
