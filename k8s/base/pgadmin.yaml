@@ -66,6 +66,21 @@ spec:
           volumeMounts:
             - name: pgadmin-data
               mountPath: /var/lib/pgadmin
+          # 15 restarts (all exit 137) -- by far the worst offender in the
+          # namespace, and the least important workload in it. An admin
+          # convenience tool was being killed repeatedly while competing for
+          # unreserved memory against postgres, redis and the api.
+          #
+          # Measured ~257Mi. A tight limit here is deliberate: this is the
+          # one workload that SHOULD lose a memory fight, so capping it at
+          # 512Mi protects the database and api from it rather than the other
+          # way round.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
           readinessProbe:
             httpGet:
               path: /misc/ping

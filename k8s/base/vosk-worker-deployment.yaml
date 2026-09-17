@@ -39,6 +39,16 @@ spec:
           volumeMounts:
             - name: model-repo
               mountPath: /models
+          # Explicit sizing so this is Burstable, not BestEffort -- an unsized
+          # container is the first thing the kernel OOM-kills under node memory
+          # pressure, and this node pool is shared with the unrelated `bitocard`
+          # namespace. See api-deployment.yaml for the incident this came from.
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
       containers:
         - name: vosk-worker
           image: golojan/dialect-vosk-worker:latest
@@ -102,6 +112,16 @@ spec:
             - name: model-repo
               mountPath: /models
               readOnly: true
+          # Explicit sizing so this is Burstable, not BestEffort -- an unsized
+          # container is the first thing the kernel OOM-kills under node memory
+          # pressure, and this node pool is shared with the unrelated `bitocard`
+          # namespace. See api-deployment.yaml for the incident this came from.
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
       volumes:
         - name: model-repo
           persistentVolumeClaim:

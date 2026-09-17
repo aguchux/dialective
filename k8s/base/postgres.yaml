@@ -82,6 +82,23 @@ spec:
             - name: postgres-tls-runtime
               mountPath: /postgres-tls-runtime
               readOnly: true
+          # THE most important resource block in this repo. Without it this
+          # container is BestEffort, which is the first QoS class the kernel
+          # kills under node memory pressure -- i.e. the primary database was
+          # a top eviction candidate on a node sitting at 98% requested
+          # memory, shared with the unrelated `bitocard` namespace.
+          #
+          # Measured at ~311Mi steady state. requests 1Gi is deliberately
+          # well above that: it buys Guaranteed-adjacent scheduling priority
+          # and room for shared_buffers/work_mem under real query load rather
+          # than sizing to an idle moment. limits 2Gi caps a runaway query
+          # without putting the whole node at risk.
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+            limits:
+              memory: 2Gi
           readinessProbe:
             exec:
               command: ["pg_isready", "-U", "$(POSTGRES_USER)", "-d", "$(POSTGRES_DB)"]

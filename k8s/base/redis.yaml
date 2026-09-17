@@ -73,6 +73,22 @@ spec:
             - name: redis-tls
               mountPath: /tls
               readOnly: true
+          # Was BestEffort -- first to be OOM-killed under node pressure --
+          # despite being the work-queue backbone for BOTH clusters (GKE's
+          # workers consume these same streams over redis-external).
+          #
+          # Measured ~84Mi, but that is not the number to size to: the
+          # streams are unbounded (quality-gate-jobs alone was 199k entries /
+          # 63MB with no MAXLEN trim), so memory here grows with backlog
+          # rather than with traffic. requests 512Mi / limits 1Gi gives real
+          # headroom for a backlog spike; if this starts being hit, the fix
+          # is trimming the streams, not raising the limit.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
           # redis-cli needs -a/--tls to reach an AUTH+TLS-required server --
           # probing the plain 6379 port with a bare PING still works exactly
           # as before, so requirepass doesn't need to touch these.

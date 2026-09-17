@@ -445,3 +445,25 @@ spec:
               port: 3000
             initialDelaySeconds: 15
             periodSeconds: 20
+          # Sized from measurement, not guesswork: steady state was ~680Mi
+          # with a cgroup peak of 1057Mi (memory.peak inside the pod).
+          #
+          # This container previously declared nothing at all, which made it
+          # BestEffort -- the FIRST QoS class the kernel kills under node
+          # memory pressure. It duly grew past 1Gi on a node already at 63%
+          # requested / 108% limits and was OOMKilled (exit 137). Without a
+          # request the scheduler also can't reserve anything for it, so it
+          # kept landing on nodes that had no room to give.
+          #
+          # requests 768Mi covers steady state so the scheduler reserves real
+          # space; limits 2Gi leaves ~2x headroom over observed peak so a
+          # traffic spike or a heavy report query throttles rather than dies.
+          # Note this node pool is SHARED with the unrelated `bitocard`
+          # namespace, so leaving dai workloads unsized means competing for
+          # memory with another project's pods and losing.
+          resources:
+            requests:
+              cpu: 200m
+              memory: 768Mi
+            limits:
+              memory: 2Gi

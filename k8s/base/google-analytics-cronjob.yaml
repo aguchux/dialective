@@ -43,3 +43,14 @@ spec:
                       name: google-analytics-creds
                       key: service_account_json
                       optional: true
+
+              # Explicit sizing so this is Burstable, not BestEffort -- an unsized
+              # container is the first thing the kernel OOM-kills under node memory
+              # pressure, and this node pool is shared with the unrelated `bitocard`
+              # namespace. See api-deployment.yaml for the incident this came from.
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+                limits:
+                  memory: 384Mi

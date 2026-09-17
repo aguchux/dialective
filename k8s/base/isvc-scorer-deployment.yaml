@@ -48,3 +48,13 @@ spec:
                 secretKeyRef:
                   name: postgres-creds
                   key: connection_string
+          # Measured ~65Mi steady state. Sized modestly but explicitly, so
+          # this stops being BestEffort and competing for unreserved memory
+          # with postgres/redis/api on a node pool shared with the unrelated
+          # `bitocard` namespace.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
