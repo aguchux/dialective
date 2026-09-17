@@ -11,6 +11,7 @@ import {
   P2PDispute,
   P2PDisputeParty,
   P2PTrade,
+  P2PTradeStatus,
   useGetMeQuery,
   useListAdminP2PDisputesQuery,
   useListAdminP2PTradesQuery,
@@ -18,6 +19,7 @@ import {
 } from '@/store/api';
 
 const PAGE_SIZE = 5;
+const TERMINAL_TRADE_STATUSES = new Set<P2PTradeStatus>(['RELEASED', 'CANCELLED', 'EXPIRED']);
 
 function partyName(party: P2PDisputeParty): string {
   return [party.firstName, party.lastName].filter(Boolean).join(' ') || party.email;
@@ -29,6 +31,27 @@ function counterpartyName(party: { firstName: string | null; lastName: string | 
 
 function tradeLabel(trade: P2PTrade): string {
   return `${trade.tokenAmount} DL · ${Number(trade.fiatAmount).toLocaleString()} ${trade.fiatCurrency}`;
+}
+
+/** "Xm"/"Xh"/"Xd" elapsed since `iso` -- deliberately short (no "ago"/"since" suffix baked in, callers add their own context word) so it reads as a compact, at-a-glance duration next to a timestamp. */
+function elapsedSince(iso: string): string {
+  const diffMs = Math.max(0, Date.now() - new Date(iso).getTime());
+  const minutes = Math.floor(diffMs / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  return `${days}d`;
+}
+
+/** Red "time open" indicator -- flags how long a dispute/trade has been sitting unresolved so an admin can triage the oldest ones first, matching the danger-red styling used for the dispute defaulter dot elsewhere on this page. */
+function TimeOpenBadge({ since, suffix }: { since: string; suffix: string }) {
+  return (
+    <p className="text-xs font-bold text-danger">
+      {elapsedSince(since)} {suffix}
+    </p>
+  );
 }
 
 export default function AdminP2PPage() {
@@ -87,7 +110,10 @@ export default function AdminP2PPage() {
       header: 'Raised',
       sortValue: (d) => d.createdAt,
       render: (d) => (
-        <span className="text-sm text-muted">{new Date(d.createdAt).toLocaleString()}</span>
+        <div>
+          <span className="text-sm text-muted">{new Date(d.createdAt).toLocaleString()}</span>
+          <TimeOpenBadge since={d.createdAt} suffix="since trade" />
+        </div>
       ),
     },
     {
@@ -129,7 +155,14 @@ export default function AdminP2PPage() {
       header: 'Status',
       sortValue: (t) => t.status,
       searchable: true,
-      render: (t) => <span className="font-black">{t.status}</span>,
+      render: (t) => (
+        <div>
+          <span className="font-black">{t.status}</span>
+          {!TERMINAL_TRADE_STATUSES.has(t.status) && (
+            <TimeOpenBadge since={t.createdAt} suffix="open" />
+          )}
+        </div>
+      ),
     },
     {
       key: 'type',
