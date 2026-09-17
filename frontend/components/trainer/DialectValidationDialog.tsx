@@ -22,10 +22,18 @@ const FLAG_OPTIONS: { value: WordValidationFlag; label: string }[] = [
   { value: 'NO_AUDIO', label: 'No audio / silent or unusable' },
   { value: 'UNCLEAR_NOISY', label: 'Unclear / too noisy to judge' },
   { value: 'MULTIPLE_SPEAKERS', label: 'Multiple speakers / background voices' },
-  { value: 'NO_WORD_MATCH', label: 'None of the listed words match' },
   { value: 'TOO_FAST', label: 'Spoken too fast' },
   { value: 'TOO_SLOW', label: 'Spoken too slow' },
 ];
+
+// Sentinel id (never a real Word.id, which are UUIDs) for the "None of the
+// above" radio choice appended to item.wordOptions -- picking it maps to
+// the NO_WORD_MATCH flag on submit instead of a selectedWordId, reusing
+// the flag's existing server-side semantics rather than adding a new one.
+// Kept as a fixed LAST option (not shuffled in with the real word choices)
+// since it's a distinct "none of these" escape hatch, not a candidate
+// answer itself.
+const NONE_OF_THE_ABOVE_ID = '__none_of_the_above__';
 
 function extractQracRequired(err: unknown): boolean {
   const data = (err as { data?: ApiErrorShape } | undefined)?.data;
@@ -201,12 +209,16 @@ export function DialectValidationDialog({
     if (!item) return;
     setError(null);
     try {
+      const noneOfTheAbove = selectedWordId === NONE_OF_THE_ABOVE_ID;
+      const submittedFlags = noneOfTheAbove
+        ? Array.from(new Set([...flags, 'NO_WORD_MATCH' as WordValidationFlag]))
+        : flags;
       const result = await submitValidation({
         recordingId: item.recordingId,
         presentmentToken: item.presentmentToken,
-        selectedWordId: selectedWordId ?? undefined,
+        selectedWordId: noneOfTheAbove ? undefined : (selectedWordId ?? undefined),
         transcript: transcript.trim() || undefined,
-        flags: flags.length > 0 ? flags : undefined,
+        flags: submittedFlags.length > 0 ? submittedFlags : undefined,
       }).unwrap();
       setSubmitted({ rewarded: result.rewarded, rewardAmount: result.rewardAmount });
     } catch (err) {
@@ -405,6 +417,22 @@ export function DialectValidationDialog({
                                 {word.text}
                               </label>
                             ))}
+                            <label
+                              className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-left font-bold italic transition-colors ${
+                                selectedWordId === NONE_OF_THE_ABOVE_ID
+                                  ? 'border-accent bg-accent-soft'
+                                  : 'border-line bg-surface hover:bg-surface-muted'
+                              }`}
+                            >
+                              <input
+                                checked={selectedWordId === NONE_OF_THE_ABOVE_ID}
+                                className="size-4 accent-accent"
+                                name="word-option"
+                                onChange={() => setSelectedWordId(NONE_OF_THE_ABOVE_ID)}
+                                type="radio"
+                              />
+                              None of the above
+                            </label>
                           </div>
                         </div>
                       )}

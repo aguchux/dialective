@@ -62,6 +62,7 @@ describe('WordValidationService', () => {
       ledgerEntry: { create: jest.fn() },
       dialect: { findFirst: jest.fn() },
       dialectVariant: { findUnique: jest.fn() },
+      $queryRaw: jest.fn().mockResolvedValue([]),
       $transaction: jest.fn(async (fn: (tx: any) => unknown) => fn(prisma)),
     };
     storage = {
@@ -111,6 +112,19 @@ describe('WordValidationService', () => {
       await expect(service.nextItem(trainer.id, session.id)).rejects.toThrow(
         'Training tasks are temporarily paused',
       );
+    });
+
+    it('samples distractors via ORDER BY random(), excluding the correct word and disabled words', async () => {
+      prisma.$queryRaw.mockResolvedValue([
+        { id: 'word-a', text: 'apple' },
+        { id: 'word-b', text: 'banana' },
+        { id: 'word-c', text: 'cherry' },
+      ]);
+      const result = await service.nextItem(trainer.id, session.id);
+
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+      const optionIds = result.wordOptions.map((o) => o.id).sort();
+      expect(optionIds).toEqual(['word-a', 'word-b', 'word-c', 'word-correct'].sort());
     });
 
     it('excludes the trainer\'s own recordings and already-validated ones via the where clause', async () => {

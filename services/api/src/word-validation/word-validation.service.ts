@@ -307,22 +307,19 @@ export class WordValidationService {
     const correctWord = await this.prisma.word.findUnique({ where: { id: correctWordId } });
     if (!correctWord) return [];
 
-    const distractorPoolCount = await this.prisma.word.count({
-      where: { id: { not: correctWordId }, isDisabled: false },
-    });
-    const takeCount = Math.min(DISTRACTOR_COUNT, distractorPoolCount);
-    const distractors: { id: string; text: string }[] = [];
-    if (takeCount > 0) {
-      const skip = Math.max(0, Math.floor(Math.random() * (distractorPoolCount - takeCount + 1)));
-      const rows = await this.prisma.word.findMany({
-        where: { id: { not: correctWordId }, isDisabled: false },
-        select: { id: true, text: true },
-        orderBy: { id: 'asc' },
-        skip,
-        take: takeCount,
-      });
-      distractors.push(...rows);
-    }
+    // ORDER BY random() so distractors are DISTINCT_COUNT independently
+    // sampled words, not a contiguous alphabetical-by-id window -- a single
+    // random `skip` with a fixed `orderBy` (the previous approach) always
+    // returns the same frozen trio of neighbors for a given offset, so a
+    // validator doing many items sees the same distractor groupings
+    // recur, which reads as a broken/unrelated option list even though
+    // the correct word is technically always included.
+    const distractors = await this.prisma.$queryRaw<{ id: string; text: string }[]>`
+      SELECT id, text FROM words
+      WHERE id != ${correctWordId}::uuid AND "isDisabled" = false
+      ORDER BY random()
+      LIMIT ${DISTRACTOR_COUNT}
+    `;
 
     const options = [{ id: correctWord.id, text: correctWord.text }, ...distractors];
     // Fisher-Yates shuffle so the correct answer isn't always first.
