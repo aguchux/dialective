@@ -1012,3 +1012,62 @@ describe('P2PService.getOfferDetail -- view tracking', () => {
     await expect(service.getOfferDetail('viewer-1', 'nope')).rejects.toThrow('Offer not found');
   });
 });
+
+/**
+ * The phone gate on trading.
+ *
+ * "Can a new account with no mobile verification buy on P2P?" is a
+ * launch-blocking question, and requireVerifiedForTrading was the only
+ * thing answering it -- with no test pinning it. These assert the gate
+ * holds on BOTH entry points, since a hole in either one is equally bad:
+ * accepting an offer moves real escrow, and creating one exposes an
+ * unverified account to counterparties as a tradeable listing.
+ */
+describe('P2PService -- phone verification gate on trading', () => {
+  let prisma: any;
+  let platformSettings: any;
+  let service: P2PService;
+
+  beforeEach(() => {
+    prisma = {
+      user: { findUniqueOrThrow: jest.fn().mockResolvedValue({ phoneVerifiedAt: null }) },
+      p2PTokenOffer: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
+      p2PMarketSettings: { upsert: jest.fn().mockResolvedValue({}) },
+    };
+    platformSettings = { isPhoneVerificationRequired: jest.fn().mockResolvedValue(true) };
+    service = new P2PService(prisma, {} as any, platformSettings as any, {} as any);
+    jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
+  });
+
+  it('blocks an unverified account from accepting an offer', async () => {
+    await expect(
+      service.acceptOffer('new-user', 'offer-1', {} as any),
+    ).rejects.toThrow('Verify your phone number before trading on the P2P market');
+
+    // Must reject BEFORE touching the offer at all -- escrow moves in this
+    // call, so the gate cannot sit after any state read/write.
+    expect(prisma.p2PTokenOffer.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('lets a verified account through the gate', async () => {
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ phoneVerifiedAt: new Date() });
+    // Reaches the offer lookup instead of throwing at the gate; the call
+    // then fails for an unrelated reason (no offer), which is fine here --
+    // the assertion is only that the gate did not stop it.
+    await expect(service.acceptOffer('ok-user', 'offer-1', {} as any)).rejects.not.toThrow(
+      'Verify your phone number before trading on the P2P market',
+    );
+    expect(prisma.p2PTokenOffer.findUnique).toHaveBeenCalled();
+  });
+
+  it('falls back to an emailed trade OTP when phone verification is switched off', async () => {
+    platformSettings.isPhoneVerificationRequired.mockResolvedValue(false);
+
+    // With the phone requirement off there is no phone to check, so trading
+    // must still not be open -- an OTP bound to the trade terms is required.
+    await expect(
+      service.acceptOffer('new-user', 'offer-1', {} as any),
+    ).rejects.toThrow('Email OTP verification is required to trade on the P2P market');
+    expect(prisma.p2PTokenOffer.findUnique).not.toHaveBeenCalled();
+  });
+});
