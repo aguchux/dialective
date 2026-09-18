@@ -5,7 +5,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Clock3, Landmark, Phone } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
-import { cardClass, EmptyPanel, formatDateTime, SectionTitle } from '@/components/dashboard/shared';
+import {
+  Avatar,
+  cardClass,
+  EmptyPanel,
+  formatDateTime,
+  SectionTitle,
+} from '@/components/dashboard/shared';
 import { PaymentCountdown } from '@/components/p2p/PaymentCountdown';
 import { STATUS_LABELS, statusBadgeClass } from '@/components/p2p/tradeStatus';
 import { formatCompactNumber } from '@/lib/format';
@@ -59,43 +65,49 @@ export function MarketActivity() {
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-black tracking-normal md:text-3xl">My market activity</h1>
+    // Same full-bleed treatment as MarketOfferList: the page chrome wraps
+    // this in a max-w-4xl column, which squeezes a five-column table into
+    // permanent horizontal scrolling. Breaking out to the viewport keeps
+    // My trades reading identically to the market it mirrors.
+    <section className="mx-[calc(50%-50vw)] w-screen overflow-x-hidden px-4 md:px-6">
+      <div className="mx-auto max-w-[1600px]">
+        <h1 className="text-2xl font-black tracking-normal md:text-3xl">My market activity</h1>
 
-      {error && (
-        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-          {error}
+        {error && (
+          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+            {error}
+          </div>
+        )}
+
+        <div className="mt-5 mb-5 flex w-fit max-w-full overflow-x-auto rounded-lg border border-line bg-surface p-1">
+          {[
+            { id: 'TRADES' as const, label: 'My trades', count: trades.length },
+            { id: 'POSTS' as const, label: 'My posts', count: myOffers.length },
+          ].map((option) => (
+            <button
+              className={`min-h-10 whitespace-nowrap rounded-md px-4 text-sm font-extrabold ${tab === option.id ? 'bg-accent text-white' : 'text-muted hover:bg-surface-muted'}`}
+              key={option.id}
+              onClick={() => setTab(option.id)}
+              type="button"
+            >
+              {option.label} <span className="ml-1 opacity-80">{option.count}</span>
+            </button>
+          ))}
         </div>
-      )}
 
-      <div className="mt-5 mb-5 flex w-fit max-w-full overflow-x-auto rounded-lg border border-line bg-surface p-1">
-        {[
-          { id: 'TRADES' as const, label: 'My trades', count: trades.length },
-          { id: 'POSTS' as const, label: 'My posts', count: myOffers.length },
-        ].map((option) => (
-          <button
-            className={`min-h-10 whitespace-nowrap rounded-md px-4 text-sm font-extrabold ${tab === option.id ? 'bg-accent text-white' : 'text-muted hover:bg-surface-muted'}`}
-            key={option.id}
-            onClick={() => setTab(option.id)}
-            type="button"
-          >
-            {option.label} <span className="ml-1 opacity-80">{option.count}</span>
-          </button>
-        ))}
+        {tab === 'POSTS' && (
+          <MyOfferList
+            offers={myOffers}
+            cancellingOffer={cancellingOffer}
+            cancellingOfferId={cancellingOfferId}
+            onCancel={cancelPost}
+          />
+        )}
+        {tab === 'TRADES' && (
+          <MyTradeTable basePath={basePath} trades={trades} viewerId={me?.id} />
+        )}
       </div>
-
-      {tab === 'POSTS' && (
-        <MyOfferList
-          offers={myOffers}
-          cancellingOffer={cancellingOffer}
-          cancellingOfferId={cancellingOfferId}
-          onCancel={cancelPost}
-        />
-      )}
-      {tab === 'TRADES' && (
-        <MyTradeTable basePath={basePath} trades={trades} viewerId={me?.id} />
-      )}
-    </div>
+    </section>
   );
 }
 
@@ -162,13 +174,18 @@ function MyTradeTable({
                     key={trade.id}
                   >
                     <td className="px-4 py-3 align-top">
-                      <p className="font-bold text-ink">{counterpartyName}</p>
-                      {otherParty.phoneNumber && (
-                        <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted">
-                          <Phone className="size-3" aria-hidden="true" />
-                          {otherParty.phoneNumber}
-                        </span>
-                      )}
+                      <div className="flex items-start gap-2.5">
+                        <Avatar email={otherParty.email} />
+                        <div className="min-w-0">
+                          <p className="font-bold text-ink">{counterpartyName}</p>
+                          {otherParty.phoneNumber && (
+                            <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted">
+                              <Phone className="size-3" aria-hidden="true" />
+                              {otherParty.phoneNumber}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3 align-top">
                       <p className="font-black text-ink">
@@ -199,19 +216,21 @@ function MyTradeTable({
                       )}
                     </td>
                     <td className="px-4 py-3 text-right align-top">
-                      {/* Labelled and coloured by the side the viewer is on,
-                          matching the market list, so the trade path reads
-                          the same end to end: green for selling, the
-                          standard accent for buying. */}
+                      {/* "Manage trade", not Buy/Sell: this row is a trade
+                          already in flight, so the action is paying,
+                          releasing, cancelling or disputing it -- not
+                          starting a new purchase. Colour still follows the
+                          side the viewer is on, matching the market list:
+                          green for selling, the accent for buying. */}
                       <Link
-                        className={`inline-flex min-h-9 items-center rounded-lg px-4 text-sm font-extrabold text-white ${
+                        className={`inline-flex min-h-9 items-center whitespace-nowrap rounded-lg px-4 text-sm font-extrabold text-white ${
                           isBuyer
                             ? 'bg-accent hover:bg-accent-dark'
                             : 'bg-emerald-700 hover:bg-emerald-800'
                         }`}
                         href={`${basePath}/trades/${trade.id}`}
                       >
-                        {isBuyer ? 'Buy' : 'Sell'}
+                        Manage trade
                       </Link>
                     </td>
                   </tr>
