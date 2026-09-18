@@ -143,6 +143,11 @@ export function DialectValidationDialog({
         setStep('validating');
       } catch (err) {
         if (extractQracRequired(err)) {
+          // Hand off to QracDialog, but leave this dialog on a settled step
+          // rather than 'loading'. Staying on 'loading' meant that if the
+          // trainer ended the session from the QRAC prompt (or it failed to
+          // render) they were left on "Preparing your session..." forever.
+          setStep('validating');
           setQracOpen(true);
           return;
         }
@@ -332,7 +337,34 @@ export function DialectValidationDialog({
 
               {step === 'validating' && (
                 <section className="mx-auto grid w-full max-w-2xl gap-6">
-                  {isLoadingNext || !item ? (
+                  {!item && error ? (
+                    // An error while there's no item to show must win over the
+                    // spinner below. Otherwise a failed load sets `error` but
+                    // renders "Loading the next recording..." forever, since
+                    // nothing ever populates `item` -- the trainer sees an
+                    // endless spinner instead of the reason it failed.
+                    <div className="mx-auto grid w-full max-w-md gap-4 text-center">
+                      <p className="font-bold text-danger" role="alert">
+                        {error}
+                      </p>
+                      <div className="flex flex-wrap items-center justify-center gap-3">
+                        <button
+                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-accent px-5 font-extrabold text-white hover:bg-accent-dark"
+                          onClick={() => void nextItem()}
+                          type="button"
+                        >
+                          Try again
+                        </button>
+                        <button
+                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-5 font-extrabold hover:bg-surface-muted"
+                          onClick={() => void closeDialog()}
+                          type="button"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+                  ) : isLoadingNext || !item ? (
                     <div className="mx-auto grid place-items-center gap-3 text-center">
                       <LoaderCircle
                         className="size-8 animate-spin text-accent"

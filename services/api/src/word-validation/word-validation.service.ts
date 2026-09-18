@@ -397,9 +397,13 @@ export class WordValidationService {
     // validator doing many items sees the same distractor groupings
     // recur, which reads as a broken/unrelated option list even though
     // the correct word is technically always included.
+    // No ::uuid cast on the parameter: Word.id is `String @id @default(uuid())`
+    // with no @db.Uuid, so the words.id COLUMN is Postgres `text`. Casting the
+    // bind parameter made the comparison `text <> uuid`, for which no operator
+    // exists -- Postgres 42883, a 500 on every single request to this endpoint.
     const distractors = await this.prisma.$queryRaw<{ id: string; text: string }[]>`
       SELECT id, text FROM words
-      WHERE id != ${correctWordId}::uuid AND "isDisabled" = false
+      WHERE id != ${correctWordId} AND "isDisabled" = false
       ORDER BY random()
       LIMIT ${DISTRACTOR_COUNT}
     `;

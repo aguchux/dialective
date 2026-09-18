@@ -134,6 +134,23 @@ describe('WordValidationService', () => {
       expect(optionIds).toEqual(['word-a', 'word-b', 'word-c', 'word-correct'].sort());
     });
 
+    // Regression: the distractor query cast its bind parameter with `::uuid`.
+    // words.id is `String @id @default(uuid())` with no @db.Uuid, so the COLUMN
+    // is Postgres `text` -- the comparison became `text <> uuid`, which has no
+    // operator (42883), and EVERY request to this endpoint returned 500 while
+    // the mocked $queryRaw above kept the suite green. Assert the SQL itself.
+    it('does not cast the distractor id parameter, since words.id is a text column', async () => {
+      await service.nextItem(trainer.id, session.id);
+
+      // $queryRaw is tagged-template invoked, so call[0] is the strings array
+      // and the interpolations land in call[1..]. Joining with a placeholder
+      // reconstructs the SQL around each bind parameter.
+      const strings = prisma.$queryRaw.mock.calls[0][0] as string[];
+      const text = strings.join('?');
+      expect(text).toContain('FROM words');
+      expect(text).not.toMatch(/::\s*uuid/i);
+    });
+
     it("excludes the trainer's own recordings and already-validated ones via the where clause", async () => {
       await service.nextItem(trainer.id, session.id);
       expect(prisma.wordRecording.count).toHaveBeenCalledWith(
