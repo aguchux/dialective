@@ -1,7 +1,7 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { PortalContainerProvider } from '@/components/ui/PortalContainer';
 import {
@@ -11,8 +11,8 @@ import {
 } from '@/components/dashboard/DashboardShell';
 import { TradeDetailView } from '@/components/p2p/TradeDetailView';
 
-export default function TradeDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function TradeDetailPage() {
+  const { id } = useParams<{ id: string }>();
   const { data: session, status } = useSession();
   const router = useRouter();
   const [themeRoot, setThemeRoot] = useState<HTMLDivElement | null>(null);
