@@ -9,9 +9,11 @@ import { StorageModule } from '../storage/storage.module';
 import { LlmModule } from '../llm/llm.module';
 import { MailModule } from '../mail/mail.module';
 import { SmsModule } from '../sms/sms.module';
+import { KycPeerReviewModule } from '../kyc-peer-review/kyc-peer-review.module';
 
 @Module({
-  imports: [StorageModule, LlmModule, MailModule, SmsModule],
+  // KycPeerReviewModule: the admin-approve route pays peer reviewers.
+  imports: [StorageModule, LlmModule, MailModule, SmsModule, KycPeerReviewModule],
   controllers: [KycController],
   providers: [
     KycService,

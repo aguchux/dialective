@@ -41,6 +41,7 @@ import { TrainerProfilesModule } from './trainer-profiles/trainer-profiles.modul
 import { CommunityModule } from './community/community.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { WhatsAppValidatorModule } from './whatsapp-validator/whatsapp-validator.module';
+import { KycPeerReviewModule } from './kyc-peer-review/kyc-peer-review.module';
 import { PaymentMethodsModule } from './payment-methods/payment-methods.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 
@@ -86,6 +87,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     IntegrationsModule,
     PaymentMethodsModule,
     WhatsAppValidatorModule,
+    KycPeerReviewModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: AppThrottlerGuard }],

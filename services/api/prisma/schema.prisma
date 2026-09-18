@@ -246,6 +246,9 @@ model User {
   apiAccessTokensUpdated            ApiAccessToken[]                 @relation("ApiAccessTokenUpdatedBy")
   payoutAccounts                    PayoutAccount[]
   kycVerifications                  KycVerification[]
+  kycPeerReviews                    KycPeerReview[]                  @relation("KycPeerReviewer")
+  kycPeerReviewClaims               KycPeerReviewClaim[]             @relation("KycPeerReviewClaimant")
+  kycEvidenceViews                  KycEvidenceViewLog[]             @relation("KycEvidenceViewer")
   assistantConversation             AssistantConversation?
   faqsCreated                       Faq[]                            @relation("FaqCreatedBy")
   integrationSubscriptions          IntegrationSubscription[]
@@ -879,6 +882,8 @@ model KycVerification {
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
   captureEvidence       KycCaptureEvidence[]
+  peerReviews           KycPeerReview[]
+  peerReviewClaims      KycPeerReviewClaim[]
 
   @@index([userId, status])
   @@index([status, createdAt])
@@ -988,6 +993,95 @@ model KycCaptureEvidence {
 
   @@index([kycVerificationId])
   @@map("kyc_capture_evidence")
+}
+
+enum KycPeerReviewVerdict {
+  APPROVE
+  DECLINE
+}
+
+/// One peer's verdict on one KycVerification, for the `p2p-kyc-review`
+/// integration. Reviewers are subscribed, admin-APPROVED members (see
+/// IntegrationSubscription) who check that the name on the document
+/// matches the account and type back the document number they can read.
+///
+/// documentNumberHash, never the number itself: the typed value only has
+/// to prove the reviewer actually read the card, which a hash comparison
+/// against the OCR'd number already in KycVerification
+/// .decisionEncryptedJson does. Storing it plaintext would create a second
+/// copy of an ID number in a table far more rows can read than the
+/// encrypted decision blob.
+///
+/// A verification needs KYC_PEER_REVIEW_QUORUM agreeing verdicts to reach
+/// an admin. Where the first two disagree a third is polled and the
+/// majority decides -- see KycPeerReviewService.tally.
+model KycPeerReview {
+  id                 String               @id @default(uuid())
+  kycVerificationId  String
+  kycVerification    KycVerification      @relation(fields: [kycVerificationId], references: [id], onDelete: Cascade)
+  reviewerId         String
+  reviewer           User                 @relation("KycPeerReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  verdict            KycPeerReviewVerdict
+  /// SHA-256 of the document number the reviewer typed, normalised
+  /// (uppercased, non-alphanumerics stripped) before hashing.
+  documentNumberHash String
+  /// Whether that hash matched the number on file. Recorded rather than
+  /// enforced: a mismatch is a signal for the admin, not grounds to reject
+  /// the reviewer's verdict outright (OCR is imperfect).
+  documentNumberMatched Boolean
+  declineReason      String?
+  /// Set when this review's payout was credited -- at admin approval, and
+  /// only once. Null means unpaid; see KycPeerReviewService.payReviewers.
+  paidAt             DateTime?
+  createdAt          DateTime             @default(now())
+
+  /// One verdict per reviewer per verification -- nobody reviews the same
+  /// document twice, and the quorum cannot be reached by one person.
+  @@unique([kycVerificationId, reviewerId])
+  @@index([kycVerificationId])
+  @@index([reviewerId, createdAt])
+  @@map("kyc_peer_reviews")
+}
+
+/// A peer's active hold on a KycVerification while they review it, so two
+/// reviewers are never shown the same document at once. Expires on its own
+/// (claimExpiresAt) so an abandoned claim returns to the pool -- same
+/// lazy-expiry pattern as the P2P market and WhatsApp Validator.
+model KycPeerReviewClaim {
+  id                String          @id @default(uuid())
+  kycVerificationId String
+  kycVerification   KycVerification @relation(fields: [kycVerificationId], references: [id], onDelete: Cascade)
+  reviewerId        String
+  reviewer          User            @relation("KycPeerReviewClaimant", fields: [reviewerId], references: [id], onDelete: Cascade)
+  claimedAt         DateTime        @default(now())
+  claimExpiresAt    DateTime
+
+  @@unique([kycVerificationId, reviewerId])
+  @@index([claimExpiresAt])
+  @@map("kyc_peer_review_claims")
+}
+
+/// Append-only record of a peer opening a trainer's identity document.
+///
+/// Peer review means people outside the platform's staff see other
+/// members' ID images. The client-side copy/drag/right-click blocks are
+/// deterrents, not protection -- this log is what makes a leak
+/// attributable, and it is deliberately written before the image bytes
+/// are served, not after.
+model KycEvidenceViewLog {
+  id                String   @id @default(uuid())
+  kycVerificationId String
+  viewerId          String
+  viewer            User     @relation("KycEvidenceViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+  evidenceId        String
+  /// "PEER" or "ADMIN" -- who was looking, since both routes serve the
+  /// same redacted copy.
+  viewerRole        String
+  viewedAt          DateTime @default(now())
+
+  @@index([kycVerificationId, viewedAt])
+  @@index([viewerId, viewedAt])
+  @@map("kyc_evidence_view_logs")
 }
 
 enum SubmissionStatus {

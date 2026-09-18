@@ -36,4 +36,20 @@ export const INTEGRATION_REGISTRY: IntegrationDefinition[] = [
     defaultMaxConcurrentClaims: 5,
     defaultCodeValidityMinutes: 60 * 24,
   },
+  {
+    slug: 'p2p-kyc-review',
+    name: 'ID Review',
+    description:
+      "Check a member's ID document against their account name and earn DL. Two agreeing reviewers send it to an admin, who makes the final decision.",
+    category: 'Verification',
+    iconKey: 'ScanFace',
+    // Paid by the PLATFORM on admin approval, not by the member being
+    // verified -- KYC is a platform requirement, not a purchase.
+    defaultFeeTokenAmount: 1,
+    defaultSortOrder: 1,
+    // Deliberately low: a reviewer holding many identity documents open at
+    // once is exactly what this feature should not encourage.
+    defaultMaxConcurrentClaims: 2,
+    defaultCodeValidityMinutes: 60 * 24,
+  },
 ];

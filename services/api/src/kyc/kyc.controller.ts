@@ -19,6 +19,7 @@ import { Role } from '@dialectiva/db';
 import { KycService } from './kyc.service';
 import { SelfHostedKycService } from './self-hosted-kyc.service';
 import { KycEvidenceRedactionService } from './kyc-evidence-redaction.service';
+import { KycPeerReviewService } from '../kyc-peer-review/kyc-peer-review.service';
 import { StorageService } from '../storage/storage.service';
 import { AdminDeclineKycDto, AdminListKycDto } from './dto/admin-list-kyc.dto';
 import {
@@ -36,6 +37,7 @@ export class KycController {
     private readonly selfHosted: SelfHostedKycService,
     private readonly redaction: KycEvidenceRedactionService,
     private readonly storage: StorageService,
+    private readonly peerReview: KycPeerReviewService,
   ) {}
 
   @Post('kyc/session')
@@ -278,8 +280,14 @@ export class KycController {
   @Post('admin/kyc/:id/approve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  adminApprove(@Param('id') id: string) {
-    return this.kyc.adminApproveSelfHosted(id);
+  async adminApprove(@Param('id') id: string) {
+    const result = await this.kyc.adminApproveSelfHosted(id);
+    // Peer reviewers are paid by the platform when the admin confirms
+    // their read -- a no-op when this verification never went through peer
+    // review, and guarded against paying the same review twice. Failures
+    // must not undo an approval that already happened.
+    await this.peerReview.payReviewers(id).catch(() => undefined);
+    return result;
   }
 
   @Post('admin/kyc/:id/decline')
