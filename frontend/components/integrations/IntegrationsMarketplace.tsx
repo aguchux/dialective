@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowRight, MessageCircle, Plug, Search } from 'lucide-react';
+import { ArrowRight, Clock, MessageCircle, Plug, Search } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { cardClass, EmptyPanel, SectionTitle } from '@/components/dashboard/shared';
 import {
@@ -160,6 +160,8 @@ export function IntegrationsMarketplace() {
                   Earn {integration.feeTokenAmount} DL per fulfilled request
                 </p>
               )}
+              {/* Requesting access and having it are different things now:
+                  an admin approves before a member can fulfil requests. */}
               {integration.subscribed ? (
                 <Link
                   className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg bg-accent px-3 font-extrabold text-white"
@@ -167,16 +169,29 @@ export function IntegrationsMarketplace() {
                 >
                   Open <ArrowRight className="size-4" aria-hidden="true" />
                 </Link>
+              ) : integration.subscriptionStatus === 'PENDING' ? (
+                <p className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-line bg-surface-muted px-3 text-sm font-extrabold text-muted">
+                  <Clock className="size-4" aria-hidden="true" /> Awaiting admin approval
+                </p>
               ) : (
-                <ActionButton
-                  className="min-h-10 rounded-lg border border-line px-3 font-extrabold hover:bg-surface-muted"
-                  onClick={() => handleSubscribe(integration)}
-                  pending={subscribing && subscribingId === integration.id}
-                  pendingLabel="Subscribing"
-                  type="button"
-                >
-                  Subscribe
-                </ActionButton>
+                <div className="grid gap-1.5">
+                  {integration.subscriptionStatus === 'REJECTED' && (
+                    <p className="text-sm font-bold text-red-700">
+                      Your request was declined. You can request again.
+                    </p>
+                  )}
+                  <ActionButton
+                    className="min-h-10 rounded-lg border border-line px-3 font-extrabold hover:bg-surface-muted"
+                    onClick={() => handleSubscribe(integration)}
+                    pending={subscribing && subscribingId === integration.id}
+                    pendingLabel="Requesting"
+                    type="button"
+                  >
+                    {integration.subscriptionStatus === 'REJECTED'
+                      ? 'Request again'
+                      : 'Request access'}
+                  </ActionButton>
+                </div>
               )}
             </div>
           );

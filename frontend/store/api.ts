@@ -926,7 +926,22 @@ export interface Integration {
   category: string;
   iconKey: string | null;
   feeTokenAmount: string;
+  /** True only when an admin has APPROVED the request -- i.e. real access. */
   subscribed: boolean;
+  /** null when never requested. PENDING means waiting on an admin, not access. */
+  subscriptionStatus: IntegrationSubscriptionStatus | null;
+}
+
+export type IntegrationSubscriptionStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface AdminIntegrationSubscription {
+  id: string;
+  status: IntegrationSubscriptionStatus;
+  subscribedAt: string;
+  reviewedAt: string | null;
+  reviewNote: string | null;
+  integration: { id: string; slug: string; name: string };
+  user: { id: string; email: string; firstName: string | null; lastName: string | null };
 }
 
 export interface AdminIntegration {
@@ -3125,6 +3140,28 @@ export const dialectivaApi = createApi({
     }),
     subscribeToIntegration: builder.mutation<Integration, string>({
       query: (id) => ({ url: `/integrations/${id}/subscribe`, method: 'POST' }),
+      invalidatesTags: ['Integrations'],
+    }),
+    // Admin: the access-request queue and its approve/reject decision.
+    getAdminIntegrationSubscriptions: builder.query<
+      AdminIntegrationSubscription[],
+      { status?: IntegrationSubscriptionStatus } | void
+    >({
+      query: (params) => ({
+        url: '/integrations/admin/subscriptions',
+        params: params ?? undefined,
+      }),
+      providesTags: ['Integrations'],
+    }),
+    reviewIntegrationSubscription: builder.mutation<
+      AdminIntegrationSubscription,
+      { id: string; decision: 'approve' | 'reject'; reviewNote?: string }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/integrations/admin/subscriptions/${id}`,
+        method: 'PATCH',
+        body,
+      }),
       invalidatesTags: ['Integrations'],
     }),
     unsubscribeFromIntegration: builder.mutation<{ unsubscribed: boolean }, string>({
@@ -6020,6 +6057,8 @@ export const {
   useListIntegrationsQuery,
   useListMyIntegrationsQuery,
   useSubscribeToIntegrationMutation,
+  useGetAdminIntegrationSubscriptionsQuery,
+  useReviewIntegrationSubscriptionMutation,
   useUnsubscribeFromIntegrationMutation,
   useRequestWhatsAppValidationMutation,
   useRegenerateWhatsAppValidationCodeMutation,

@@ -32,7 +32,9 @@ describe('IntegrationsService', () => {
       },
       integrationSubscription: {
         findMany: jest.fn().mockResolvedValue([]),
-        create: jest.fn().mockResolvedValue({ id: 'sub-1' }),
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'sub-1', status: 'PENDING' }),
+        update: jest.fn().mockResolvedValue({ id: 'sub-1', status: 'PENDING' }),
         deleteMany: jest.fn().mockResolvedValue({ count: 1 }),
         count: jest.fn().mockResolvedValue(0),
       },
@@ -59,12 +61,23 @@ describe('IntegrationsService', () => {
       );
     });
 
-    it('marks subscribed integrations', async () => {
+    it('marks an APPROVED subscription as subscribed', async () => {
       prisma.integrationSubscription.findMany.mockResolvedValue([
-        { integrationId: integration.id },
+        { integrationId: integration.id, status: 'APPROVED' },
       ]);
       const [result] = await service.list(userId, {});
       expect(result.subscribed).toBe(true);
+      expect(result.subscriptionStatus).toBe('APPROVED');
+    });
+
+    it('does NOT mark a PENDING request as subscribed', async () => {
+      prisma.integrationSubscription.findMany.mockResolvedValue([
+        { integrationId: integration.id, status: 'PENDING' },
+      ]);
+      const [result] = await service.list(userId, {});
+      // Requesting access is not having it -- an admin has not decided yet.
+      expect(result.subscribed).toBe(false);
+      expect(result.subscriptionStatus).toBe('PENDING');
     });
 
     it('marks unsubscribed integrations', async () => {
@@ -79,17 +92,101 @@ describe('IntegrationsService', () => {
       await expect(service.subscribe(userId, integration.id)).rejects.toThrow(NotFoundException);
     });
 
-    it('is idempotent on a duplicate subscription', async () => {
-      prisma.integrationSubscription.create.mockRejectedValue(
-        Object.assign(
-          new Prisma.PrismaClientKnownRequestError('dup', { code: 'P2002', clientVersion: 'x' }),
-          {
-            code: 'P2002',
-          },
-        ),
-      );
+    it('creates a PENDING request rather than granting access', async () => {
+      const result = await service.subscribe(userId, integration.id);
+      expect(result.subscriptionStatus).toBe('PENDING');
+      expect(result.subscribed).toBe(false);
+    });
+
+    it('is idempotent on a duplicate request, without resetting an approval', async () => {
+      prisma.integrationSubscription.findUnique.mockResolvedValue({
+        id: 'sub-1',
+        status: 'APPROVED',
+      });
       const result = await service.subscribe(userId, integration.id);
       expect(result.subscribed).toBe(true);
+      // A double-tap must never knock an approved member back to pending.
+      expect(prisma.integrationSubscription.update).not.toHaveBeenCalled();
+      expect(prisma.integrationSubscription.create).not.toHaveBeenCalled();
+    });
+
+    it('lets a rejected member request again, clearing the old decision', async () => {
+      prisma.integrationSubscription.findUnique.mockResolvedValue({
+        id: 'sub-1',
+        status: 'REJECTED',
+      });
+      await service.subscribe(userId, integration.id);
+      expect(prisma.integrationSubscription.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: 'PENDING',
+            reviewedAt: null,
+            reviewNote: null,
+          }),
+        }),
+      );
+    });
+  });
+
+  describe('isSubscribed -- the access gate', () => {
+    it('counts only APPROVED rows', async () => {
+      await service.isSubscribed(userId, 'whatsapp-validator');
+      expect(prisma.integrationSubscription.count).toHaveBeenCalledWith({
+        where: expect.objectContaining({ status: 'APPROVED' }),
+      });
+    });
+  });
+
+  describe('reviewSubscription', () => {
+    it('approving is what grants access', async () => {
+      prisma.integrationSubscription.findUnique.mockResolvedValue({ id: 'sub-1' });
+      prisma.integrationSubscription.update.mockResolvedValue({
+        id: 'sub-1',
+        userId,
+        status: 'APPROVED',
+        subscribedAt: new Date(),
+        reviewedAt: new Date(),
+        reviewNote: null,
+        integration: { id: integration.id, slug: 'whatsapp-validator', name: 'W' },
+        user: { id: userId, email: 'a@b.c', firstName: null, lastName: null },
+      });
+      const result = await service.reviewSubscription('admin-1', 'sub-1', 'approve');
+      expect(result.status).toBe('APPROVED');
+      expect(prisma.integrationSubscription.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: 'APPROVED', reviewedByAdminId: 'admin-1' }),
+        }),
+      );
+    });
+
+    it('rejecting keeps the row so the member can see why', async () => {
+      prisma.integrationSubscription.findUnique.mockResolvedValue({ id: 'sub-1' });
+      prisma.integrationSubscription.update.mockResolvedValue({
+        id: 'sub-1',
+        userId,
+        status: 'REJECTED',
+        subscribedAt: new Date(),
+        reviewedAt: new Date(),
+        reviewNote: 'Not enough completed trades',
+        integration: { id: integration.id, slug: 'whatsapp-validator', name: 'W' },
+        user: { id: userId, email: 'a@b.c', firstName: null, lastName: null },
+      });
+      const result = await service.reviewSubscription(
+        'admin-1',
+        'sub-1',
+        'reject',
+        'Not enough completed trades',
+      );
+      expect(result.status).toBe('REJECTED');
+      expect(result.reviewNote).toBe('Not enough completed trades');
+      expect(prisma.integrationSubscription.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('throws for an unknown request', async () => {
+      prisma.integrationSubscription.findUnique.mockResolvedValue(null);
+      await expect(
+        service.reviewSubscription('admin-1', 'nope', 'approve'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

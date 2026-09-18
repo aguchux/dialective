@@ -249,6 +249,7 @@ model User {
   assistantConversation             AssistantConversation?
   faqsCreated                       Faq[]                            @relation("FaqCreatedBy")
   integrationSubscriptions          IntegrationSubscription[]
+  integrationSubscriptionsReviewed  IntegrationSubscription[]        @relation("IntegrationSubscriptionReviewer")
   whatsappValidationRequestsMade    WhatsAppValidationRequest[]      @relation("WhatsAppValidationRequester")
   whatsappValidationRequestsClaimed WhatsAppValidationRequest[]      @relation("WhatsAppValidationValidator")
 
@@ -756,20 +757,39 @@ model Integration {
   @@map("integrations")
 }
 
-/// One row per member who has opted into an Integration -- simple opt-in,
-/// no approval workflow (mirrors CourseProgress's per-user-per-thing
-/// shape). Required before a member can claim/fulfill requests for that
-/// integration; browsing the catalog itself never requires a subscription.
+enum IntegrationSubscriptionStatus {
+  PENDING // requested by the member, waiting on an admin
+  APPROVED // admin granted access -- the only status that grants it
+  REJECTED // admin declined; the member may request again
+}
+
+/// One row per member who has requested an Integration. Subscribing is a
+/// REQUEST, not a grant: a member only gains access once an admin moves
+/// the row to APPROVED. Fulfilling an integration means handling other
+/// members' identity documents and being paid for it, so who may do it is
+/// an admin decision rather than a self-serve toggle.
+///
+/// Browsing the catalog never requires a subscription; only claiming or
+/// fulfilling requests does (see IntegrationsService.isSubscribed, the
+/// single gate every consumer goes through).
 model IntegrationSubscription {
-  id            String      @id @default(uuid())
+  id            String                        @id @default(uuid())
   integrationId String
-  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  integration   Integration                   @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   userId        String
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subscribedAt  DateTime    @default(now())
+  user          User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status        IntegrationSubscriptionStatus @default(PENDING)
+  subscribedAt  DateTime                      @default(now())
+  /// Set when an admin approves or rejects -- who decided, when, and why
+  /// for a rejection, so a declined member can be told something useful.
+  reviewedAt      DateTime?
+  reviewedByAdminId String?
+  reviewedByAdmin   User?                     @relation("IntegrationSubscriptionReviewer", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
+  reviewNote      String?
 
   @@unique([integrationId, userId])
   @@index([userId])
+  @@index([status, subscribedAt])
   @@map("integration_subscriptions")
 }
 

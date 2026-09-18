@@ -15,7 +15,12 @@ import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { IntegrationsService } from './integrations.service';
-import { ListIntegrationsDto, UpdateIntegrationDto } from './dto/integrations.dto';
+import {
+  ListIntegrationSubscriptionsDto,
+  ListIntegrationsDto,
+  ReviewIntegrationSubscriptionDto,
+  UpdateIntegrationDto,
+} from './dto/integrations.dto';
 
 @Controller('integrations')
 @UseGuards(JwtAuthGuard)
@@ -47,6 +52,33 @@ export class IntegrationsController {
   @Roles(Role.ADMIN)
   adminList() {
     return this.integrations.listAllForAdmin();
+  }
+
+  /**
+   * The access-request queue. Subscribing does not grant access -- a
+   * member's request lands PENDING and is only usable once approved here.
+   */
+  @Get('admin/subscriptions')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  adminListSubscriptions(@Query() query: ListIntegrationSubscriptionsDto) {
+    return this.integrations.listSubscriptionsForAdmin(query.status);
+  }
+
+  @Patch('admin/subscriptions/:id')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  adminReviewSubscription(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: ReviewIntegrationSubscriptionDto,
+  ) {
+    return this.integrations.reviewSubscription(
+      req.user.sub,
+      id,
+      body.decision,
+      body.reviewNote,
+    );
   }
 
   /**

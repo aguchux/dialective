@@ -169,7 +169,9 @@ export class WhatsAppValidatorService {
   async listPending(validatorUserId: string, page = 1, pageSize = 20) {
     const isSubscribed = await this.integrations.isSubscribed(validatorUserId, INTEGRATION_SLUG);
     if (!isSubscribed) {
-      throw new ForbiddenException('Subscribe to WhatsApp Validator before viewing requests');
+      throw new ForbiddenException(
+        'Your WhatsApp Validator access has not been approved yet. Request access from the Integrations page; an admin reviews every request.',
+      );
     }
     const now = new Date();
     await this.expireStale(now);
@@ -268,7 +270,9 @@ export class WhatsAppValidatorService {
   async claim(validatorUserId: string, requestId: string) {
     const isSubscribed = await this.integrations.isSubscribed(validatorUserId, INTEGRATION_SLUG);
     if (!isSubscribed) {
-      throw new ForbiddenException('Subscribe to WhatsApp Validator before claiming requests');
+      throw new ForbiddenException(
+        'Your WhatsApp Validator access has not been approved yet. Request access from the Integrations page; an admin reviews every request.',
+      );
     }
     const integration = await this.integrations.requireEnabled(INTEGRATION_SLUG);
 

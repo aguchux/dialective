@@ -1,4 +1,14 @@
-import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+} from 'class-validator';
+import { IntegrationSubscriptionStatus } from '@dialectiva/db';
 import { Type } from 'class-transformer';
 
 export class ListIntegrationsDto {
@@ -52,4 +62,30 @@ export class UpdateIntegrationDto {
   @Type(() => Number)
   @IsNumber()
   sortOrder?: number;
+}
+
+export class ListIntegrationSubscriptionsDto {
+  @IsOptional()
+  @IsIn([
+    IntegrationSubscriptionStatus.PENDING,
+    IntegrationSubscriptionStatus.APPROVED,
+    IntegrationSubscriptionStatus.REJECTED,
+  ])
+  status?: IntegrationSubscriptionStatus;
+}
+
+/**
+ * An admin's decision on a member's access request. Approving is what
+ * actually grants access -- IntegrationsService.isSubscribed accepts only
+ * APPROVED -- so this is the gate, not a formality.
+ */
+export class ReviewIntegrationSubscriptionDto {
+  @IsIn(['approve', 'reject'])
+  decision!: 'approve' | 'reject';
+
+  // Shown to the member on a rejection, so a decline says something useful.
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reviewNote?: string;
 }

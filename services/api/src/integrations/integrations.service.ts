@@ -1,5 +1,5 @@
 import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
-import { Prisma } from '@dialectiva/db';
+import { IntegrationSubscriptionStatus, Prisma } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { INTEGRATION_REGISTRY } from './integration-registry';
 import { ListIntegrationsDto, UpdateIntegrationDto } from './dto/integrations.dto';
@@ -84,11 +84,13 @@ export class IntegrationsService implements OnModuleInit {
       this.prisma.integration.findMany({ where, orderBy: [orderBy, { name: 'asc' }] }),
       this.prisma.integrationSubscription.findMany({
         where: { userId },
-        select: { integrationId: true },
+        select: { integrationId: true, status: true },
       }),
     ]);
-    const subscribedIds = new Set(subscriptions.map((s) => s.integrationId));
-    return rows.map((row) => this.toPublic(row, subscribedIds.has(row.id)));
+    const statusByIntegration = new Map(
+      subscriptions.map((s) => [s.integrationId, s.status] as const),
+    );
+    return rows.map((row) => this.toPublic(row, statusByIntegration.get(row.id) ?? null));
   }
 
   async listMine(userId: string) {
@@ -97,26 +99,58 @@ export class IntegrationsService implements OnModuleInit {
       include: { integration: true },
       orderBy: { subscribedAt: 'desc' },
     });
-    return subscriptions.map((s) => this.toPublic(s.integration, true));
+    return subscriptions.map((s) => this.toPublic(s.integration, s.status));
   }
 
+  /**
+   * Request access. This does NOT grant it -- the row lands PENDING and an
+   * admin decides (see reviewSubscription).
+   *
+   * Re-requesting after a rejection is allowed and resets the row to
+   * PENDING, clearing the previous decision: a member who fixes whatever
+   * caused the decline should not have to be deleted to try again. An
+   * existing PENDING or APPROVED row is returned as-is, so a double-tap
+   * cannot reset an approval back to pending.
+   */
   async subscribe(userId: string, integrationId: string) {
     const integration = await this.prisma.integration.findUnique({ where: { id: integrationId } });
     if (!integration || !integration.enabled) {
       throw new NotFoundException('Integration not found');
     }
+    const existing = await this.prisma.integrationSubscription.findUnique({
+      where: { integrationId_userId: { integrationId, userId } },
+    });
+    if (existing && existing.status !== IntegrationSubscriptionStatus.REJECTED) {
+      return this.toPublic(integration, existing.status);
+    }
+    if (existing) {
+      const reopened = await this.prisma.integrationSubscription.update({
+        where: { id: existing.id },
+        data: {
+          status: IntegrationSubscriptionStatus.PENDING,
+          subscribedAt: new Date(),
+          reviewedAt: null,
+          reviewedByAdminId: null,
+          reviewNote: null,
+        },
+      });
+      return this.toPublic(integration, reopened.status);
+    }
     try {
-      await this.prisma.integrationSubscription.create({
+      const created = await this.prisma.integrationSubscription.create({
         data: { integrationId, userId },
       });
+      return this.toPublic(integration, created.status);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        // Already subscribed -- idempotent, not an error.
-        return this.toPublic(integration, true);
+        // Raced with another request for the same pair -- read it back.
+        const row = await this.prisma.integrationSubscription.findUnique({
+          where: { integrationId_userId: { integrationId, userId } },
+        });
+        return this.toPublic(integration, row?.status ?? IntegrationSubscriptionStatus.PENDING);
       }
       throw err;
     }
-    return this.toPublic(integration, true);
   }
 
   async unsubscribe(userId: string, integrationId: string) {
@@ -124,9 +158,21 @@ export class IntegrationsService implements OnModuleInit {
     return { unsubscribed: true };
   }
 
+  /**
+   * The single access gate every integration consumer goes through.
+   *
+   * Only an APPROVED subscription grants access. A PENDING row means the
+   * member asked and an admin has not decided yet, which is emphatically
+   * not access -- fulfilling an integration means handling other members'
+   * identity documents and being paid for it.
+   */
   async isSubscribed(userId: string, slug: string): Promise<boolean> {
     const count = await this.prisma.integrationSubscription.count({
-      where: { userId, integration: { slug } },
+      where: {
+        userId,
+        integration: { slug },
+        status: IntegrationSubscriptionStatus.APPROVED,
+      },
     });
     return count > 0;
   }
@@ -171,6 +217,79 @@ export class IntegrationsService implements OnModuleInit {
     return this.toAdminPublic(row);
   }
 
+  /**
+   * Every access request, newest-pending first -- the admin queue. Pending
+   * sorts ahead of decided rows so the work to do is always at the top.
+   */
+  async listSubscriptionsForAdmin(status?: IntegrationSubscriptionStatus) {
+    const rows = await this.prisma.integrationSubscription.findMany({
+      where: status ? { status } : undefined,
+      include: {
+        integration: { select: { id: true, slug: true, name: true } },
+        user: { select: { id: true, email: true, firstName: true, lastName: true } },
+      },
+      orderBy: [{ status: 'asc' }, { subscribedAt: 'desc' }],
+      take: 200,
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      subscribedAt: row.subscribedAt,
+      reviewedAt: row.reviewedAt,
+      reviewNote: row.reviewNote,
+      integration: row.integration,
+      user: row.user,
+    }));
+  }
+
+  /**
+   * Approve or reject an access request.
+   *
+   * Approving is what actually grants access -- isSubscribed accepts only
+   * APPROVED. Rejecting leaves the row in place rather than deleting it, so
+   * the member can see they were declined and why, and the decision is not
+   * silently lost if they ask again.
+   */
+  async reviewSubscription(
+    adminId: string,
+    subscriptionId: string,
+    decision: 'approve' | 'reject',
+    reviewNote?: string,
+  ) {
+    const existing = await this.prisma.integrationSubscription.findUnique({
+      where: { id: subscriptionId },
+    });
+    if (!existing) throw new NotFoundException('Subscription request not found');
+    const row = await this.prisma.integrationSubscription.update({
+      where: { id: subscriptionId },
+      data: {
+        status:
+          decision === 'approve'
+            ? IntegrationSubscriptionStatus.APPROVED
+            : IntegrationSubscriptionStatus.REJECTED,
+        reviewedAt: new Date(),
+        reviewedByAdminId: adminId,
+        reviewNote: reviewNote ?? null,
+      },
+      include: {
+        integration: { select: { id: true, slug: true, name: true } },
+        user: { select: { id: true, email: true, firstName: true, lastName: true } },
+      },
+    });
+    this.logger.log(
+      `Integration access ${decision}d: admin=${adminId} user=${row.userId} integration=${row.integration.slug}`,
+    );
+    return {
+      id: row.id,
+      status: row.status,
+      subscribedAt: row.subscribedAt,
+      reviewedAt: row.reviewedAt,
+      reviewNote: row.reviewNote,
+      integration: row.integration,
+      user: row.user,
+    };
+  }
+
   private toPublic(
     integration: {
       id: string;
@@ -181,7 +300,7 @@ export class IntegrationsService implements OnModuleInit {
       iconKey: string | null;
       feeTokenAmount: Prisma.Decimal;
     },
-    subscribed: boolean,
+    subscriptionStatus: IntegrationSubscriptionStatus | null,
   ) {
     return {
       id: integration.id,
@@ -191,7 +310,14 @@ export class IntegrationsService implements OnModuleInit {
       category: integration.category,
       iconKey: integration.iconKey,
       feeTokenAmount: integration.feeTokenAmount.toString(),
-      subscribed,
+      /**
+       * Kept meaning "has access", so every existing consumer of this flag
+       * stays correct now that requesting and being granted are different
+       * things. subscriptionStatus carries the finer detail the UI needs to
+       * distinguish "awaiting approval" from "not requested".
+       */
+      subscribed: subscriptionStatus === IntegrationSubscriptionStatus.APPROVED,
+      subscriptionStatus,
     };
   }
 
