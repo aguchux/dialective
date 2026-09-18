@@ -21,7 +21,17 @@ const HELD_TEXT = '#8a5a0f';
  * "Other activity" rather than crashing -- new LedgerEntryTypes added to
  * the schema degrade gracefully instead of silently misclassifying.
  */
-type Bucket = 'earned' | 'held' | 'spent' | 'other';
+/**
+ * A withdrawal is the member being PAID; a fee is the platform charging them.
+ * Both used to sit in one 'spent' bucket under the heading "Spent or
+ * withdrawn", summarised as "covers fees, corrections, or other spending".
+ * On a real account that read as "67 DL went to fees" when 66 of it was the
+ * member's own withdrawals and only 1 DL was a fee -- i.e. the statement made
+ * being paid look identical to being charged. They are now separate buckets so
+ * no total ever mixes the two, and 'purchase' keeps marketplace spending (real
+ * spending, but not a fee either) out of the fee total as well.
+ */
+type Bucket = 'earned' | 'held' | 'paidout' | 'fee' | 'purchase' | 'other';
 
 const TYPE_INFO: Record<string, { label: string; bucket: Bucket; note?: string }> = {
   TRAINING_PAYOUT: { label: 'Training payout', bucket: 'earned', note: 'Paid for a scored task' },
@@ -47,35 +57,46 @@ const TYPE_INFO: Record<string, { label: string; bucket: Bucket; note?: string }
     bucket: 'held',
     note: 'A reserved amount returned to your balance -- no tokens were lost',
   },
-  TASK_SPEND: { label: 'Task spend (legacy)', bucket: 'spent' },
+  TASK_SPEND: { label: 'Task spend (legacy)', bucket: 'purchase' },
   P2P_ESCROW_LOCK: { label: 'Marketplace order held', bucket: 'held' },
   P2P_ESCROW_REFUND: { label: 'Marketplace order refunded', bucket: 'held' },
-  P2P_ESCROW_RELEASE: { label: 'Marketplace order released', bucket: 'spent' },
+  P2P_ESCROW_RELEASE: {
+    label: 'Marketplace tokens sold',
+    bucket: 'purchase',
+    note: 'Tokens you sold or sent in a marketplace trade -- not a fee',
+  },
   P2P_ESCROW_CREDIT: { label: 'Marketplace order received', bucket: 'earned' },
   WITHDRAWAL: {
     label: 'Withdrawal requested',
-    bucket: 'spent',
-    note: 'Deducted the moment you request it, not when it is paid out',
+    bucket: 'paidout',
+    note: 'Money leaving the wallet TO YOU. Deducted the moment you request it, not when it lands',
   },
   WITHDRAWAL_REVERSED: {
     label: 'Withdrawal reversed',
     bucket: 'held',
     note: 'A requested withdrawal that did not complete -- the amount was returned to you',
   },
-  PHONE_VERIFICATION_FEE: { label: 'Phone verification fee', bucket: 'spent' },
+  PHONE_VERIFICATION_FEE: { label: 'Phone verification fee', bucket: 'fee' },
   PHONE_VERIFICATION_FEE_REFUND: { label: 'Verification fee refunded', bucket: 'held' },
-  WHATSAPP_VALIDATION_FEE: { label: 'WhatsApp verification fee', bucket: 'spent' },
+  WHATSAPP_VALIDATION_FEE: { label: 'WhatsApp verification fee', bucket: 'fee' },
   WHATSAPP_VALIDATION_PAYOUT: {
     label: 'WhatsApp verification reward',
     bucket: 'earned',
     note: 'Paid for confirming another member’s WhatsApp code',
   },
+  // Corrections are their own category, not fees: an ADMIN_ADJUSTMENT can be
+  // positive or negative, so filing it under "fees charged" would misstate it
+  // in exactly the way this grouping exists to prevent.
   ADMIN_ADJUSTMENT: {
     label: 'Admin correction',
-    bucket: 'spent',
-    note: 'A manual balance correction made by an admin',
+    bucket: 'other',
+    note: 'A manual balance correction made by an admin -- not a fee',
   },
-  SUB_DISTRIBUTOR_ADJUSTMENT: { label: 'Distributor adjustment', bucket: 'spent' },
+  SUB_DISTRIBUTOR_ADJUSTMENT: {
+    label: 'Distributor adjustment',
+    bucket: 'other',
+    note: 'A balance correction, not a fee',
+  },
 };
 
 function typeInfo(type: string): { label: string; bucket: Bucket; note?: string } {
@@ -124,9 +145,10 @@ function ensureSpace(doc: PDFKit.PDFDocument, needed: number) {
  * total earned" -- the single most common reason this report gets
  * generated. Structure: account summary tiles, then a one-paragraph plain-
  * English explanation of the gap (with the actual reconciling numbers
- * filled in), then a three-bucket breakdown (Earned / Held / Spent) instead
- * of a flat alphabetical dump of enum names, then the full itemized
- * history for a reader who wants to verify every line themselves.
+ * filled in), then an explicit total-fees callout, then a breakdown grouped
+ * so that money paid out to the member, money they spent themselves, and
+ * fees the platform charged are never added into the same figure, then the
+ * full itemized history for a reader who wants to verify every line.
  */
 export function renderProofAccountPdf(
   report: ProofAccountReport,
@@ -177,7 +199,11 @@ export function renderProofAccountPdf(
         `${formatTokens(report.summary.heldBalanceTokens)} DL`,
         'Releases once pending tasks are scored',
       ],
-      ['Completed withdrawals', `${formatTokens(report.summary.totalWithdrawnTokens)} DL`],
+      [
+        'Paid out to you (completed)',
+        `${formatTokens(report.summary.totalWithdrawnTokens)} DL`,
+        'Your own money, already withdrawn -- not a fee',
+      ],
     ];
 
     const tileWidth = pageWidth / 2 - 6;
@@ -250,6 +276,14 @@ export function renderProofAccountPdf(
       );
     doc.moveDown(0.5);
 
+    const bucketAbsTotal = (bucket: Bucket) =>
+      Math.abs(
+        report.ledgerTotalsByType
+          .filter((row) => typeInfo(row.type).bucket === bucket)
+          .reduce((sum, row) => sum + Number(row.totalAmount), 0),
+      );
+    const totalFees = bucketAbsTotal('fee');
+
     if (Math.abs(gap) > 0.0001) {
       const parts: string[] = [];
       if (held > 0.0001) {
@@ -258,16 +292,22 @@ export function renderProofAccountPdf(
         );
       }
       if (withdrawn > 0.0001) {
-        parts.push(`${formatTokens(String(withdrawn))} DL has already been paid out`);
+        parts.push(`${formatTokens(String(withdrawn))} DL has already been paid out to you`);
       }
-      const spentTotal = report.ledgerTotalsByType
-        .filter((row) => typeInfo(row.type).bucket === 'spent')
-        .reduce((sum, row) => sum + Number(row.totalAmount), 0);
-      if (Math.abs(spentTotal) > 0.0001) {
-        parts.push(
-          `${formatTokens(String(Math.abs(spentTotal)))} DL covers fees, corrections, or other spending`,
-        );
+      const purchaseTotal = bucketAbsTotal('purchase');
+      const feeTotal = totalFees;
+      if (purchaseTotal > 0.0001) {
+        parts.push(`${formatTokens(String(purchaseTotal))} DL you spent or sold yourself`);
       }
+      // State the fee total explicitly and separately, every time -- including
+      // when it is zero. The previous wording folded withdrawals into a vague
+      // "fees, corrections, or other spending" total, so a member with 66 DL of
+      // withdrawals and a single 1 DL fee read it as 67 DL of fees.
+      parts.push(
+        feeTotal > 0.0001
+          ? `${formatTokens(String(feeTotal))} DL in platform fees`
+          : 'no platform fees at all',
+      );
       const sentence =
         parts.length > 0
           ? `The ${formatTokens(String(gap))} DL difference on this account breaks down as: ${parts.join('; ')}.`
@@ -284,6 +324,41 @@ export function renderProofAccountPdf(
         .font('Helvetica-Bold')
         .text('On this account, both figures currently match.', { width: pageWidth });
     }
+    doc.moveDown(0.8);
+
+    // --- Unambiguous fee callout ---------------------------------------
+    // The single question this statement kept getting wrong in readers' heads
+    // is "how much did the platform take from me?". Answer it outright, in its
+    // own panel, rather than leaving it to be inferred from a grouped total.
+    const feeLine =
+      totalFees > 0.0001
+        ? `Total fees charged by the platform, for the entire life of this account: ` +
+          `${formatTokens(String(totalFees))} DL.`
+        : 'The platform has charged this account no fees at all.';
+    const feeNote =
+      'Withdrawals are NOT fees -- they are your own money being paid out to you. ' +
+      'Reserved task amounts are NOT fees -- they are returned to you when the task is reviewed. ' +
+      'Only the "Fees charged by the platform" group below is money the platform kept.';
+    const calloutText = `${feeLine} ${feeNote}`;
+    const calloutH =
+      doc.heightOfString(calloutText, { width: pageWidth - 20, lineGap: 2 }) + 16;
+    ensureSpace(doc, calloutH + 10);
+    const calloutTop = doc.y;
+    doc.rect(doc.page.margins.left, calloutTop, pageWidth, calloutH).fillColor(PANEL_BG).fill();
+    doc
+      .fillColor(INK)
+      .fontSize(9)
+      .font('Helvetica-Bold')
+      .text(feeLine, doc.page.margins.left + 10, calloutTop + 8, {
+        width: pageWidth - 20,
+        lineGap: 2,
+        continued: true,
+      })
+      .fillColor(MUTED)
+      .font('Helvetica')
+      .text(` ${feeNote}`, { width: pageWidth - 20, lineGap: 2 });
+    doc.y = calloutTop + calloutH;
+    doc.x = doc.page.margins.left;
     doc.moveDown(1);
 
     doc
@@ -304,7 +379,8 @@ export function renderProofAccountPdf(
       .fontSize(8)
       .font('Helvetica')
       .text(
-        'Every entry ever posted to this wallet, grouped into three plain categories instead of raw system names.',
+        'Every entry ever posted to this wallet, grouped into plain categories instead of raw system names. ' +
+          'Money paid out to you, money you spent yourself, and fees the platform charged are kept strictly separate below.',
       );
     doc.moveDown(0.6);
 
@@ -322,10 +398,22 @@ export function renderProofAccountPdf(
         hint: 'Temporarily reserved, then returned -- no lasting effect on your balance',
       },
       {
-        bucket: 'spent',
-        title: 'Spent or withdrawn',
+        bucket: 'paidout',
+        title: 'Paid out to you',
         color: DEBIT,
-        hint: 'Left the wallet for a specific reason',
+        hint: 'Your own money, withdrawn to you. These are NOT fees and were not taken by the platform',
+      },
+      {
+        bucket: 'purchase',
+        title: 'Spent by you',
+        color: DEBIT,
+        hint: 'Tokens you chose to spend or sell. These are NOT fees',
+      },
+      {
+        bucket: 'fee',
+        title: 'Fees charged by the platform',
+        color: DEBIT,
+        hint: 'The only category the platform charged you. Everything else above is your own money',
       },
       { bucket: 'other', title: 'Other activity', color: MUTED, hint: '' },
     ];
