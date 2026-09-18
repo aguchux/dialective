@@ -197,7 +197,14 @@ export const activityLabels: Record<LedgerEntryType, string> = {
   NO_AUDIO_BONUS_CLAWBACK: 'Bonus reversed (no audio)',
 };
 
-export function TrainerDashboard() {
+/**
+ * @param forcedView pins the view regardless of ?view=, so a section can be
+ * given a real route (/dashboard/markets) while still rendering inside the
+ * dashboard's chrome -- the header, nav, banners and dashboard query all
+ * live here, and a standalone page would have to duplicate every one of
+ * them. Left undefined, the view comes from ?view= exactly as before.
+ */
+export function TrainerDashboard({ forcedView }: { forcedView?: DashboardView } = {}) {
   const { data: session, status, update } = useSession();
   // NextAuth's refetchInterval (providers.tsx) polls /api/auth/session every
   // 5 minutes; if that single poll fails or is served something unparseable
@@ -228,9 +235,25 @@ export function TrainerDashboard() {
   const [testimonyOpen, setTestimonyOpen] = useState(false);
   const requestedView = searchParams.get('view');
   const displayName = [session?.user.firstName, session?.user.lastName].filter(Boolean).join(' ');
-  const activeView = allViewIds.includes(requestedView as DashboardView)
-    ? (requestedView as DashboardView)
-    : 'home';
+  const activeView =
+    forcedView ??
+    (allViewIds.includes(requestedView as DashboardView)
+      ? (requestedView as DashboardView)
+      : 'home');
+
+  // The market moved to its own route. Existing links, bookmarks and any
+  // installed PWA shortcut still point at ?view=market, so send them on
+  // rather than breaking them -- carrying the rest of the query string
+  // (notably ?create=sell|buy, which opens the create-offer dialog) so the
+  // redirect is transparent to those flows.
+  useEffect(() => {
+    if (forcedView || requestedView !== 'market') return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('view');
+    const query = params.toString();
+    router.replace(`/dashboard/markets${query ? `?${query}` : ''}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-check when the raw query string changes
+  }, [requestedView, forcedView]);
   const { data, isLoading, isFetching, error, refetch } = useGetTrainerDashboardQuery(undefined, {
     skip:
       status !== 'authenticated' ||
@@ -4511,7 +4534,7 @@ function FundTokensDialog({
     return (
       <button
         className={fundButtonClassName}
-        onClick={() => router.push('/dashboard?view=market&create=buy')}
+        onClick={() => router.push('/dashboard/markets?create=buy')}
         type="button"
       >
         <Plus className="size-4" aria-hidden="true" />{' '}
@@ -5040,7 +5063,7 @@ function WithdrawTokensDialog({
     return (
       <button
         className={withdrawButtonClassName}
-        onClick={() => router.push('/dashboard?view=market&create=sell')}
+        onClick={() => router.push('/dashboard/markets?create=sell')}
         type="button"
       >
         <ArrowUpRight className="size-4" aria-hidden="true" />{' '}

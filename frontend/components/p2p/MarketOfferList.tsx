@@ -99,10 +99,11 @@ export function MarketOfferList({
   viewerId: string | undefined;
 }) {
   const pathname = usePathname();
-  // A trainer browses the market as a view inside /dashboard rather than on
-  // its own route, but the offer detail IS a real route for both roles --
-  // /dashboard/market/offers/[id] and /distributor/market/offers/[id].
-  const basePath = pathname?.startsWith('/distributor') ? '/distributor' : '/dashboard';
+  // Offer detail lives under each role's own market route:
+  // /dashboard/markets/offers/[id] and /distributor/market/offers/[id].
+  const offersBase = pathname?.startsWith('/distributor')
+    ? '/distributor/market/offers'
+    : '/dashboard/markets/offers';
   const [type, setType] = useState<MarketType>('ALL');
   const [search, setSearch] = useState('');
   const [fiatCurrency, setFiatCurrency] = useState('');
@@ -347,7 +348,7 @@ export function MarketOfferList({
                           // scrolling table can no longer open a real trade.
                           <Link
                             className="inline-flex min-h-9 items-center rounded-lg bg-accent px-4 text-sm font-extrabold text-white hover:bg-accent-dark"
-                            href={`${basePath}/market/offers/${offer.id}`}
+                            href={`${offersBase}/${offer.id}`}
                           >
                             View
                           </Link>

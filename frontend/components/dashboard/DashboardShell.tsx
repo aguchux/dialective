@@ -81,7 +81,7 @@ export const dashboardViews: {
   { id: 'tokens', label: 'Tokens', icon: WalletCards, href: '/dashboard?view=tokens' },
   { id: 'earnings', label: 'Earnings', icon: CircleDollarSign, href: '/dashboard?view=earnings' },
   { id: 'training', label: 'Training', icon: Mic2, href: '/dashboard?view=training' },
-  { id: 'market', label: 'Markets', icon: Landmark, href: '/dashboard?view=market' },
+  { id: 'market', label: 'Markets', icon: Landmark, href: '/dashboard/markets' },
   { id: 'scores', label: 'Scores', icon: Star, href: '/dashboard?view=scores' },
   { id: 'p2p', label: 'P2P', icon: Plug, href: '/dashboard/integrations' },
 ];

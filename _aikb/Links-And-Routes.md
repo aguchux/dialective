@@ -53,7 +53,7 @@ Routes below are listed as paths (e.g. `/dashboard?view=profile`) for brevity, b
 | Tokens and wallet activity                                                                           | `/dashboard?view=tokens`                   | Signed-in trainer                  |
 | Earnings history                                                                                     | `/dashboard?view=earnings`                 | Signed-in trainer                  |
 | Training and submitted tasks                                                                         | `/dashboard?view=training`                 | Signed-in trainer                  |
-| P2P token market                                                                                     | `/dashboard?view=market`                   | Signed-in trainer; may be disabled |
+| P2P token market                                                                                     | `/dashboard/markets`                   | Signed-in trainer; may be disabled |
 | My Scores                                                                                            | `/dashboard?view=scores`                   | Signed-in trainer                  |
 | Profile, country, dialect, SMS or manual WhatsApp phone verification, payment methods, notifications | `/dashboard?view=profile`                  | Signed-in trainer                  |
 | Referrals (code, invite link, invitations, bonus rates)                                              | `/dashboard?view=referrals`                | Signed-in trainer                  |

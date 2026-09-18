@@ -28,11 +28,11 @@ import {
 export function OfferDetailView({ offerId }: { offerId: string }) {
   const router = useRouter();
   const pathname = usePathname();
-  // The two roles reach the market differently: the distributor has a real
-  // /distributor/market route, while for a trainer it is a view inside the
-  // dashboard (/dashboard?view=market), not a route of its own.
-  const isDistributor = pathname?.startsWith('/distributor');
-  const marketHref = isDistributor ? '/distributor/market' : '/dashboard?view=market';
+  // Both roles now have a real market route, so "back" and the ?accept=
+  // hand-off are plain URLs rather than a query-param mode of another page.
+  const marketHref = pathname?.startsWith('/distributor')
+    ? '/distributor/market'
+    : '/dashboard/markets';
 
   const { data: offer, isLoading, error } = useGetP2POfferQuery(offerId);
   const { data: me } = useGetMeQuery();
@@ -163,11 +163,7 @@ export function OfferDetailView({ offerId }: { offerId: string }) {
                 <>
                   <button
                     className="inline-flex min-h-12 items-center justify-center rounded-lg bg-accent px-6 font-extrabold text-white hover:bg-accent-dark"
-                    onClick={() =>
-                      router.push(
-                        `${marketHref}${marketHref.includes('?') ? '&' : '?'}accept=${offer.id}`,
-                      )
-                    }
+                    onClick={() => router.push(`${marketHref}?accept=${offer.id}`)}
                     type="button"
                   >
                     {offer.type === 'SELL' ? 'Buy this DL' : 'Sell DL to this trader'}
