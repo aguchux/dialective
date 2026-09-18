@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowRight, Clock, MessageCircle, Plug, ScanFace, Search } from 'lucide-react';
+import { ArrowRight, Check, Clock, Lock, MessageCircle, Plug, ScanFace, Search } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { cardClass, EmptyPanel, SectionTitle } from '@/components/dashboard/shared';
 import {
@@ -181,16 +181,42 @@ export function IntegrationsMarketplace() {
                       Your request was declined. You can request again.
                     </p>
                   )}
+                  {/* The bar is shown whenever there is one, so a member
+                      who qualifies understands why they do, and one who
+                      does not knows what to work toward instead of
+                      pressing a button that will only refuse them. */}
+                  {integration.eligibilityRequirements.length > 0 && (
+                    <ul className="grid gap-1 rounded-lg border border-line bg-surface-muted p-2.5">
+                      {integration.eligibilityRequirements.map((requirement) => (
+                        <li
+                          className={`flex items-start gap-1.5 text-xs font-bold ${
+                            requirement.met ? 'text-emerald-700' : 'text-muted'
+                          }`}
+                          key={requirement.label}
+                        >
+                          {requirement.met ? (
+                            <Check className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+                          ) : (
+                            <Lock className="mt-px size-3.5 shrink-0" aria-hidden="true" />
+                          )}
+                          {requirement.label}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   <ActionButton
-                    className="min-h-10 rounded-lg border border-line px-3 font-extrabold hover:bg-surface-muted"
+                    className="min-h-10 rounded-lg border border-line px-3 font-extrabold hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled={!integration.eligible}
                     onClick={() => handleSubscribe(integration)}
                     pending={subscribing && subscribingId === integration.id}
                     pendingLabel="Requesting"
                     type="button"
                   >
-                    {integration.subscriptionStatus === 'REJECTED'
-                      ? 'Request again'
-                      : 'Request access'}
+                    {!integration.eligible
+                      ? 'Not yet eligible'
+                      : integration.subscriptionStatus === 'REJECTED'
+                        ? 'Request again'
+                        : 'Request access'}
                   </ActionButton>
                 </div>
               )}

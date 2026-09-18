@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, UnprocessableEntityException } from '@nestjs/common';
 import { Prisma } from '@dialectiva/db';
 import { IntegrationsService } from './integrations.service';
 import { INTEGRATION_REGISTRY } from './integration-registry';
@@ -19,11 +19,34 @@ describe('IntegrationsService', () => {
     updatedAt: new Date(),
   };
 
+  /**
+   * The eligibility facts loadEligibilityFacts reads. Defaults to a member
+   * who clears every bar, so a test only states the fact it is about.
+   */
+  const eligibleUser = {
+    phoneVerifiedAt: new Date(),
+    kycStatus: 'APPROVED',
+    _count: { wordRecordings: 500 },
+  };
+
+  /** The user shape the admin queue selects, for update() mock returns. */
+  const adminUser = {
+    id: userId,
+    email: 'a@b.c',
+    firstName: null,
+    lastName: null,
+    phoneNumber: '+2348012345678',
+    phoneVerifiedAt: new Date(),
+    kycStatus: 'APPROVED',
+    _count: { wordRecordings: 120 },
+  };
+
   let prisma: any;
   let service: IntegrationsService;
 
   beforeEach(() => {
     prisma = {
+      user: { findUnique: jest.fn().mockResolvedValue(eligibleUser) },
       integration: {
         findMany: jest.fn().mockResolvedValue([integration]),
         findUnique: jest.fn().mockResolvedValue(integration),
@@ -128,6 +151,155 @@ describe('IntegrationsService', () => {
     });
   });
 
+  /**
+   * ID Review's bar: verified phone, approved KYC, 100 completed tasks.
+   * WhatsApp Validator deliberately has none, which is why every test
+   * above passes an unqualified member without noticing.
+   */
+  describe('eligibility -- who may request access', () => {
+    const idReview = {
+      ...integration,
+      id: 'integration-2',
+      slug: 'p2p-kyc-review',
+      name: 'ID Review',
+    };
+
+    beforeEach(() => {
+      prisma.integration.findUnique.mockResolvedValue(idReview);
+      prisma.integration.findMany.mockResolvedValue([idReview]);
+    });
+
+    it('lets a member who clears every bar request access', async () => {
+      const result = await service.subscribe(userId, idReview.id);
+      expect(result.subscriptionStatus).toBe('PENDING');
+      expect(prisma.integrationSubscription.create).toHaveBeenCalled();
+    });
+
+    it.each([
+      ['an unverified phone', { phoneVerifiedAt: null }],
+      ['unapproved KYC', { kycStatus: 'IN_REVIEW' }],
+      ['too few tasks', { _count: { wordRecordings: 99 } }],
+    ])('refuses a member with %s, without reaching the admin queue', async (_label, override) => {
+      prisma.user.findUnique.mockResolvedValue({ ...eligibleUser, ...override });
+      await expect(service.subscribe(userId, idReview.id)).rejects.toThrow(
+        UnprocessableEntityException,
+      );
+      expect(prisma.integrationSubscription.create).not.toHaveBeenCalled();
+    });
+
+    it('names every unmet requirement, so the member knows the whole bar', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        phoneVerifiedAt: null,
+        kycStatus: 'NOT_STARTED',
+        _count: { wordRecordings: 3 },
+      });
+      await expect(service.subscribe(userId, idReview.id)).rejects.toThrow(
+        /Verified phone number.*Approved KYC.*100 completed tasks/s,
+      );
+    });
+
+    it('counts exactly the minimum as enough', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        ...eligibleUser,
+        _count: { wordRecordings: 100 },
+      });
+      await expect(service.subscribe(userId, idReview.id)).resolves.toBeDefined();
+    });
+
+    it('does not re-gate a member who is already approved', async () => {
+      // A rule that tightens later is the admin's to act on by revoking,
+      // not something that silently strips access on the next page load.
+      prisma.user.findUnique.mockResolvedValue({ ...eligibleUser, phoneVerifiedAt: null });
+      prisma.integrationSubscription.findUnique.mockResolvedValue({
+        id: 'sub-1',
+        status: 'APPROVED',
+      });
+      const result = await service.subscribe(userId, idReview.id);
+      expect(result.subscribed).toBe(true);
+    });
+
+    it('re-gates a member who was rejected and is trying again', async () => {
+      prisma.user.findUnique.mockResolvedValue({ ...eligibleUser, kycStatus: 'DECLINED' });
+      prisma.integrationSubscription.findUnique.mockResolvedValue({
+        id: 'sub-1',
+        status: 'REJECTED',
+      });
+      await expect(service.subscribe(userId, idReview.id)).rejects.toThrow(
+        UnprocessableEntityException,
+      );
+    });
+
+    it('shows the full bar on the marketplace card, met or not', async () => {
+      prisma.user.findUnique.mockResolvedValue({ ...eligibleUser, _count: { wordRecordings: 40 } });
+      const [result] = await service.list(userId, {});
+      expect(result.eligible).toBe(false);
+      expect(result.eligibilityRequirements).toEqual([
+        { label: 'Verified phone number', met: true },
+        { label: 'Approved KYC', met: true },
+        { label: '100 completed tasks (you have 40)', met: false },
+      ]);
+    });
+
+    it('leaves an integration with no rule open to everyone', async () => {
+      prisma.integration.findMany.mockResolvedValue([integration]);
+      prisma.user.findUnique.mockResolvedValue({
+        phoneVerifiedAt: null,
+        kycStatus: 'NOT_STARTED',
+        _count: { wordRecordings: 0 },
+      });
+      const [result] = await service.list(userId, {});
+      expect(result.eligible).toBe(true);
+      expect(result.eligibilityRequirements).toEqual([]);
+    });
+  });
+
+  describe('listSubscriptionsForAdmin -- the member facts an admin reviews', () => {
+    it('returns the mobile, its verification state, KYC status and task count', async () => {
+      prisma.integrationSubscription.findMany.mockResolvedValue([
+        {
+          id: 'sub-1',
+          status: 'PENDING',
+          subscribedAt: new Date(),
+          reviewedAt: null,
+          reviewNote: null,
+          certified: false,
+          certifiedAt: null,
+          integration: { id: integration.id, slug: 'p2p-kyc-review', name: 'ID Review' },
+          user: adminUser,
+        },
+      ]);
+      const [row] = await service.listSubscriptionsForAdmin();
+      expect(row.user).toEqual(
+        expect.objectContaining({
+          email: 'a@b.c',
+          phoneNumber: '+2348012345678',
+          phoneVerified: true,
+          kycStatus: 'APPROVED',
+          taskCount: 120,
+        }),
+      );
+    });
+
+    it('reports an unverified number as unverified rather than omitting it', async () => {
+      prisma.integrationSubscription.findMany.mockResolvedValue([
+        {
+          id: 'sub-1',
+          status: 'PENDING',
+          subscribedAt: new Date(),
+          reviewedAt: null,
+          reviewNote: null,
+          certified: false,
+          certifiedAt: null,
+          integration: { id: integration.id, slug: 'p2p-kyc-review', name: 'ID Review' },
+          user: { ...adminUser, phoneVerifiedAt: null },
+        },
+      ]);
+      const [row] = await service.listSubscriptionsForAdmin();
+      expect(row.user.phoneNumber).toBe('+2348012345678');
+      expect(row.user.phoneVerified).toBe(false);
+    });
+  });
+
   describe('isSubscribed -- the access gate', () => {
     it('counts only APPROVED rows', async () => {
       await service.isSubscribed(userId, 'whatsapp-validator');
@@ -179,7 +351,7 @@ describe('IntegrationsService', () => {
         reviewedAt: new Date(),
         reviewNote: null,
         integration: { id: integration.id, slug: 'whatsapp-validator', name: 'W' },
-        user: { id: userId, email: 'a@b.c', firstName: null, lastName: null },
+        user: adminUser,
       });
       const result = await service.reviewSubscription('admin-1', 'sub-1', 'approve');
       expect(result.status).toBe('APPROVED');
@@ -200,7 +372,7 @@ describe('IntegrationsService', () => {
         reviewedAt: new Date(),
         reviewNote: 'Not enough completed trades',
         integration: { id: integration.id, slug: 'whatsapp-validator', name: 'W' },
-        user: { id: userId, email: 'a@b.c', firstName: null, lastName: null },
+        user: adminUser,
       });
       const result = await service.reviewSubscription(
         'admin-1',

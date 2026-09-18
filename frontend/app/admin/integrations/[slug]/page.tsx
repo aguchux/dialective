@@ -106,6 +106,59 @@ They will see ID documents unobscured, and their single decision will approve or
       ),
     },
     {
+      // The member's phone and whether they proved it -- an unverified
+      // number is a number they typed, not one they hold.
+      key: 'phone',
+      header: 'Mobile',
+      sortValue: (row) => row.user.phoneNumber ?? '',
+      render: (row) =>
+        row.user.phoneNumber ? (
+          <div>
+            <p className="text-sm tabular-nums">{row.user.phoneNumber}</p>
+            <span
+              className={`text-xs font-extrabold ${
+                row.user.phoneVerified ? 'text-emerald-700' : 'text-amber-700'
+              }`}
+            >
+              {row.user.phoneVerified ? 'verified' : 'unverified'}
+            </span>
+          </div>
+        ) : (
+          <span className="text-xs text-muted">No number</span>
+        ),
+    },
+    {
+      key: 'kyc',
+      header: 'KYC',
+      sortValue: (row) => row.user.kycStatus,
+      render: (row) => (
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-black ${
+            row.user.kycStatus === 'APPROVED'
+              ? 'bg-emerald-100 text-emerald-800'
+              : row.user.kycStatus === 'DECLINED'
+                ? 'bg-red-100 text-red-800'
+                : row.user.kycStatus === 'IN_REVIEW' || row.user.kycStatus === 'IN_PROGRESS'
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-surface-muted text-muted'
+          }`}
+        >
+          {row.user.kycStatus.toLowerCase().replace(/_/g, ' ')}
+        </span>
+      ),
+    },
+    {
+      key: 'tasks',
+      header: 'Tasks',
+      searchable: false,
+      sortValue: (row) => row.user.taskCount,
+      render: (row) => (
+        <span className="text-sm font-extrabold tabular-nums">
+          {row.user.taskCount.toLocaleString()}
+        </span>
+      ),
+    },
+    {
       key: 'requested',
       header: 'Requested',
       searchable: false,

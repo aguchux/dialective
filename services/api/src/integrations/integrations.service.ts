@@ -5,10 +5,27 @@ import {
   OnModuleInit,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { IntegrationSubscriptionStatus, Prisma } from '@dialectiva/db';
+import { IntegrationSubscriptionStatus, KycStatus, Prisma } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
-import { INTEGRATION_REGISTRY } from './integration-registry';
+import {
+  INTEGRATION_REGISTRY,
+  IntegrationEligibilityRule,
+} from './integration-registry';
 import { ListIntegrationsDto, UpdateIntegrationDto } from './dto/integrations.dto';
+
+/** What a member must have to request access, and whether they have it. */
+export interface IntegrationEligibility {
+  eligible: boolean;
+  /** Human-readable, in the order they are listed on the card. */
+  requirements: { label: string; met: boolean }[];
+}
+
+/** The subset of User the eligibility rules read. */
+interface EligibilityFacts {
+  phoneVerified: boolean;
+  kycApproved: boolean;
+  taskCount: number;
+}
 
 /**
  * "P2P & Integrations" marketplace catalog -- rows are synced from the
@@ -66,6 +83,61 @@ export class IntegrationsService implements OnModuleInit {
     this.logger.log(`Synced ${INTEGRATION_REGISTRY.length} integration(s) from the registry`);
   }
 
+  /**
+   * Loads the handful of User facts the eligibility rules read. Task count
+   * is the lifetime word-recording count, the same measure the admin users
+   * list and the audit-hold queue already use for "how much work has this
+   * member done".
+   */
+  private async loadEligibilityFacts(userId: string): Promise<EligibilityFacts> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        phoneVerifiedAt: true,
+        kycStatus: true,
+        _count: { select: { wordRecordings: true } },
+      },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    return {
+      phoneVerified: user.phoneVerifiedAt !== null,
+      kycApproved: user.kycStatus === KycStatus.APPROVED,
+      taskCount: user._count.wordRecordings,
+    };
+  }
+
+  /**
+   * Evaluates one integration's rule against a member's facts. Returns
+   * every requirement, met or not, rather than only the failures: the
+   * marketplace card shows the whole bar up front so a member knows what
+   * they are working toward instead of discovering it one rejection at a
+   * time.
+   */
+  private evaluateEligibility(
+    rule: IntegrationEligibilityRule,
+    facts: EligibilityFacts,
+  ): IntegrationEligibility {
+    const requirements: { label: string; met: boolean }[] = [];
+    if (rule.requirePhoneVerified) {
+      requirements.push({ label: 'Verified phone number', met: facts.phoneVerified });
+    }
+    if (rule.requireKycApproved) {
+      requirements.push({ label: 'Approved KYC', met: facts.kycApproved });
+    }
+    if (rule.minTasks && rule.minTasks > 0) {
+      requirements.push({
+        label: `${rule.minTasks} completed tasks (you have ${facts.taskCount})`,
+        met: facts.taskCount >= rule.minTasks,
+      });
+    }
+    return { eligible: requirements.every((r) => r.met), requirements };
+  }
+
+  /** The rule for a slug, or an empty (open to all) rule for an unknown one. */
+  private ruleFor(slug: string): IntegrationEligibilityRule {
+    return INTEGRATION_REGISTRY.find((d) => d.slug === slug)?.eligibility ?? {};
+  }
+
   /** Public-facing list -- disabled integrations are excluded here (see listAllForAdmin for the unfiltered admin view). */
   async list(userId: string, query: ListIntegrationsDto) {
     const search = query.search?.trim();
@@ -86,26 +158,42 @@ export class IntegrationsService implements OnModuleInit {
     const orderBy: Prisma.IntegrationOrderByWithRelationInput =
       sortBy === 'sortOrder' ? { sortOrder: sortDir } : { [sortBy]: sortDir };
 
-    const [rows, subscriptions] = await Promise.all([
+    const [rows, subscriptions, facts] = await Promise.all([
       this.prisma.integration.findMany({ where, orderBy: [orderBy, { name: 'asc' }] }),
       this.prisma.integrationSubscription.findMany({
         where: { userId },
         select: { integrationId: true, status: true },
       }),
+      this.loadEligibilityFacts(userId),
     ]);
     const statusByIntegration = new Map(
       subscriptions.map((s) => [s.integrationId, s.status] as const),
     );
-    return rows.map((row) => this.toPublic(row, statusByIntegration.get(row.id) ?? null));
+    return rows.map((row) =>
+      this.toPublic(
+        row,
+        statusByIntegration.get(row.id) ?? null,
+        this.evaluateEligibility(this.ruleFor(row.slug), facts),
+      ),
+    );
   }
 
   async listMine(userId: string) {
-    const subscriptions = await this.prisma.integrationSubscription.findMany({
-      where: { userId },
-      include: { integration: true },
-      orderBy: { subscribedAt: 'desc' },
-    });
-    return subscriptions.map((s) => this.toPublic(s.integration, s.status));
+    const [subscriptions, facts] = await Promise.all([
+      this.prisma.integrationSubscription.findMany({
+        where: { userId },
+        include: { integration: true },
+        orderBy: { subscribedAt: 'desc' },
+      }),
+      this.loadEligibilityFacts(userId),
+    ]);
+    return subscriptions.map((s) =>
+      this.toPublic(
+        s.integration,
+        s.status,
+        this.evaluateEligibility(this.ruleFor(s.integration.slug), facts),
+      ),
+    );
   }
 
   /**
@@ -117,6 +205,11 @@ export class IntegrationsService implements OnModuleInit {
    * caused the decline should not have to be deleted to try again. An
    * existing PENDING or APPROVED row is returned as-is, so a double-tap
    * cannot reset an approval back to pending.
+   *
+   * Gated by the integration's eligibility rule (see integration-registry):
+   * a member who does not meet the bar cannot get as far as the admin
+   * queue, so the admin's list only ever contains people who could
+   * legitimately be approved.
    */
   async subscribe(userId: string, integrationId: string) {
     const integration = await this.prisma.integration.findUnique({ where: { id: integrationId } });
@@ -126,8 +219,20 @@ export class IntegrationsService implements OnModuleInit {
     const existing = await this.prisma.integrationSubscription.findUnique({
       where: { integrationId_userId: { integrationId, userId } },
     });
+    // Only a new or previously-rejected request is gated. An already
+    // pending/approved member is not re-gated by a rule that tightened
+    // after the fact -- withdrawing access is the admin's call, not a
+    // silent side effect.
+    const facts = await this.loadEligibilityFacts(userId);
+    const eligibility = this.evaluateEligibility(this.ruleFor(integration.slug), facts);
     if (existing && existing.status !== IntegrationSubscriptionStatus.REJECTED) {
-      return this.toPublic(integration, existing.status);
+      return this.toPublic(integration, existing.status, eligibility);
+    }
+    if (!eligibility.eligible) {
+      const missing = eligibility.requirements.filter((r) => !r.met).map((r) => r.label);
+      throw new UnprocessableEntityException(
+        `You need ${missing.join(', ')} before you can request access to ${integration.name}.`,
+      );
     }
     if (existing) {
       const reopened = await this.prisma.integrationSubscription.update({
@@ -140,20 +245,24 @@ export class IntegrationsService implements OnModuleInit {
           reviewNote: null,
         },
       });
-      return this.toPublic(integration, reopened.status);
+      return this.toPublic(integration, reopened.status, eligibility);
     }
     try {
       const created = await this.prisma.integrationSubscription.create({
         data: { integrationId, userId },
       });
-      return this.toPublic(integration, created.status);
+      return this.toPublic(integration, created.status, eligibility);
     } catch (err) {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         // Raced with another request for the same pair -- read it back.
         const row = await this.prisma.integrationSubscription.findUnique({
           where: { integrationId_userId: { integrationId, userId } },
         });
-        return this.toPublic(integration, row?.status ?? IntegrationSubscriptionStatus.PENDING);
+        return this.toPublic(
+          integration,
+          row?.status ?? IntegrationSubscriptionStatus.PENDING,
+          eligibility,
+        );
       }
       throw err;
     }
@@ -267,12 +376,44 @@ export class IntegrationsService implements OnModuleInit {
       },
       include: {
         integration: { select: { id: true, slug: true, name: true } },
-        user: { select: { id: true, email: true, firstName: true, lastName: true } },
+        // The same facts the eligibility gate reads, so an admin reviewing
+        // a request sees what the member actually brings rather than only
+        // a name and a date.
+        user: { select: IntegrationsService.ADMIN_SUBSCRIPTION_USER_SELECT },
       },
       orderBy: [{ status: 'asc' }, { subscribedAt: 'desc' }],
       take: 500,
     });
-    return rows.map((row) => ({
+    return rows.map((row) => this.toAdminSubscription(row));
+  }
+
+  /**
+   * Shapes one admin-queue row. Shared by the list and by the two decision
+   * endpoints, so an approve/certify response replaces the row in the
+   * table with the same shape it had rather than blanking the member's
+   * details.
+   */
+  private toAdminSubscription(row: {
+    id: string;
+    status: IntegrationSubscriptionStatus;
+    subscribedAt: Date;
+    reviewedAt: Date | null;
+    reviewNote: string | null;
+    certified: boolean;
+    certifiedAt: Date | null;
+    integration: { id: string; slug: string; name: string };
+    user: {
+      id: string;
+      email: string;
+      firstName: string | null;
+      lastName: string | null;
+      phoneNumber: string | null;
+      phoneVerifiedAt: Date | null;
+      kycStatus: KycStatus;
+      _count: { wordRecordings: number };
+    };
+  }) {
+    return {
       id: row.id,
       status: row.status,
       subscribedAt: row.subscribedAt,
@@ -281,9 +422,30 @@ export class IntegrationsService implements OnModuleInit {
       certified: row.certified,
       certifiedAt: row.certifiedAt,
       integration: row.integration,
-      user: row.user,
-    }));
+      user: {
+        id: row.user.id,
+        email: row.user.email,
+        firstName: row.user.firstName,
+        lastName: row.user.lastName,
+        phoneNumber: row.user.phoneNumber,
+        phoneVerified: row.user.phoneVerifiedAt !== null,
+        kycStatus: row.user.kycStatus,
+        taskCount: row.user._count.wordRecordings,
+      },
+    };
   }
+
+  /** The user selection toAdminSubscription needs, shared by all three queries. */
+  private static readonly ADMIN_SUBSCRIPTION_USER_SELECT = {
+    id: true,
+    email: true,
+    firstName: true,
+    lastName: true,
+    phoneNumber: true,
+    phoneVerifiedAt: true,
+    kycStatus: true,
+    _count: { select: { wordRecordings: true } },
+  } as const;
 
   /**
    * Approve or reject an access request.
@@ -320,23 +482,13 @@ export class IntegrationsService implements OnModuleInit {
       },
       include: {
         integration: { select: { id: true, slug: true, name: true } },
-        user: { select: { id: true, email: true, firstName: true, lastName: true } },
+        user: { select: IntegrationsService.ADMIN_SUBSCRIPTION_USER_SELECT },
       },
     });
     this.logger.warn(
       `Integration certification ${certified ? 'GRANTED' : 'REVOKED'}: admin=${adminId} user=${row.userId} integration=${row.integration.slug}`,
     );
-    return {
-      id: row.id,
-      status: row.status,
-      subscribedAt: row.subscribedAt,
-      reviewedAt: row.reviewedAt,
-      reviewNote: row.reviewNote,
-      certified: row.certified,
-      certifiedAt: row.certifiedAt,
-      integration: row.integration,
-      user: row.user,
-    };
+    return this.toAdminSubscription(row);
   }
 
   async reviewSubscription(
@@ -362,23 +514,13 @@ export class IntegrationsService implements OnModuleInit {
       },
       include: {
         integration: { select: { id: true, slug: true, name: true } },
-        user: { select: { id: true, email: true, firstName: true, lastName: true } },
+        user: { select: IntegrationsService.ADMIN_SUBSCRIPTION_USER_SELECT },
       },
     });
     this.logger.log(
       `Integration access ${decision}d: admin=${adminId} user=${row.userId} integration=${row.integration.slug}`,
     );
-    return {
-      id: row.id,
-      status: row.status,
-      subscribedAt: row.subscribedAt,
-      reviewedAt: row.reviewedAt,
-      reviewNote: row.reviewNote,
-      certified: row.certified,
-      certifiedAt: row.certifiedAt,
-      integration: row.integration,
-      user: row.user,
-    };
+    return this.toAdminSubscription(row);
   }
 
   private toPublic(
@@ -392,6 +534,7 @@ export class IntegrationsService implements OnModuleInit {
       feeTokenAmount: Prisma.Decimal;
     },
     subscriptionStatus: IntegrationSubscriptionStatus | null,
+    eligibility: IntegrationEligibility,
   ) {
     return {
       id: integration.id,
@@ -409,6 +552,12 @@ export class IntegrationsService implements OnModuleInit {
        */
       subscribed: subscriptionStatus === IntegrationSubscriptionStatus.APPROVED,
       subscriptionStatus,
+      /**
+       * Whether this member may request access at all, and the full bar
+       * either way -- the card shows what is required before they try.
+       */
+      eligible: eligibility.eligible,
+      eligibilityRequirements: eligibility.requirements,
     };
   }
 

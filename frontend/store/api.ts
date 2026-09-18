@@ -930,6 +930,13 @@ export interface Integration {
   subscribed: boolean;
   /** null when never requested. PENDING means waiting on an admin, not access. */
   subscriptionStatus: IntegrationSubscriptionStatus | null;
+  /** Whether this member may request access at all (see eligibilityRequirements). */
+  eligible: boolean;
+  /**
+   * The full bar for this integration, met or not, so the card can show
+   * what is required before the member tries. Empty when open to all.
+   */
+  eligibilityRequirements: { label: string; met: boolean }[];
 }
 
 export type IntegrationSubscriptionStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -944,7 +951,17 @@ export interface AdminIntegrationSubscription {
   certified: boolean;
   certifiedAt: string | null;
   integration: { id: string; slug: string; name: string };
-  user: { id: string; email: string; firstName: string | null; lastName: string | null };
+  user: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    phoneNumber: string | null;
+    phoneVerified: boolean;
+    kycStatus: KycStatus;
+    /** Lifetime completed word recordings. */
+    taskCount: number;
+  };
 }
 
 // --- Peer review of identity documents (p2p-kyc-review integration) ---

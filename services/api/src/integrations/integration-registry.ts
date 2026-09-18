@@ -22,6 +22,25 @@ export interface IntegrationDefinition {
   defaultMaxConcurrentClaims: number;
   /** Default minutes an issued code/request stays valid before expiring, until an admin changes it via the gate. */
   defaultCodeValidityMinutes: number;
+  /**
+   * Who is allowed to request access at all. Checked when a member hits
+   * subscribe, and shown on the marketplace card so the bar is visible
+   * before they try rather than only in a rejection.
+   *
+   * This is a property of the integration, not a global policy: fulfilling
+   * ID Review means handling other members' identity documents, which
+   * warrants a verified, established member. WhatsApp Validator carries no
+   * such exposure and deliberately has no bar.
+   */
+  eligibility: IntegrationEligibilityRule;
+}
+
+/** An empty rule (all fields absent/0) means anyone may request access. */
+export interface IntegrationEligibilityRule {
+  requirePhoneVerified?: boolean;
+  requireKycApproved?: boolean;
+  /** Lifetime completed word recordings ("tasks") the member must have. */
+  minTasks?: number;
 }
 
 export const INTEGRATION_REGISTRY: IntegrationDefinition[] = [
@@ -35,6 +54,9 @@ export const INTEGRATION_REGISTRY: IntegrationDefinition[] = [
     defaultSortOrder: 0,
     defaultMaxConcurrentClaims: 5,
     defaultCodeValidityMinutes: 60 * 24,
+    // No bar: relaying a one-time code exposes the validator to nothing
+    // more than a phone number the requester chose to share.
+    eligibility: {},
   },
   {
     slug: 'p2p-kyc-review',
@@ -51,5 +73,12 @@ export const INTEGRATION_REGISTRY: IntegrationDefinition[] = [
     // once is exactly what this feature should not encourage.
     defaultMaxConcurrentClaims: 2,
     defaultCodeValidityMinutes: 60 * 24,
+    /**
+     * A reviewer here reads other members' identity documents, so the bar
+     * is deliberately high: they must have proven their own phone and
+     * passed KYC themselves, and have a real track record on the platform
+     * rather than being a fresh account that signed up to harvest IDs.
+     */
+    eligibility: { requirePhoneVerified: true, requireKycApproved: true, minTasks: 100 },
   },
 ];
