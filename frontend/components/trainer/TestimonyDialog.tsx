@@ -190,7 +190,17 @@ export function TestimonyDialog({
       const upload = await createUpload({ contentType: uploadContentType }).unwrap();
       const uploaded = await fetch(upload.uploadUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': uploadContentType },
+        headers: {
+          'Content-Type': uploadContentType,
+          // The URL is signed with ACL: public-read (see
+          // TestimonialsService.createUploadUrl), and S3 requires the
+          // matching header to actually be sent -- signing it is not
+          // enough. Without this the object uploads PRIVATE, and the
+          // admin/public players get 403 on a file that looks perfectly
+          // fine in the database, which is what made every video
+          // testimony render as an empty 0:00 player.
+          'x-amz-acl': 'public-read',
+        },
         body: videoBlob,
       });
       if (!uploaded.ok) throw new Error('The video upload failed. Please try again.');
