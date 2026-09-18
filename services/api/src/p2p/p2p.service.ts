@@ -7,6 +7,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import {
+  KycStatus,
   LedgerEntryType,
   OtpPurpose,
   P2PDisputeStatus,
@@ -96,6 +97,50 @@ export class P2PService {
   async getSettings() {
     const row = await this.settingsRow();
     return serializeSettings(row);
+  }
+
+  /**
+   * What this member may do on the market, and why not where they can't.
+   *
+   * The same three facts the create/accept gates enforce, read once so
+   * the UI can show the bar up front instead of letting someone fill in
+   * a sell form and only then be refused. Advisory only -- every gate is
+   * still enforced server-side on the action itself.
+   */
+  async getTradingEligibility(userId: string) {
+    const [user, minTasks] = await Promise.all([
+      this.prisma.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { phoneVerifiedAt: true, kycStatus: true },
+      }),
+      this.platformSettings.getMinCompletedTasksForWithdrawal(),
+    ]);
+    const phoneVerified = user.phoneVerifiedAt !== null;
+    const kycApproved = user.kycStatus === KycStatus.APPROVED;
+
+    // Only counted when there is a bar to clear -- three COUNTs on every
+    // market page load would not earn their keep otherwise.
+    let completedTasks = 0;
+    if (minTasks > 0) {
+      const [wordRecordings, conversationRecordings, validations] = await Promise.all([
+        this.prisma.wordRecording.count({ where: { userId, status: 'SETTLED' } }),
+        this.prisma.domainConversationRecording.count({ where: { userId, status: 'SETTLED' } }),
+        this.prisma.wordValidation.count({ where: { validatorId: userId, status: 'SETTLED' } }),
+      ]);
+      completedTasks = wordRecordings + conversationRecordings + validations;
+    }
+
+    const canBuy = phoneVerified && kycApproved;
+    return {
+      canBuy,
+      // Selling is strictly the stricter gate: everything buying needs,
+      // plus the track record.
+      canSell: canBuy && (minTasks <= 0 || completedTasks >= minTasks),
+      phoneVerified,
+      kycApproved,
+      completedTasks,
+      minCompletedTasksForSelling: minTasks,
+    };
   }
 
   /** Display quotes only; createOffer recalculates every amount server-side. */
@@ -321,6 +366,61 @@ export class P2PService {
   }
 
   /**
+   * Identity gate for anyone touching the market, buyer or seller: a
+   * verified mobile number and approved KYC of their own.
+   *
+   * This is separate from requireVerifiedForTrading, which proves the
+   * person is at the keyboard for this particular action (phone or a
+   * term-bound OTP). This one asks who they are at all. Money changes
+   * hands off-platform on the fiat leg, so both sides are identified
+   * before either can trade.
+   */
+  private async requireIdentifiedForTrading(userId: string): Promise<void> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { phoneVerifiedAt: true, kycStatus: true },
+    });
+    if (!user.phoneVerifiedAt) {
+      throw new UnprocessableEntityException(
+        'Verify your phone number before trading on the P2P market',
+      );
+    }
+    if (user.kycStatus !== KycStatus.APPROVED) {
+      throw new UnprocessableEntityException(
+        'Complete identity verification (KYC) before trading on the P2P market',
+      );
+    }
+  }
+
+  /**
+   * The extra bar for the SELLING side, on top of requireIdentifiedForTrading.
+   *
+   * Selling tokens for fiat is how value leaves the platform, so it is
+   * gated the same way withdrawal is -- the same admin setting drives
+   * both, because they are the same act by a different route. A buyer
+   * brings money in and needs no track record.
+   *
+   * "Settled tasks" is counted exactly as the withdrawal gate counts it
+   * (word recordings + domain conversation recordings + validations, all
+   * SETTLED), so the two gates can never disagree about what a task is.
+   */
+  private async requireTaskHistoryForSelling(userId: string): Promise<void> {
+    const minTasks = await this.platformSettings.getMinCompletedTasksForWithdrawal();
+    if (minTasks <= 0) return;
+    const [wordRecordings, conversationRecordings, validations] = await Promise.all([
+      this.prisma.wordRecording.count({ where: { userId, status: 'SETTLED' } }),
+      this.prisma.domainConversationRecording.count({ where: { userId, status: 'SETTLED' } }),
+      this.prisma.wordValidation.count({ where: { validatorId: userId, status: 'SETTLED' } }),
+    ]);
+    const completedTasks = wordRecordings + conversationRecordings + validations;
+    if (completedTasks < minTasks) {
+      throw new UnprocessableEntityException(
+        `Complete at least ${minTasks} tasks before selling tokens on the P2P market (${completedTasks}/${minTasks} so far)`,
+      );
+    }
+  }
+
+  /**
    * Best-effort trade-notification SMS -- gated per-event by an admin
    * toggle, silently skipped for unverified/missing phone numbers, and
    * never allowed to fail or block the trade action that triggered it
@@ -375,6 +475,13 @@ export class P2PService {
       dto.otpRequestId,
       dto.code,
     );
+    await this.requireIdentifiedForTrading(userId);
+    // A SELL offer makes its creator the seller. (The other way to become
+    // a seller -- accepting someone's BUY offer -- is gated in
+    // acceptOffer, which is where that role is decided.)
+    if (dto.type === P2POfferType.SELL) {
+      await this.requireTaskHistoryForSelling(userId);
+    }
 
     const openOffers = await this.prisma.p2PTokenOffer.count({
       where: { userId, status: { in: OPEN_OFFER_STATUSES } },
@@ -1025,6 +1132,14 @@ export class P2PService {
       throw new NotFoundException('Active offer not found');
     }
     if (offer.userId === userId) throw new ForbiddenException('You cannot accept your own offer');
+
+    await this.requireIdentifiedForTrading(userId);
+    // Accepting a BUY offer is the other way to become a seller: the
+    // offer owner wants tokens, so the acceptor is the one handing them
+    // over for fiat. Gating only createOffer would leave this route open.
+    if (offer.type === P2POfferType.BUY) {
+      await this.requireTaskHistoryForSelling(userId);
+    }
 
     const settings = await this.requireMarketEnabled(offer.type);
     await this.enforceOpenTradeLimit(userId, settings.maxOpenTradesPerUser);

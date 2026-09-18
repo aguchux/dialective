@@ -44,6 +44,12 @@ export class P2PController {
     return this.p2p.getSettings();
   }
 
+  /** What the caller may do on the market -- advisory; the gates are enforced on the actions themselves. */
+  @Get('eligibility')
+  getTradingEligibility(@Req() req: AuthenticatedRequest) {
+    return this.p2p.getTradingEligibility(req.user.sub);
+  }
+
   @Get('reference-rate')
   getReferenceRate(@Req() req: AuthenticatedRequest) {
     return this.p2p.getReferenceRate(req.user.sub);

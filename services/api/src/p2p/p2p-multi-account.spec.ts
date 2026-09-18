@@ -58,11 +58,19 @@ function setup() {
       findMany: jest.fn().mockResolvedValue([]),
     },
     user: {
-      findUniqueOrThrow: jest.fn().mockResolvedValue({ phoneVerifiedAt: new Date() }),
+      // Fully eligible to trade: verified phone and approved KYC. These
+      // suites are about payment accounts, not the trading gates.
+      findUniqueOrThrow: jest
+        .fn()
+        .mockResolvedValue({ phoneVerifiedAt: new Date(), kycStatus: 'APPROVED' }),
       findUnique: jest.fn().mockResolvedValue({
         country: { currencyCode: 'NGN', usdExchangeRate: decimal(1500) },
       }),
     },
+    // Settled-task counts behind the sell gate -- comfortably over any bar.
+    wordRecording: { count: jest.fn().mockResolvedValue(200) },
+    domainConversationRecording: { count: jest.fn().mockResolvedValue(0) },
+    wordValidation: { count: jest.fn().mockResolvedValue(0) },
     country: {
       findFirst: jest
         .fn()
@@ -82,6 +90,7 @@ function setup() {
   const platformSettings = {
     isPhoneVerificationRequired: jest.fn().mockResolvedValue(true),
     getTokenUsdRate: jest.fn().mockResolvedValue(0.1),
+    getMinCompletedTasksForWithdrawal: jest.fn().mockResolvedValue(100),
   };
   const service = new P2PService(prisma, otp as any, platformSettings as any, {} as any);
   jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);

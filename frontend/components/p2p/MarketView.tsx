@@ -19,6 +19,7 @@ import {
   useGetMeQuery,
   useGetP2PReferenceRateQuery,
   useGetP2PSettingsQuery,
+  useGetP2PTradingEligibilityQuery,
   useGetP2PTraderProfileQuery,
   useGetPlatformSettingsQuery,
   useListPayoutAccountsQuery,
@@ -85,6 +86,23 @@ export function MarketView() {
   // is on -- when it's off, createOffer/acceptOffer fall back to an
   // emailed OTP instead (see submitOffer/accept and offerOtpRequestId below).
   const marketDisabled = !settings?.enabled || (phoneVerificationRequired && !phoneVerified);
+  /**
+   * Buying needs a verified mobile and approved KYC; selling needs those
+   * plus a settled-task track record, because selling is how value leaves
+   * the platform. Shown here so nobody fills in a sell form only to be
+   * refused -- the server enforces all of it regardless.
+   */
+  const { data: eligibility } = useGetP2PTradingEligibilityQuery();
+  const canSell = eligibility?.canSell ?? true;
+  const sellBlockedReason = !eligibility
+    ? null
+    : !eligibility.phoneVerified
+      ? 'Verify your mobile number to sell DL.'
+      : !eligibility.kycApproved
+        ? 'Complete identity verification (KYC) to sell DL.'
+        : !eligibility.canSell
+          ? `Complete ${eligibility.minCompletedTasksForSelling} tasks to sell DL — you have ${eligibility.completedTasks}.`
+          : null;
   const [offerOtpRequestId, setOfferOtpRequestId] = useState<string | null>(null);
   const [offerOtpCode, setOfferOtpCode] = useState('');
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
@@ -114,6 +132,14 @@ export function MarketView() {
   useEffect(() => {
     if (referenceRate?.currencyCode) setFiatCurrency(referenceRate.currencyCode);
   }, [referenceRate?.currencyCode]);
+
+  // ?create=sell can land an ineligible member on a tab they cannot
+  // submit, and eligibility usually arrives after that deep link is
+  // handled. Kept as its own effect rather than a dependency of the
+  // deep-link one, which must stay keyed to the query string alone.
+  useEffect(() => {
+    if (!canSell && offerType === 'SELL') setOfferType('BUY');
+  }, [canSell, offerType]);
 
   // Deep-link from the dashboard's Withdraw/Fund DL buttons (now that
   // platform withdrawals/funding are disabled during the P2P transition) --
@@ -273,17 +299,29 @@ export function MarketView() {
             >
               <form className="grid gap-3" onSubmit={submitOffer}>
                 <div className="grid grid-cols-2 gap-2 rounded-lg bg-bg p-1">
-                  {(['SELL', 'BUY'] as const).map((type) => (
-                    <button
-                      className={`min-h-10 rounded-md font-extrabold ${offerType === type ? 'bg-accent text-white' : 'text-muted hover:bg-surface'}`}
-                      key={type}
-                      onClick={() => setOfferType(type)}
-                      type="button"
-                    >
-                      {type === 'SELL' ? 'Sell DL' : 'Buy request'}
-                    </button>
-                  ))}
+                  {(['SELL', 'BUY'] as const).map((type) => {
+                    const blocked = type === 'SELL' && !canSell;
+                    return (
+                      <button
+                        className={`min-h-10 rounded-md font-extrabold ${offerType === type ? 'bg-accent text-white' : 'text-muted hover:bg-surface'} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent`}
+                        disabled={blocked}
+                        key={type}
+                        onClick={() => setOfferType(type)}
+                        title={blocked ? (sellBlockedReason ?? undefined) : undefined}
+                        type="button"
+                      >
+                        {type === 'SELL' ? 'Sell DL' : 'Buy request'}
+                      </button>
+                    );
+                  })}
                 </div>
+                {/* Buying stays open, so this explains the one half that
+                    is closed rather than blocking the whole dialog. */}
+                {sellBlockedReason && (
+                  <p className="rounded-lg border border-line bg-surface-muted p-2.5 text-xs font-bold text-muted">
+                    {sellBlockedReason} You can still post a buy request.
+                  </p>
+                )}
                 <label className="grid gap-1.5 text-sm font-bold">
                   DL amount
                   <input

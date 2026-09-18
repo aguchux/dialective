@@ -1103,6 +1103,21 @@ export interface WhatsAppValidationPendingPage {
   totalPages: number;
 }
 
+/**
+ * What this member may do on the market. Advisory -- every gate is also
+ * enforced server-side on the action itself. Selling is the stricter
+ * side: everything buying needs, plus a settled-task track record.
+ */
+export interface P2PTradingEligibility {
+  canBuy: boolean;
+  canSell: boolean;
+  phoneVerified: boolean;
+  kycApproved: boolean;
+  completedTasks: number;
+  /** 0 when an admin has switched the task requirement off. */
+  minCompletedTasksForSelling: number;
+}
+
 export interface P2PMarketSettings {
   enabled: boolean;
   sellOffersEnabled: boolean;
@@ -3164,6 +3179,10 @@ export const dialectivaApi = createApi({
     }),
     getP2PSettings: builder.query<P2PMarketSettings, void>({
       query: () => '/p2p/settings',
+      providesTags: ['P2P'],
+    }),
+    getP2PTradingEligibility: builder.query<P2PTradingEligibility, void>({
+      query: () => '/p2p/eligibility',
       providesTags: ['P2P'],
     }),
     getP2PReferenceRate: builder.query<P2PReferenceRate, void>({
@@ -5993,6 +6012,7 @@ export const {
   useGetDialectVariantsQuery,
   useGetWalletQuery,
   useGetP2PSettingsQuery,
+  useGetP2PTradingEligibilityQuery,
   useGetP2PReferenceRateQuery,
   useGetP2PPaymentInstructionsQuery,
   useUpdateP2PPaymentInstructionsMutation,

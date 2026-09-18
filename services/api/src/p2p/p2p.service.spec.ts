@@ -1094,6 +1094,189 @@ describe('P2PService -- phone verification gate on trading', () => {
 });
 
 /**
+ * KYC on both sides, and a settled-task history on the selling side only.
+ *
+ * The role, not the endpoint, decides which gate applies. A member sells
+ * either by creating a SELL offer OR by accepting someone else's BUY
+ * offer -- gating only createOffer would leave the second route wide
+ * open, which is the whole reason these tests exist.
+ */
+describe('P2PService -- KYC and task-history gates on trading', () => {
+  const MIN_TASKS = 100;
+
+  function setup(
+    user: Record<string, unknown> = { phoneVerifiedAt: new Date(), kycStatus: 'APPROVED' },
+    settledTasks = 500,
+  ) {
+    const prisma: any = {
+      user: { findUniqueOrThrow: jest.fn().mockResolvedValue(user) },
+      // Split across the three task kinds to prove they are summed, not
+      // read from whichever one happens to be first.
+      wordRecording: { count: jest.fn().mockResolvedValue(settledTasks) },
+      domainConversationRecording: { count: jest.fn().mockResolvedValue(0) },
+      wordValidation: { count: jest.fn().mockResolvedValue(0) },
+      p2PTokenOffer: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        count: jest.fn().mockResolvedValue(0),
+      },
+      p2PMarketSettings: { upsert: jest.fn().mockResolvedValue({}) },
+    };
+    const platformSettings = {
+      isPhoneVerificationRequired: jest.fn().mockResolvedValue(true),
+      getMinCompletedTasksForWithdrawal: jest.fn().mockResolvedValue(MIN_TASKS),
+    };
+    const service = new P2PService(prisma, {} as any, platformSettings as any, {} as any);
+    jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
+    jest.spyOn(service as any, 'requireMarketEnabled').mockResolvedValue({
+      maxOpenOffersPerUser: 5,
+      maxOpenTradesPerUser: 5,
+      paymentWindowMinutes: 15,
+    });
+    jest.spyOn(service as any, 'validateTradeInput').mockReturnValue(undefined);
+    return { service, prisma, platformSettings };
+  }
+
+  const buyDto = { type: 'BUY', tokenAmount: 10, fiatCurrency: 'NGN', paymentMethod: 'BANK_TRANSFER' };
+  const sellDto = { ...buyDto, type: 'SELL', paymentMethodIds: ['acct-1'] };
+
+  describe('KYC applies to both sides', () => {
+    it('blocks an un-KYCed member from creating a BUY offer', async () => {
+      const { service } = setup({ phoneVerifiedAt: new Date(), kycStatus: 'IN_REVIEW' });
+      await expect(service.createOffer('u1', buyDto as any)).rejects.toThrow(
+        'Complete identity verification (KYC) before trading on the P2P market',
+      );
+    });
+
+    it('blocks an un-KYCed member from accepting an offer, before the offer is read', async () => {
+      const { service, prisma } = setup({ phoneVerifiedAt: new Date(), kycStatus: 'NOT_STARTED' });
+      prisma.p2PTokenOffer.findUnique.mockResolvedValue({
+        id: 'offer-1',
+        userId: 'someone-else',
+        status: 'ACTIVE',
+        type: 'SELL',
+      });
+      await expect(service.acceptOffer('u1', 'offer-1', {} as any)).rejects.toThrow(
+        'Complete identity verification (KYC) before trading on the P2P market',
+      );
+    });
+  });
+
+  describe('task history applies to the SELLING side only', () => {
+    it('blocks a short-of-tasks member from creating a SELL offer', async () => {
+      const { service } = setup(undefined, 99);
+      await expect(service.createOffer('u1', sellDto as any)).rejects.toThrow(
+        `Complete at least ${MIN_TASKS} tasks before selling tokens on the P2P market (99/${MIN_TASKS} so far)`,
+      );
+    });
+
+    it('lets a short-of-tasks member create a BUY offer -- buyers bring money in', async () => {
+      const { service } = setup(undefined, 0);
+      // Passes both gates and fails later on unrelated offer mechanics.
+      await expect(service.createOffer('u1', buyDto as any)).rejects.not.toThrow(
+        /tasks before selling/,
+      );
+    });
+
+    it('blocks a short-of-tasks member from ACCEPTING a BUY offer -- the other way to sell', async () => {
+      const { service, prisma } = setup(undefined, 99);
+      prisma.p2PTokenOffer.findUnique.mockResolvedValue({
+        id: 'offer-1',
+        userId: 'someone-else',
+        status: 'ACTIVE',
+        // A BUY offer: its owner wants tokens, so the ACCEPTOR is selling.
+        type: 'BUY',
+      });
+      await expect(service.acceptOffer('u1', 'offer-1', {} as any)).rejects.toThrow(
+        /tasks before selling tokens/,
+      );
+    });
+
+    it('lets a short-of-tasks member ACCEPT a SELL offer -- they are the buyer there', async () => {
+      const { service, prisma } = setup(undefined, 0);
+      prisma.p2PTokenOffer.findUnique.mockResolvedValue({
+        id: 'offer-1',
+        userId: 'someone-else',
+        status: 'ACTIVE',
+        type: 'SELL',
+      });
+      await expect(service.acceptOffer('u1', 'offer-1', {} as any)).rejects.not.toThrow(
+        /tasks before selling/,
+      );
+    });
+
+    it('sums all three task kinds rather than counting recordings alone', async () => {
+      const { service, prisma } = setup(undefined, 40);
+      prisma.domainConversationRecording.count.mockResolvedValue(30);
+      prisma.wordValidation.count.mockResolvedValue(30);
+      // 40 + 30 + 30 = exactly the minimum.
+      await expect(service.createOffer('u1', sellDto as any)).rejects.not.toThrow(
+        /tasks before selling/,
+      );
+    });
+
+    it('counts only SETTLED work', async () => {
+      const { service, prisma } = setup(undefined, 500);
+      await service.createOffer('u1', sellDto as any).catch(() => undefined);
+      for (const model of ['wordRecording', 'domainConversationRecording', 'wordValidation']) {
+        expect(prisma[model].count).toHaveBeenCalledWith(
+          expect.objectContaining({ where: expect.objectContaining({ status: 'SETTLED' }) }),
+        );
+      }
+    });
+
+    it('is disabled entirely when an admin sets the minimum to 0', async () => {
+      const { service, platformSettings, prisma } = setup(undefined, 0);
+      platformSettings.getMinCompletedTasksForWithdrawal.mockResolvedValue(0);
+      await expect(service.createOffer('u1', sellDto as any)).rejects.not.toThrow(
+        /tasks before selling/,
+      );
+      // And does not pay for three COUNTs it cannot act on.
+      expect(prisma.wordRecording.count).not.toHaveBeenCalled();
+    });
+
+    it('tracks the admin setting rather than a hardcoded 100', async () => {
+      const { service, platformSettings } = setup(undefined, 150);
+      platformSettings.getMinCompletedTasksForWithdrawal.mockResolvedValue(200);
+      await expect(service.createOffer('u1', sellDto as any)).rejects.toThrow(
+        'Complete at least 200 tasks before selling tokens on the P2P market (150/200 so far)',
+      );
+    });
+  });
+
+  describe('getTradingEligibility -- what the UI shows up front', () => {
+    it('reports a fully-qualified member as able to do both', async () => {
+      const { service } = setup(undefined, 500);
+      await expect(service.getTradingEligibility('u1')).resolves.toEqual({
+        canBuy: true,
+        canSell: true,
+        phoneVerified: true,
+        kycApproved: true,
+        completedTasks: 500,
+        minCompletedTasksForSelling: MIN_TASKS,
+      });
+    });
+
+    it('reports buy-but-not-sell for a verified member short of tasks', async () => {
+      const { service } = setup(undefined, 12);
+      await expect(service.getTradingEligibility('u1')).resolves.toMatchObject({
+        canBuy: true,
+        canSell: false,
+        completedTasks: 12,
+      });
+    });
+
+    it('reports neither for an un-KYCed member, however many tasks they have', async () => {
+      const { service } = setup({ phoneVerifiedAt: new Date(), kycStatus: 'DECLINED' }, 9999);
+      await expect(service.getTradingEligibility('u1')).resolves.toMatchObject({
+        canBuy: false,
+        canSell: false,
+        kycApproved: false,
+      });
+    });
+  });
+});
+
+/**
  * Owner edit/delete of a post.
  *
  * The rule is "no trade already attached or executed". That is checked

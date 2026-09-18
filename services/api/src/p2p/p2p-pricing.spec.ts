@@ -37,8 +37,15 @@ function setup(options: { currency?: string; exchangeRate?: number } = {}) {
     },
     p2POfferPaymentMethod: { createMany: jest.fn() },
     payoutAccount: { findMany: jest.fn().mockResolvedValue([account]) },
+    // Settled-task counts behind the sell gate -- these suites are about
+    // pricing, so the trader clears every bar.
+    wordRecording: { count: jest.fn().mockResolvedValue(200) },
+    domainConversationRecording: { count: jest.fn().mockResolvedValue(0) },
+    wordValidation: { count: jest.fn().mockResolvedValue(0) },
     user: {
-      findUniqueOrThrow: jest.fn().mockResolvedValue({ phoneVerifiedAt: new Date() }),
+      findUniqueOrThrow: jest
+        .fn()
+        .mockResolvedValue({ phoneVerifiedAt: new Date(), kycStatus: 'APPROVED' }),
       findUnique: jest.fn().mockResolvedValue({
         country: {
           currencyCode: 'NGN',
@@ -69,6 +76,7 @@ function setup(options: { currency?: string; exchangeRate?: number } = {}) {
   };
   const platformSettings = {
     isPhoneVerificationRequired: jest.fn().mockResolvedValue(true),
+    getMinCompletedTasksForWithdrawal: jest.fn().mockResolvedValue(100),
     getTokenUsdRate: jest.fn().mockResolvedValue(0.1),
   };
   const service = new P2PService(prisma, {} as never, platformSettings as never, {} as never);
