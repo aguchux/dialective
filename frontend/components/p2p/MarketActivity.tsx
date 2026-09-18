@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Clock3, Copy, Landmark, MessageSquare } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { Clock3, Landmark, Phone } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { cardClass, EmptyPanel, formatDateTime, SectionTitle } from '@/components/dashboard/shared';
-import { WhatsAppContactLink } from '@/components/WhatsAppContactLink';
 import { PaymentCountdown } from '@/components/p2p/PaymentCountdown';
-import { TradeChatPanel } from '@/components/p2p/TradeChatPanel';
+import { STATUS_LABELS, statusBadgeClass } from '@/components/p2p/tradeStatus';
 import { formatCompactNumber } from '@/lib/format';
 import {
   P2POffer,
@@ -16,9 +17,6 @@ import {
   useGetMeQuery,
   useListMyP2PTradesQuery,
   useListMyP2POffersQuery,
-  useMarkP2PTradePaidMutation,
-  useReleaseP2PTradeMutation,
-  useRequestP2PTradeCancelMutation,
 } from '@/store/api';
 
 /**
@@ -31,6 +29,8 @@ import {
 export function MarketActivity() {
   const [tab, setTab] = useState<'POSTS' | 'TRADES'>('TRADES');
   const [error, setError] = useState('');
+  const pathname = usePathname();
+  const basePath = pathname?.startsWith('/distributor') ? '/distributor' : '/dashboard';
 
   const { data: myOffers = [] } = useListMyP2POffersQuery();
   // Reads trigger the server-side expiry sweep, so a pending cancellation is
@@ -41,13 +41,6 @@ export function MarketActivity() {
   const { data: me } = useGetMeQuery();
   const [cancelOffer, { isLoading: cancellingOffer, originalArgs: cancellingOfferId }] =
     useCancelP2POfferMutation();
-  const [markPaid, { isLoading: markingPaid, originalArgs: markingPaidId }] =
-    useMarkP2PTradePaidMutation();
-  const [releaseTrade, { isLoading: releasing, originalArgs: releasingId }] =
-    useReleaseP2PTradeMutation();
-  const [requestCancel, { isLoading: cancelling, originalArgs: cancellingId }] =
-    useRequestP2PTradeCancelMutation();
-  const [chatTradeId, setChatTradeId] = useState<string | null>(null);
 
   async function cancelPost(offer: P2POffer) {
     if (
@@ -100,44 +93,127 @@ export function MarketActivity() {
         />
       )}
       {tab === 'TRADES' && (
-        <section>
-          <SectionTitle
-            title="My trades"
-            subtitle="Pay, release, cancel safely, or raise disputes."
-          />
-          <div className="grid gap-3">
-            {trades.length === 0 && <EmptyPanel icon={Clock3} title="No trades yet" unframed />}
-            {trades.map((trade) => (
-              <TradeCard
-                key={trade.id}
-                trade={trade}
-                viewerId={me?.id}
-                markingPaid={markingPaid && markingPaidId === trade.id}
-                releasing={releasing && releasingId === trade.id}
-                cancelling={cancelling && cancellingId === trade.id}
-                onCancel={(id) => requestCancel(id).unwrap()}
-                onMarkPaid={(id) => markPaid(id).unwrap()}
-                onRelease={(id) => releaseTrade(id).unwrap()}
-                onOpenChat={(id) => setChatTradeId(id)}
-              />
-            ))}
-          </div>
-        </section>
+        <MyTradeTable basePath={basePath} trades={trades} viewerId={me?.id} />
       )}
-      {chatTradeId &&
-        (() => {
-          const trade = trades.find((item) => item.id === chatTradeId);
-          if (!trade) return null;
-          return (
-            <TradeChatPanel
-              isViewerAdmin={false}
-              onClose={() => setChatTradeId(null)}
-              trade={trade}
-              viewerId={me?.id}
-            />
-          );
-        })()}
     </div>
+  );
+}
+
+/**
+ * My trades as a scannable table, mirroring the market list's shape, with a
+ * View CTA per row instead of every trade's full payment detail inline.
+ *
+ * The old card list rendered account numbers, copy buttons and action
+ * buttons for every trade at once, which made a nine-trade history an
+ * enormous wall and put "Release DL" one stray tap away while scrolling.
+ * Acting on a trade now happens on its own page, where the trade you are
+ * acting on is unambiguous.
+ */
+function MyTradeTable({
+  basePath,
+  trades,
+  viewerId,
+}: {
+  basePath: string;
+  trades: P2PTrade[];
+  viewerId: string | undefined;
+}) {
+  return (
+    <section>
+      <SectionTitle
+        title="My trades"
+        subtitle="Open a trade to pay, release, cancel safely, or raise a dispute."
+      />
+      {trades.length === 0 ? (
+        <EmptyPanel icon={Clock3} title="No trades yet" unframed />
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-line bg-surface">
+          <table className="w-full min-w-215 border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-line text-left text-xs font-bold uppercase tracking-wide text-muted">
+                <th className="px-4 py-3 font-bold" scope="col">
+                  Counterparty
+                </th>
+                <th className="px-4 py-3 font-bold" scope="col">
+                  Amount
+                </th>
+                <th className="px-4 py-3 font-bold" scope="col">
+                  Role
+                </th>
+                <th className="px-4 py-3 font-bold" scope="col">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-right font-bold" scope="col">
+                  &nbsp;
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {trades.map((trade) => {
+                const isBuyer = trade.buyerId === viewerId;
+                const isSeller = trade.sellerId === viewerId;
+                const otherParty = isBuyer ? trade.seller : trade.buyer;
+                const counterpartyName =
+                  [otherParty.firstName, otherParty.lastName].filter(Boolean).join(' ') ||
+                  'Unknown trader';
+                return (
+                  <tr
+                    className="border-b border-line last:border-0 hover:bg-surface-muted"
+                    key={trade.id}
+                  >
+                    <td className="px-4 py-3 align-top">
+                      <p className="font-bold text-ink">{counterpartyName}</p>
+                      {otherParty.phoneNumber && (
+                        <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted">
+                          <Phone className="size-3" aria-hidden="true" />
+                          {otherParty.phoneNumber}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <p className="font-black text-ink">
+                        {formatCompactNumber(trade.tokenAmount)} DL
+                      </p>
+                      <p className="text-xs text-muted">
+                        {Number(trade.fiatAmount).toLocaleString()} {trade.fiatCurrency}
+                      </p>
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <p className="font-bold text-ink">{isBuyer ? 'Buyer' : 'Seller'}</p>
+                      <p className="text-xs text-muted">{formatDateTime(trade.updatedAt)}</p>
+                    </td>
+                    <td className="px-4 py-3 align-top">
+                      <span
+                        className={`inline-block rounded-full px-2.5 py-1 text-xs font-black ${statusBadgeClass(trade.status)}`}
+                      >
+                        {STATUS_LABELS[trade.status]}
+                      </span>
+                      {trade.status === 'AWAITING_PAYMENT' && (
+                        <p className="mt-1">
+                          <PaymentCountdown
+                            compact
+                            deadline={trade.paymentDeadlineAt}
+                            isSeller={isSeller}
+                          />
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right align-top">
+                      <Link
+                        className="inline-flex min-h-9 items-center rounded-lg border border-line bg-surface px-4 text-sm font-extrabold text-ink hover:bg-surface-muted"
+                        href={`${basePath}/trades/${trade.id}`}
+                      >
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -231,252 +307,6 @@ function offerStatusBadgeClass(status: P2POffer['status']): string {
       return 'bg-red-100 text-red-700';
     case 'RESERVED':
       return 'bg-amber-100 text-amber-800';
-    default:
-      return 'bg-accent-soft text-accent';
-  }
-}
-
-const STATUS_LABELS: Record<P2PTrade['status'], string> = {
-  AWAITING_PAYMENT: 'Awaiting payment',
-  PAID_MARKED: 'Marked as paid',
-  RELEASED: 'Released',
-  CANCEL_PENDING: 'Cancel pending',
-  CANCELLED: 'Cancelled',
-  DISPUTED: 'Disputed',
-  EXPIRED: 'Expired',
-  // Escrow is mid-transfer. Normally too brief for a user to ever see; if it
-  // persists, a release or refund crashed partway and needs admin attention.
-  SETTLING: 'Completing',
-};
-
-const OPEN_TRADE_STATUSES = new Set(['AWAITING_PAYMENT', 'PAID_MARKED', 'CANCEL_PENDING']);
-
-function TradeCard({
-  trade,
-  viewerId,
-  markingPaid,
-  releasing,
-  cancelling,
-  onMarkPaid,
-  onRelease,
-  onCancel,
-  onOpenChat,
-}: {
-  trade: P2PTrade;
-  viewerId: string | undefined;
-  markingPaid: boolean;
-  releasing: boolean;
-  cancelling: boolean;
-  onMarkPaid: (id: string) => Promise<unknown>;
-  onRelease: (id: string) => Promise<unknown>;
-  onCancel: (id: string) => Promise<unknown>;
-  onOpenChat: (id: string) => void;
-}) {
-  const [actionError, setActionError] = useState('');
-  const [copied, setCopied] = useState(false);
-  const isBuyer = trade.buyerId === viewerId;
-  const isSeller = trade.sellerId === viewerId;
-  const isOpen = OPEN_TRADE_STATUSES.has(trade.status);
-
-  const canMarkPaid =
-    isBuyer && (trade.status === 'AWAITING_PAYMENT' || trade.status === 'CANCEL_PENDING');
-  const canRelease = isSeller && trade.status === 'PAID_MARKED';
-  const canRequestCancel = isOpen && trade.status !== 'PAID_MARKED';
-
-  async function run(action: (id: string) => Promise<unknown>) {
-    setActionError('');
-    try {
-      await action(trade.id);
-    } catch (err) {
-      setActionError(normalizeErrorMessage(err, 'Action failed'));
-    }
-  }
-
-  return (
-    <div className={`${cardClass} grid gap-3 p-4`}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-bold text-muted">
-            {trade.offerType === 'SELL' ? 'Sell offer trade' : 'Buy request trade'} · You are the{' '}
-            {isBuyer ? 'buyer' : 'seller'}
-          </p>
-          <p className="text-xl font-black">
-            {formatCompactNumber(trade.tokenAmount)} · {Number(trade.fiatAmount).toLocaleString()}{' '}
-            {trade.fiatCurrency}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* At-a-glance timer next to the status, so urgency reads without
-              opening the trade. */}
-          {trade.status === 'AWAITING_PAYMENT' && (
-            <PaymentCountdown compact deadline={trade.paymentDeadlineAt} isSeller={isSeller} />
-          )}
-          <span
-            className={`rounded-full px-2.5 py-1 text-xs font-black ${statusBadgeClass(trade.status)}`}
-          >
-            {STATUS_LABELS[trade.status]}
-          </span>
-        </div>
-      </div>
-      {(() => {
-        const otherParty = isBuyer ? trade.seller : trade.buyer;
-        return otherParty.phoneNumber ? (
-          <WhatsAppContactLink
-            className="text-sm font-bold"
-            firstName={otherParty.firstName}
-            lastName={otherParty.lastName}
-            phoneNumber={otherParty.phoneNumber}
-          />
-        ) : (
-          <p className="text-sm text-muted">
-            {isBuyer ? 'Seller' : 'Buyer'} hasn&rsquo;t added a phone number yet.
-          </p>
-        );
-      })()}
-      {trade.sellerPaymentMethod &&
-        (() => {
-          const method = trade.sellerPaymentMethod;
-          const isBank = method.type === 'BANK';
-          // Real number when decryption succeeded (the normal case); falls
-          // back to the masked column only if it didn't -- see
-          // P2PSellerPaymentMethod's doc comment.
-          const number = isBank
-            ? (method.accountNumber ?? method.accountNumberMasked)
-            : (method.mobileMoneyNumber ?? method.mobileMoneyNumberMasked);
-
-          function handleCopy() {
-            if (!number) return;
-            void navigator.clipboard.writeText(number).then(() => {
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
-            });
-          }
-
-          return (
-            <div className="rounded-lg border border-line bg-bg p-3 text-sm">
-              <p className="font-black">Seller payment details -- pay this account</p>
-              <p className="mt-1">
-                {isBank ? (method.bankName ?? method.bankCode) : method.mobileMoneyNetwork}
-                {method.accountName && <> · {method.accountName}</>}
-              </p>
-              <div className="mt-1 flex items-center gap-2">
-                <span className="font-mono text-base font-black tracking-wide">{number}</span>
-                {number && (
-                  <button
-                    className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 text-xs font-bold text-ink hover:bg-surface-muted"
-                    onClick={handleCopy}
-                    type="button"
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="size-3.5 text-emerald-600" aria-hidden="true" /> Copied
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="size-3.5" aria-hidden="true" /> Copy
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-              {trade.sellerPaymentInstructions && (
-                <p className="mt-1 text-muted">{trade.sellerPaymentInstructions}</p>
-              )}
-            </div>
-          );
-        })()}
-      {trade.status === 'AWAITING_PAYMENT' && (
-        <div className="grid gap-0.5">
-          <PaymentCountdown deadline={trade.paymentDeadlineAt} isSeller={isSeller} />
-          <p className="text-xs text-muted">
-            Target: {formatDateTime(trade.paymentDeadlineAt)}
-          </p>
-        </div>
-      )}
-      {trade.status === 'PAID_MARKED' && trade.paidAt && (
-        <p className="text-sm text-muted">
-          Buyer marked paid {formatDateTime(trade.paidAt)}
-          {isSeller
-            ? ' — confirm and release when you have received payment.'
-            : ' — waiting for the seller to release.'}
-        </p>
-      )}
-      {trade.status === 'RELEASED' && trade.releasedAt && (
-        <p className="text-sm text-muted">Released {formatDateTime(trade.releasedAt)}.</p>
-      )}
-      {trade.status === 'CANCELLED' && trade.cancelledAt && (
-        <p className="text-sm text-muted">Cancelled {formatDateTime(trade.cancelledAt)}.</p>
-      )}
-      {trade.status === 'CANCEL_PENDING' && trade.cancelAvailableAt && (
-        <p className="text-sm text-muted">
-          {trade.cancelRequestedByUserId === viewerId
-            ? 'You requested'
-            : 'The other party requested'}{' '}
-          cancellation — finalizes {formatDateTime(trade.cancelAvailableAt)} unless the buyer pays
-          first.
-        </p>
-      )}
-      {trade.status === 'DISPUTED' && (
-        <p className="text-sm text-muted">An admin is reviewing this trade.</p>
-      )}
-      {actionError && <p className="text-sm font-bold text-danger">{actionError}</p>}
-      <div className="flex flex-wrap gap-2">
-        <button
-          className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-line px-3 text-sm font-extrabold hover:bg-surface-muted"
-          onClick={() => onOpenChat(trade.id)}
-          type="button"
-        >
-          <MessageSquare className="size-4" aria-hidden="true" /> Conversation
-        </button>
-        {canMarkPaid && (
-          <ActionButton
-            className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={() => run(onMarkPaid)}
-            pending={markingPaid}
-            pendingLabel="Marking paid"
-            type="button"
-          >
-            I have paid
-          </ActionButton>
-        )}
-        {canRelease && (
-          <ActionButton
-            className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={() => run(onRelease)}
-            pending={releasing}
-            pendingLabel="Releasing"
-            type="button"
-          >
-            Release DL
-          </ActionButton>
-        )}
-        {canRequestCancel && (
-          <ActionButton
-            className="min-h-10 rounded-lg border border-line px-3 font-extrabold disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={() => run(onCancel)}
-            pending={cancelling}
-            pendingLabel="Requesting"
-            type="button"
-          >
-            Request cancel
-          </ActionButton>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function statusBadgeClass(status: P2PTrade['status']): string {
-  switch (status) {
-    case 'RELEASED':
-      return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200';
-    case 'CANCELLED':
-    case 'EXPIRED':
-      return 'bg-bg text-muted';
-    case 'DISPUTED':
-      return 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-200';
-    case 'PAID_MARKED':
-      return 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200';
     default:
       return 'bg-accent-soft text-accent';
   }

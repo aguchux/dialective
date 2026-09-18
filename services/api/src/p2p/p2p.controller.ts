@@ -76,6 +76,13 @@ export class P2PController {
     return this.p2p.listMyOffers(req.user.sub);
   }
 
+  // Declared AFTER 'offers/mine' -- Nest matches in declaration order, so a
+  // ':id' route above it would swallow /offers/mine as an offer id.
+  @Get('offers/:id')
+  getOfferDetail(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.p2p.getOfferDetail(req.user.sub, id);
+  }
+
   @Post('offers/otp')
   requestTradeOtp(@Req() req: AuthenticatedRequest, @Body() body: RequestP2pTradeOtpDto) {
     return this.p2p.requestTradeOtp(req.user.sub, body);
@@ -103,6 +110,12 @@ export class P2PController {
   @Get('trades/mine')
   listMyTrades(@Req() req: AuthenticatedRequest, @Query() query: ListTradesDto) {
     return this.p2p.listMyTrades(req.user.sub, query);
+  }
+
+  // Same ordering rule as offers/:id -- must follow 'trades/mine'.
+  @Get('trades/:id')
+  getTradeDetail(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.p2p.getTradeDetail(req.user.sub, id);
   }
 
   @Post('trades/:id/mark-paid')

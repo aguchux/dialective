@@ -1064,6 +1064,8 @@ export interface P2POffer {
   /** The seller's full set of acceptable receive-accounts, visible to any viewer -- lets a buyer pick one when accepting a SELL offer with more than one option. See P2PService.summarizePaymentMethod. */
   paymentMethods: { id: string; type: PayoutAccountType; label: string; verified: boolean }[];
   status: P2POfferStatus;
+  /** Distinct traders who have opened this offer's detail page. The poster's own visits are not counted. */
+  viewCount: number;
   expiresAt: string;
   completedAt: string | null;
   cancelledAt: string | null;
@@ -3254,6 +3256,18 @@ export const dialectivaApi = createApi({
     listMyP2PTrades: builder.query<P2PTrade[], { status?: P2PTradeStatus } | void>({
       query: (params) => ({ url: '/p2p/trades/mine', params: params ?? undefined }),
       providesTags: ['P2P'],
+    }),
+    getP2PTrade: builder.query<P2PTrade, string>({
+      query: (id) => `/p2p/trades/${id}`,
+      providesTags: ['P2P'],
+    }),
+    // Fetching an offer is what records a view, so this must not be served
+    // from cache on a revisit -- keepUnusedDataFor: 0 makes each visit to the
+    // detail page a real request, which is the event we are counting.
+    getP2POffer: builder.query<P2POffer, string>({
+      query: (id) => `/p2p/offers/${id}`,
+      providesTags: ['P2P'],
+      keepUnusedDataFor: 0,
     }),
     markP2PTradePaid: builder.mutation<P2PTrade, string>({
       query: (id) => ({ url: `/p2p/trades/${id}/mark-paid`, method: 'POST' }),
@@ -5788,6 +5802,9 @@ export const {
   useAcceptP2POfferMutation,
   useCancelP2POfferMutation,
   useListMyP2PTradesQuery,
+  useGetP2PTradeQuery,
+  useGetP2POfferQuery,
+  useLazyGetP2POfferQuery,
   useMarkP2PTradePaidMutation,
   useRequestP2PTradeCancelMutation,
   useReleaseP2PTradeMutation,

@@ -883,3 +883,132 @@ describe('P2PService.expireStaleRecords trade handling', () => {
     expect(clauses[0]).toEqual(expect.objectContaining({ status: 'CANCEL_PENDING' }));
   });
 });
+
+/**
+ * Offer detail + view tracking.
+ *
+ * The market table's Buy/Sell button was replaced by a View CTA leading
+ * here, for two reasons: a mistap on a scrolling row could open a real
+ * trade, and an accept straight from the row recorded nothing about
+ * interest that did not convert. These tests pin the counting rules the
+ * feature depends on -- deduped per viewer, never self-counted, and never
+ * able to break the page it is instrumenting.
+ */
+describe('P2PService.getOfferDetail -- view tracking', () => {
+  const OFFER_ID = 'offer-1';
+  const OWNER_ID = 'trader-1';
+
+  function makeOffer(overrides: Record<string, unknown> = {}) {
+    return {
+      id: OFFER_ID,
+      type: 'SELL',
+      userId: OWNER_ID,
+      user: {
+        id: OWNER_ID,
+        firstName: 'Ada',
+        lastName: 'Lovelace',
+        email: 'ada@example.com',
+        phoneVerifiedAt: new Date(),
+        kycStatus: 'APPROVED',
+        country: { code: 'NG', name: 'Nigeria' },
+      },
+      tokenAmount: { toString: () => '100' },
+      remainingTokens: { toString: () => '100' },
+      usdAmount: { toString: () => '10' },
+      fiatAmount: { toString: () => '5000' },
+      fiatCurrency: 'NGN',
+      paymentMethod: 'BANK_TRANSFER',
+      paymentMethods: [],
+      status: 'ACTIVE',
+      viewCount: 4,
+      expiresAt: new Date(),
+      completedAt: null,
+      cancelledAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      ...overrides,
+    };
+  }
+
+  let prisma: any;
+  let service: P2PService;
+  let tx: any;
+
+  beforeEach(() => {
+    tx = {
+      p2POfferView: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'view-1' }),
+        update: jest.fn().mockResolvedValue({ id: 'view-1' }),
+      },
+      p2PTokenOffer: { update: jest.fn().mockResolvedValue({}) },
+    };
+    prisma = {
+      p2PTokenOffer: {
+        findUnique: jest.fn().mockResolvedValue(makeOffer()),
+        findMany: jest.fn().mockResolvedValue([]),
+        updateMany: jest.fn(),
+      },
+      p2PTokenTrade: { groupBy: jest.fn().mockResolvedValue([]) },
+      $transaction: jest.fn(async (fn: (t: any) => unknown) => fn(tx)),
+    };
+    service = new P2PService(prisma, {} as any, {} as any, {} as any);
+    jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
+  });
+
+  it('records a view and increments the count for a first-time viewer', async () => {
+    await service.getOfferDetail('viewer-1', OFFER_ID);
+
+    expect(tx.p2POfferView.create).toHaveBeenCalledWith({
+      data: { offerId: OFFER_ID, viewerId: 'viewer-1' },
+    });
+    expect(tx.p2PTokenOffer.update).toHaveBeenCalledWith({
+      where: { id: OFFER_ID },
+      data: { viewCount: { increment: 1 } },
+    });
+  });
+
+  it('does not double-count a returning viewer, only bumps lastViewedAt', async () => {
+    tx.p2POfferView.findUnique.mockResolvedValue({ id: 'view-1' });
+
+    await service.getOfferDetail('viewer-1', OFFER_ID);
+
+    expect(tx.p2POfferView.create).not.toHaveBeenCalled();
+    // The count must not move -- this is the whole point of the unique row.
+    expect(tx.p2PTokenOffer.update).not.toHaveBeenCalled();
+    expect(tx.p2POfferView.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'view-1' } }),
+    );
+  });
+
+  it('never counts the poster viewing their own offer', async () => {
+    await service.getOfferDetail(OWNER_ID, OFFER_ID);
+
+    // Otherwise every poster checking their own post would inflate the
+    // demand signal the count exists to provide.
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.p2POfferView.create).not.toHaveBeenCalled();
+  });
+
+  it('still returns the offer when recording the view fails', async () => {
+    prisma.$transaction.mockRejectedValue(new Error('db down'));
+
+    const result = await service.getOfferDetail('viewer-1', OFFER_ID);
+
+    // Analytics bookkeeping must never block someone seeing an offer they
+    // are about to put money into.
+    expect(result).toEqual(expect.objectContaining({ id: OFFER_ID }));
+  });
+
+  it('exposes viewCount on the serialized offer', async () => {
+    const result = await service.getOfferDetail(OWNER_ID, OFFER_ID);
+
+    expect(result).toEqual(expect.objectContaining({ viewCount: 4 }));
+  });
+
+  it('throws NotFound for an offer that does not exist', async () => {
+    prisma.p2PTokenOffer.findUnique.mockResolvedValue(null);
+
+    await expect(service.getOfferDetail('viewer-1', 'nope')).rejects.toThrow('Offer not found');
+  });
+});

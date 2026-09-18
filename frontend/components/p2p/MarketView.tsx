@@ -12,6 +12,7 @@ import {
   P2POffer,
   normalizeErrorMessage,
   useAcceptP2POfferMutation,
+  useLazyGetP2POfferQuery,
   useCancelP2POfferMutation,
   useCreateP2POfferMutation,
   useGetMeQuery,
@@ -55,6 +56,7 @@ export function MarketView() {
   const { data: platformSettings } = useGetPlatformSettingsQuery();
   const [createOffer, { isLoading: offerSaving }] = useCreateP2POfferMutation();
   const [acceptOffer, { isLoading: accepting }] = useAcceptP2POfferMutation();
+  const [fetchOfferForAccept] = useLazyGetP2POfferQuery();
   const [cancelOffer, { isLoading: cancellingOffer, originalArgs: cancellingOfferId }] =
     useCancelP2POfferMutation();
   const [requestTradeOtp, { isLoading: tradeOtpSending }] = useRequestP2PTradeOtpMutation();
@@ -132,6 +134,39 @@ export function MarketView() {
     router.replace(`${pathname ?? '/dashboard'}${query ? `?${query}` : ''}`, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately only re-checking when the raw query string changes, not on every router/pathname identity change
   }, [searchParams]);
+
+  // ?accept=<offerId> is the hand-off from an offer's detail page, which is
+  // now where a trader commits to a trade. The detail page deliberately does
+  // NOT re-implement accept: the OTP challenge, the multi-account picker and
+  // the phone-verification gate all live here, and duplicating them is how
+  // the two paths would drift. It just sends the id back and lets this run
+  // the identical flow the market table has always run.
+  //
+  // The param is stripped immediately, so a refresh or back-nav cannot
+  // silently re-trigger an accept -- the accidental-commit risk this whole
+  // change exists to remove.
+  const acceptParam = searchParams.get('accept');
+  useEffect(() => {
+    if (!acceptParam) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('accept');
+    const query = params.toString();
+    router.replace(`${pathname ?? '/dashboard'}${query ? `?${query}` : ''}`, { scroll: false });
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const offer = await fetchOfferForAccept(acceptParam).unwrap();
+        if (!cancelled) void accept(offer);
+      } catch (err) {
+        if (!cancelled) setError(normalizeErrorMessage(err, 'Could not open that offer'));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when the accept id itself changes
+  }, [acceptParam]);
 
   function updateTokenAmount(value: string) {
     setTokenAmount(value);

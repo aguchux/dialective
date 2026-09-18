@@ -1,10 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   ArrowDown,
   ArrowUp,
   CreditCard,
+  Eye,
   IdCard,
   Landmark,
   Search,
@@ -95,6 +98,11 @@ export function MarketOfferList({
   disabled: boolean;
   viewerId: string | undefined;
 }) {
+  const pathname = usePathname();
+  // A trainer browses the market as a view inside /dashboard rather than on
+  // its own route, but the offer detail IS a real route for both roles --
+  // /dashboard/market/offers/[id] and /distributor/market/offers/[id].
+  const basePath = pathname?.startsWith('/distributor') ? '/distributor' : '/dashboard';
   const [type, setType] = useState<MarketType>('ALL');
   const [search, setSearch] = useState('');
   const [fiatCurrency, setFiatCurrency] = useState('');
@@ -291,6 +299,15 @@ export function MarketOfferList({
                           {priceEach.toLocaleString(undefined, { maximumFractionDigits: 4 })}{' '}
                           {offer.fiatCurrency} each
                         </p>
+                        {offer.viewCount > 0 && (
+                          <span
+                            className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted"
+                            title={`${offer.viewCount} trader${offer.viewCount === 1 ? ' has' : 's have'} viewed this post`}
+                          >
+                            <Eye className="size-3" aria-hidden="true" />
+                            {offer.viewCount}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 align-top">
                         <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-muted px-2.5 py-1 text-xs font-bold text-ink">
@@ -324,14 +341,16 @@ export function MarketOfferList({
                             <span className="text-xs font-bold text-muted">Accepted</span>
                           )
                         ) : (
-                          <button
-                            className="min-h-9 rounded-lg bg-accent px-4 text-sm font-extrabold text-white disabled:opacity-50"
-                            disabled={accepting || disabled}
-                            onClick={() => onAccept(offer)}
-                            type="button"
+                          // View, not Buy/Sell. Committing to a trade now
+                          // happens on the offer's own detail page, which
+                          // both records the visit and means a mistap in a
+                          // scrolling table can no longer open a real trade.
+                          <Link
+                            className="inline-flex min-h-9 items-center rounded-lg bg-accent px-4 text-sm font-extrabold text-white hover:bg-accent-dark"
+                            href={`${basePath}/market/offers/${offer.id}`}
                           >
-                            {offer.type === 'SELL' ? 'Buy' : 'Sell'}
-                          </button>
+                            View
+                          </Link>
                         )}
                       </td>
                     </tr>

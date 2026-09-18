@@ -696,6 +696,105 @@ export class P2PService {
     return offers.map((offer) => serializeOffer(offer, true));
   }
 
+  /**
+   * One offer, for its detail page -- the step a trader now passes through
+   * before Buy/Sell, instead of accepting straight from a market table row.
+   *
+   * Recording the view is the point of the detour, so it happens here rather
+   * than on a separate client-fired endpoint that an interested-but-quiet
+   * viewer could skip. It is deliberately best-effort: a failed write must
+   * never stop someone seeing an offer they are about to put money into.
+   *
+   * A trader viewing their OWN offer is not counted -- otherwise every
+   * poster checking their own post would inflate the demand signal the
+   * count exists to provide.
+   */
+  async getOfferDetail(userId: string, offerId: string) {
+    await this.expireStaleRecords();
+    const offer = await this.prisma.p2PTokenOffer.findUnique({
+      where: { id: offerId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phoneVerifiedAt: true,
+            kycStatus: true,
+            country: { select: { code: true, name: true } },
+          },
+        },
+        paymentMethodRef: true,
+        paymentMethods: { include: { payoutAccount: true } },
+      },
+    });
+    if (!offer) throw new NotFoundException('Offer not found');
+
+    if (offer.userId !== userId) {
+      await this.recordOfferView(offerId, userId);
+    }
+
+    const completedSaleCountByUserId = await this.getCompletedSaleCounts([offer.userId]);
+    // Re-read so the caller sees its own view reflected, rather than a count
+    // that is always one behind.
+    const viewCount =
+      offer.userId === userId
+        ? offer.viewCount
+        : ((
+            await this.prisma.p2PTokenOffer.findUnique({
+              where: { id: offerId },
+              select: { viewCount: true },
+            })
+          )?.viewCount ?? offer.viewCount);
+
+    return serializeOffer(
+      { ...offer, viewCount },
+      offer.userId === userId,
+      completedSaleCountByUserId.get(offer.userId) ?? 0,
+    );
+  }
+
+  /**
+   * Idempotent per (offer, viewer): the unique constraint means a refresh
+   * bumps lastViewedAt instead of adding a row, and viewCount is only
+   * incremented when a row is genuinely new. Both writes share a transaction
+   * so the denormalized count can never drift from the row count.
+   */
+  private async recordOfferView(offerId: string, viewerId: string): Promise<void> {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const existing = await tx.p2POfferView.findUnique({
+          where: { offerId_viewerId: { offerId, viewerId } },
+          select: { id: true },
+        });
+        if (existing) {
+          await tx.p2POfferView.update({
+            where: { id: existing.id },
+            data: { lastViewedAt: new Date() },
+          });
+          return;
+        }
+        await tx.p2POfferView.create({ data: { offerId, viewerId } });
+        await tx.p2PTokenOffer.update({
+          where: { id: offerId },
+          data: { viewCount: { increment: 1 } },
+        });
+      });
+    } catch (err) {
+      // Two concurrent first-views race on the unique constraint; the loser
+      // simply did not create a row, which is the correct outcome. Never let
+      // analytics bookkeeping break the page.
+      p2pTradeLogger.warn(`Could not record P2P offer view ${offerId}: ${String(err)}`);
+    }
+  }
+
+  /** One trade, for its detail page. Participants only. */
+  async getTradeDetail(userId: string, tradeId: string) {
+    await this.expireStaleRecords();
+    return this.getTradeForUser(userId, tradeId);
+  }
+
   async cancelOffer(userId: string, offerId: string) {
     await this.expireStaleRecords();
     const offer = await this.prisma.p2PTokenOffer.findFirst({ where: { id: offerId, userId } });
@@ -1632,6 +1731,10 @@ function serializeOffer(offer: any, includePayment: boolean, completedSaleCount?
             .map(summarizePaymentMethod)
         : [],
     status: offer.status,
+    // Distinct traders who have opened this offer's detail page. Shown to
+    // everyone: it is a demand signal for the poster and a liquidity signal
+    // for a buyer, and it is a count of viewers, never their identities.
+    viewCount: offer.viewCount ?? 0,
     expiresAt: offer.expiresAt,
     completedAt: offer.completedAt,
     cancelledAt: offer.cancelledAt,

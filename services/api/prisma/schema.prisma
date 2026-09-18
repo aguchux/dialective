@@ -228,6 +228,7 @@ model User {
   dataAccessLeadsContacted          DataAccessLead[]                 @relation("DataAccessLeadContactedBy")
   supportRequestsResolved           SupportRequest[]                 @relation("SupportRequestResolvedBy")
   p2pOffers                         P2PTokenOffer[]
+  p2pOfferViews                     P2POfferView[]
   p2pBuyerTrades                    P2PTokenTrade[]                  @relation("P2PBuyerTrades")
   p2pSellerTrades                   P2PTokenTrade[]                  @relation("P2PSellerTrades")
   p2pDisputesRaised                 P2PDispute[]                     @relation("P2PDisputesRaised")
@@ -2694,8 +2695,14 @@ model P2PTokenOffer {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 
+  /// Denormalized count of DISTINCT viewers, kept in step with
+  /// P2POfferView rows. Stored rather than counted on read so the market
+  /// list can show it without a correlated subquery per row.
+  viewCount Int @default(0)
+
   trades         P2PTokenTrade[]
   paymentMethods P2POfferPaymentMethod[]
+  views          P2POfferView[]
 
   @@index([type, status, expiresAt])
   @@index([userId, status])
@@ -2707,6 +2714,31 @@ model P2PTokenOffer {
   // EXPLAIN ANALYZE on production data if that stops being true.
   @@index([status, type, createdAt])
   @@map("p2p_token_offers")
+}
+
+/// One row per (offer, viewer) -- a trader opening an offer's detail page.
+/// The unique constraint makes a view idempotent per user, so refreshing or
+/// coming back later never inflates the count; P2POfferOffer.viewCount is
+/// only incremented when a row is actually created. lastViewedAt is bumped
+/// on repeat visits so "interest is still live" stays distinguishable from
+/// "someone looked once a month ago".
+///
+/// Deliberately not recording anonymous/logged-out views: the market is
+/// behind auth, so every viewer has a real id, and keying on it is what
+/// makes the dedupe meaningful.
+model P2POfferView {
+  id           String        @id @default(uuid())
+  offerId      String
+  offer        P2PTokenOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  viewerId     String
+  viewer       User          @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  viewedAt     DateTime      @default(now())
+  lastViewedAt DateTime      @default(now())
+
+  @@unique([offerId, viewerId])
+  @@index([offerId, lastViewedAt])
+  @@index([viewerId])
+  @@map("p2p_offer_views")
 }
 
 /// The full set of payout accounts a SELL offer's poster is willing to
