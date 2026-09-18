@@ -199,11 +199,14 @@ function MyTradeTable({
                       )}
                     </td>
                     <td className="px-4 py-3 text-right align-top">
+                      {/* Labelled by the side the viewer is on, matching
+                          the market list's wording, so the trade path reads
+                          the same end to end. */}
                       <Link
                         className="inline-flex min-h-9 items-center rounded-lg border border-line bg-surface px-4 text-sm font-extrabold text-ink hover:bg-surface-muted"
                         href={`${basePath}/trades/${trade.id}`}
                       >
-                        View
+                        {isBuyer ? 'Buy' : 'Sell'}
                       </Link>
                     </td>
                   </tr>

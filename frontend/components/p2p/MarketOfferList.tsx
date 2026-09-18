@@ -342,15 +342,18 @@ export function MarketOfferList({
                             <span className="text-xs font-bold text-muted">Accepted</span>
                           )
                         ) : (
-                          // View, not Buy/Sell. Committing to a trade now
-                          // happens on the offer's own detail page, which
-                          // both records the visit and means a mistap in a
-                          // scrolling table can no longer open a real trade.
+                          // Names the side of the trade this row would put
+                          // you on, so the path through the market stays
+                          // legible -- but it opens the offer's detail page
+                          // rather than trading, so a mistap in a scrolling
+                          // table still cannot commit real escrow. "now"
+                          // marks it as the start of that action without
+                          // promising an immediate commit.
                           <Link
                             className="inline-flex min-h-9 items-center rounded-lg bg-accent px-4 text-sm font-extrabold text-white hover:bg-accent-dark"
                             href={`${offersBase}/${offer.id}`}
                           >
-                            View
+                            {offer.type === 'SELL' ? 'Buy now' : 'Sell now'}
                           </Link>
                         )}
                       </td>
