@@ -23,6 +23,26 @@ import { P2PTrade, normalizeErrorMessage } from '@/store/api';
 
 const OPEN_TRADE_STATUSES = new Set(['AWAITING_PAYMENT', 'PAID_MARKED', 'CANCEL_PENDING']);
 
+export function buildP2PWhatsAppMessage({
+  trade,
+  senderRole,
+  recipientName,
+}: {
+  trade: P2PTrade;
+  senderRole: 'buyer' | 'seller';
+  recipientName: string;
+}): string {
+  const greeting = recipientName ? `Hello ${recipientName},` : 'Hello,';
+  const otherRole = senderRole === 'buyer' ? 'seller' : 'buyer';
+
+  return [
+    greeting,
+    `I am the ${senderRole} contacting you about our Dialect Library P2P trade ${trade.id}.`,
+    `Trade: ${trade.tokenAmount} DL for ${trade.fiatAmount} ${trade.fiatCurrency}.`,
+    `You are the ${otherRole}. Please keep payment confirmation, DL release, cancellation, and disputes inside Dialect Library. Do not share passwords or OTP codes.`,
+  ].join('\n');
+}
+
 export function TradeDetail({
   trade,
   viewerId,
@@ -65,6 +85,12 @@ export function TradeDetail({
   }
 
   const otherParty = isBuyer ? trade.seller : trade.buyer;
+  const otherPartyName = [otherParty.firstName, otherParty.lastName].filter(Boolean).join(' ');
+  const whatsAppMessage = buildP2PWhatsAppMessage({
+    trade,
+    senderRole: isBuyer ? 'buyer' : 'seller',
+    recipientName: otherPartyName,
+  });
 
   return (
     <div className={`${cardClass} grid gap-4 p-5`}>
@@ -92,6 +118,7 @@ export function TradeDetail({
           firstName={otherParty.firstName}
           lastName={otherParty.lastName}
           phoneNumber={otherParty.phoneNumber}
+          prefilledMessage={whatsAppMessage}
         />
       ) : (
         <p className="text-sm text-muted">
