@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { Role, UserStatus } from '@dialectiva/db';
+import { KycStatus, Role, UserStatus } from '@dialectiva/db';
 import { AppModule } from './app.module';
 import { PlatformSettingsService } from './settings/platform-settings.service';
 import { TrainerReportService } from './wallet/trainer-report.service';
@@ -8,6 +8,14 @@ import { MailService } from './mail/mail.service';
 import { PrismaService } from './prisma/prisma.service';
 
 const BATCH_SIZE = 100;
+
+/**
+ * Lifetime recordings a trainer needs before the weekly report is worth
+ * sending them. The report previously went to every active trainer, so the
+ * bulk of it was a summary of zeroes mailed to people who had not recorded
+ * anything.
+ */
+const MIN_RECORDINGS = 1000;
 
 /**
  * One-shot entrypoint for the weekly-trainer-report k8s CronJob (Monday
@@ -45,9 +53,21 @@ async function bootstrap() {
     let cursor: string | undefined;
     let sent = 0;
     let failed = 0;
+    let skipped = 0;
     for (;;) {
       const trainers = await prisma.user.findMany({
-        where: { role: Role.TRAINER, status: UserStatus.ACTIVE },
+        where: {
+          role: Role.TRAINER,
+          status: UserStatus.ACTIVE,
+          // Narrowed from "every active trainer" (5,991 recipients) to
+          // established, verified contributors. The report went to everyone
+          // regardless of whether they had done anything, so most of that
+          // volume was a summary of zeroes. Recipients must be phone- and
+          // KYC-verified and have at least MIN_RECORDINGS recordings.
+          phoneVerifiedAt: { not: null },
+          kycStatus: KycStatus.APPROVED,
+          emailNotificationsEnabled: true,
+        },
         select: { id: true, email: true, firstName: true },
         orderBy: { id: 'asc' },
         take: BATCH_SIZE,
@@ -57,6 +77,17 @@ async function bootstrap() {
 
       for (const trainer of trainers) {
         try {
+          // Lifetime recording count, checked per trainer rather than in the
+          // query above -- Prisma cannot express "relation count >= N" in a
+          // where clause, and the count is cheap against an indexed userId
+          // on an audience already narrowed to verified trainers.
+          const recordingCount = await prisma.wordRecording.count({
+            where: { userId: trainer.id },
+          });
+          if (recordingCount < MIN_RECORDINGS) {
+            skipped += 1;
+            continue;
+          }
           const report = await trainerReport.buildReport(trainer.id, from, to);
           await mail.sendWeeklyTrainerReportEmail({
             trainerEmail: trainer.email,
@@ -77,7 +108,7 @@ async function bootstrap() {
     }
 
     // eslint-disable-next-line no-console
-    console.log('weekly trainer report run complete', { sent, failed });
+    console.log('weekly trainer report run complete', { sent, failed, skipped });
     await app.close();
     process.exit(0);
   } catch (err) {

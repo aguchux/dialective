@@ -451,27 +451,12 @@ export class AuthService {
         await this.grantStartupBonus(row.userId);
       }
 
-      if (user.referredById) {
-        const inviter = await this.prisma.user.findUnique({
-          where: { id: user.referredById },
-          select: { email: true },
-        });
-        if (inviter?.email) {
-          const inviteeName =
-            [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.email;
-          void this.mail
-            .sendReferralJoinNotification({
-              inviterEmail: inviter.email,
-              inviteeEmail: user.email,
-              inviteeName,
-            })
-            .catch((err) =>
-              this.logger.warn(
-                `Failed to send referral-join notification to inviter ${inviter.email}: ${err instanceof Error ? err.message : String(err)}`,
-              ),
-            );
-        }
-      }
+      // No referral-join email to the inviter. At 3,866 referred signups in
+      // one week this was among the largest email sources on the platform,
+      // for a notification the inviter can already see in their referrals
+      // dashboard. Referral bonuses are unaffected -- they still credit, and
+      // the separate payout-bonus SMS still fires for users who opted into
+      // it.
 
       return this.issueAuthResult(user);
     }

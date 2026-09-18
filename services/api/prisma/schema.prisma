@@ -229,6 +229,7 @@ model User {
   supportRequestsResolved           SupportRequest[]                 @relation("SupportRequestResolvedBy")
   p2pOffers                         P2PTokenOffer[]
   p2pOfferViews                     P2POfferView[]
+  emailSendLogs                     EmailSendLog[]
   p2pBuyerTrades                    P2PTokenTrade[]                  @relation("P2PBuyerTrades")
   p2pSellerTrades                   P2PTokenTrade[]                  @relation("P2PSellerTrades")
   p2pDisputesRaised                 P2PDispute[]                     @relation("P2PDisputesRaised")
@@ -4138,6 +4139,43 @@ model WebhookSubscription {
 /// attempt (not per event; a retried delivery gets its own row).
 /// resultCode is null when the request itself failed to complete
 /// (DNS/timeout/connection refused).
+/// Append-only record of every email the platform attempts to send.
+///
+/// Added because email volume could not be measured at all: MailService
+/// logged nothing, so answering "what is eating the quota" meant inferring
+/// it from otp_codes rows and course-completion counts rather than counting
+/// actual sends. Records suppressed attempts too (see suppressedReason), so
+/// the effect of a preference gate or an audience filter is visible instead
+/// of just an absence of rows.
+///
+/// Deliberately stores no body/HTML -- subject and kind are enough to audit
+/// volume and answer "was this user emailed", without turning this table
+/// into a copy of every password-reset link and OTP code ever sent.
+model EmailSendLog {
+  id     String  @id @default(uuid())
+  /// Null for recipients with no account (support/data-access enquiries).
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+  /// Recipient address as addressed, kept even when userId is null.
+  toEmail String
+  /// MailService method that produced it, e.g. "sendOtpEmail" -- the stable
+  /// key for grouping volume by type.
+  kind    String
+  subject String
+  /// False when the send was skipped rather than attempted.
+  sent            Boolean @default(true)
+  /// Why it was skipped: "USER_OPTED_OUT", "AUDIENCE_FILTER", or null when sent.
+  suppressedReason String?
+  /// Provider error text when a send was attempted and failed.
+  errorMessage     String?
+  createdAt        DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([kind, createdAt])
+  @@index([userId, createdAt])
+  @@map("email_send_logs")
+}
+
 model WebhookDeliveryLog {
   id             String              @id @default(uuid())
   subscriptionId String

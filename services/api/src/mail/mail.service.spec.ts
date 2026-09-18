@@ -8,13 +8,20 @@ import { MailService } from './mail.service';
 
 describe('MailService.sendWeeklyTrainerReportEmail', () => {
   let settings: any;
+  let prisma: any;
   let service: MailService;
 
   beforeEach(() => {
     sendMock.mockClear();
     process.env.RESEND_API_KEY = 'test-key';
     settings = { getResendFromAddress: jest.fn().mockResolvedValue('noreply@example.com') };
-    service = new MailService(settings as never);
+    // MailService now writes an EmailSendLog row per attempt and reads the
+    // recipient's emailNotificationsEnabled for optional mail.
+    prisma = {
+      user: { findFirst: jest.fn().mockResolvedValue(null) },
+      emailSendLog: { create: jest.fn().mockResolvedValue({}) },
+    };
+    service = new MailService(settings as never, prisma as never);
   });
 
   it('sends the weekly report with the recordings/score/earnings summary and an escaped first name', async () => {
@@ -61,13 +68,20 @@ describe('MailService.sendWeeklyTrainerReportEmail', () => {
 
 describe('MailService.sendTrainerReportPdfEmail', () => {
   let settings: any;
+  let prisma: any;
   let service: MailService;
 
   beforeEach(() => {
     sendMock.mockClear();
     process.env.RESEND_API_KEY = 'test-key';
     settings = { getResendFromAddress: jest.fn().mockResolvedValue('noreply@example.com') };
-    service = new MailService(settings as never);
+    // MailService now writes an EmailSendLog row per attempt and reads the
+    // recipient's emailNotificationsEnabled for optional mail.
+    prisma = {
+      user: { findFirst: jest.fn().mockResolvedValue(null) },
+      emailSendLog: { create: jest.fn().mockResolvedValue({}) },
+    };
+    service = new MailService(settings as never, prisma as never);
   });
 
   it('sends the PDF as an attachment with an escaped first name', async () => {
@@ -105,13 +119,20 @@ describe('MailService.sendTrainerReportPdfEmail', () => {
 
 describe('MailService.sendOtpEmail PAYOUT_ACCOUNT_DELETE', () => {
   let settings: any;
+  let prisma: any;
   let service: MailService;
 
   beforeEach(() => {
     sendMock.mockClear();
     process.env.RESEND_API_KEY = 'test-key';
     settings = { getResendFromAddress: jest.fn().mockResolvedValue('noreply@example.com') };
-    service = new MailService(settings as never);
+    // MailService now writes an EmailSendLog row per attempt and reads the
+    // recipient's emailNotificationsEnabled for optional mail.
+    prisma = {
+      user: { findFirst: jest.fn().mockResolvedValue(null) },
+      emailSendLog: { create: jest.fn().mockResolvedValue({}) },
+    };
+    service = new MailService(settings as never, prisma as never);
   });
 
   it('sends a deletion-confirmation email containing the code', async () => {
@@ -128,13 +149,20 @@ describe('MailService.sendOtpEmail PAYOUT_ACCOUNT_DELETE', () => {
 
 describe('MailService.sendOtpEmail PAYOUT_ACCOUNT_SETUP', () => {
   let settings: any;
+  let prisma: any;
   let service: MailService;
 
   beforeEach(() => {
     sendMock.mockClear();
     process.env.RESEND_API_KEY = 'test-key';
     settings = { getResendFromAddress: jest.fn().mockResolvedValue('noreply@example.com') };
-    service = new MailService(settings as never);
+    // MailService now writes an EmailSendLog row per attempt and reads the
+    // recipient's emailNotificationsEnabled for optional mail.
+    prisma = {
+      user: { findFirst: jest.fn().mockResolvedValue(null) },
+      emailSendLog: { create: jest.fn().mockResolvedValue({}) },
+    };
+    service = new MailService(settings as never, prisma as never);
   });
 
   it('sends a wallet-setup-confirmation email containing the code', async () => {
@@ -151,6 +179,7 @@ describe('MailService.sendOtpEmail PAYOUT_ACCOUNT_SETUP', () => {
 
 describe('MailService.sendSupportRequestNotification', () => {
   let settings: any;
+  let prisma: any;
   let service: MailService;
 
   beforeEach(() => {
@@ -160,7 +189,11 @@ describe('MailService.sendSupportRequestNotification', () => {
       getResendFromAddress: jest.fn().mockResolvedValue('noreply@example.com'),
       getLeadsNotificationAddress: jest.fn().mockResolvedValue('support@example.com'),
     };
-    service = new MailService(settings as never);
+    prisma = {
+      user: { findFirst: jest.fn().mockResolvedValue(null) },
+      emailSendLog: { create: jest.fn().mockResolvedValue({}) },
+    };
+    service = new MailService(settings as never, prisma as never);
   });
 
   it('emails the leads-notification address with the request details, escaping HTML in the message', async () => {
@@ -181,5 +214,85 @@ describe('MailService.sendSupportRequestNotification', () => {
     expect(call.html).not.toContain('<script>');
     expect(call.html).toContain('Line one<br>Line two');
     expect(call.text).toContain('Line one\nLine two');
+  });
+});
+
+/**
+ * Preference gating + audit logging.
+ *
+ * emailNotificationsEnabled had existed on User, been editable in the
+ * profile, and been read by nothing -- 12 users had explicitly opted out
+ * and were still receiving every email. These pin the two halves of the
+ * fix, and in particular that the gate CANNOT reach security mail: a user
+ * who cannot log in has not opted out of a password reset.
+ */
+describe('MailService -- preference gating and send logging', () => {
+  let settings: any;
+  let prisma: any;
+  let service: MailService;
+
+  beforeEach(() => {
+    sendMock.mockClear();
+    process.env.RESEND_API_KEY = 'test-key';
+    settings = { getResendFromAddress: jest.fn().mockResolvedValue('noreply@example.com') };
+    prisma = {
+      user: { findFirst: jest.fn().mockResolvedValue(null) },
+      emailSendLog: { create: jest.fn().mockResolvedValue({}) },
+    };
+    service = new MailService(settings as never, prisma as never);
+  });
+
+  it('suppresses optional mail for a user who opted out, and records why', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'u1', emailNotificationsEnabled: false });
+
+    await service.sendReferralInviteEmail({
+      inviterName: 'Ada',
+      inviterEmail: 'ada@example.com',
+      inviteeFirstName: 'Bo',
+      inviteeEmail: 'bo@example.com',
+      referralUrl: 'https://example.com/r/abc',
+    });
+
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(prisma.emailSendLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ sent: false, suppressedReason: 'USER_OPTED_OUT' }),
+      }),
+    );
+  });
+
+  it('still delivers a password reset to a user who opted out', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'u1', emailNotificationsEnabled: false });
+
+    await service.sendPasswordResetEmail('bo@example.com', 'tok');
+
+    // Security mail is not a notification preference. If this ever starts
+    // being suppressed, opted-out users are locked out of their accounts.
+    expect(sendMock).toHaveBeenCalled();
+  });
+
+  it('still delivers an OTP to a user who opted out', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'u1', emailNotificationsEnabled: false });
+
+    await service.sendOtpEmail('bo@example.com', '123456', 'LOGIN' as never);
+
+    expect(sendMock).toHaveBeenCalled();
+  });
+
+  it('logs a successful send with its kind, for volume auditing', async () => {
+    await service.sendPasswordResetEmail('bo@example.com', 'tok');
+
+    expect(prisma.emailSendLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ kind: 'sendPasswordResetEmail', sent: true }),
+      }),
+    );
+  });
+
+  it('never lets a logging failure break the email itself', async () => {
+    prisma.emailSendLog.create.mockRejectedValue(new Error('db down'));
+
+    await expect(service.sendPasswordResetEmail('bo@example.com', 'tok')).resolves.toBeUndefined();
+    expect(sendMock).toHaveBeenCalled();
   });
 });

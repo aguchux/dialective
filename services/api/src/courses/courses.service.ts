@@ -245,21 +245,11 @@ export class CoursesService {
       }
     }
 
-    try {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-        select: { email: true },
-      });
-      if (user) {
-        await this.mail.sendCourseCompletedEmail({
-          trainerEmail: user.email,
-          courseTitle: course.title,
-          rewardTokens,
-        });
-      }
-    } catch {
-      // Best-effort, same as every other post-completion side effect here.
-    }
+    // No course-completion email. This was the platform's single largest
+    // email source -- 7,693 sends in one week, more than every OTP
+    // combined -- for a congratulatory message about something the trainer
+    // had just done themselves and could already see in the UI. The reward
+    // still lands in their wallet and still shows in their ledger.
   }
 
   async listAdmin() {

@@ -2,6 +2,7 @@ import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
 import { Resend } from 'resend';
 import { OtpPurpose } from '@dialectiva/db';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 interface DataAccessLeadNotification {
   id: string;
@@ -102,7 +103,10 @@ export class MailService {
   private readonly logger = new Logger(MailService.name);
   private readonly resend: Resend | null;
 
-  constructor(private readonly settings: PlatformSettingsService) {
+  constructor(
+    private readonly settings: PlatformSettingsService,
+    private readonly prisma: PrismaService,
+  ) {
     const apiKey = process.env.RESEND_API_KEY;
     this.resend = apiKey ? new Resend(apiKey) : null;
     if (!this.resend) {
@@ -117,6 +121,7 @@ export class MailService {
       'Reset your Dialect Library password',
       passwordResetHtml(url),
       `Reset your password: ${url}`,
+      { kind: 'sendPasswordResetEmail' },
     );
   }
 
@@ -127,6 +132,7 @@ export class MailService {
       'Verify your Dialect Library email',
       verifyEmailHtml(url),
       `Verify your email: ${url}`,
+      { kind: 'sendEmailVerificationEmail' },
     );
   }
 
@@ -142,6 +148,7 @@ export class MailService {
       'Your Dialect Library sign-in link',
       magicLinkHtml(url),
       `Sign in: ${url}`,
+      { kind: 'sendMagicLinkEmail' },
     );
   }
 
@@ -152,6 +159,7 @@ export class MailService {
       'Reset your Dialect Library Voice Stream password',
       passwordResetHtml(url),
       `Reset your password: ${url}`,
+      { kind: 'sendSubscriberPasswordResetEmail' },
     );
   }
 
@@ -166,6 +174,7 @@ export class MailService {
       `You've been invited to join ${params.organizationName} on Dialect Library Voice Stream`,
       `<p>You've been invited to join <strong>${escapeHtml(params.organizationName)}</strong> on Dialect Library Voice Stream.</p><p><a href="${url}">${url}</a></p>`,
       `You've been invited to join ${params.organizationName} on Dialect Library Voice Stream: ${url}`,
+      { kind: 'sendSubscriberInviteEmail' },
     );
   }
 
@@ -176,7 +185,7 @@ export class MailService {
       subject,
       otpHtml(intro, code),
       `${intro} Your code: ${code} (expires in 10 minutes).`,
-      { footer: false },
+      { kind: 'sendOtpEmail', footer: false },
     );
   }
 
@@ -187,6 +196,7 @@ export class MailService {
       `New voice data lead: ${lead.name}`,
       dataAccessLeadHtml(lead),
       dataAccessLeadText(lead),
+      { kind: 'sendDataAccessLeadNotification' },
     );
   }
 
@@ -197,6 +207,7 @@ export class MailService {
       `New support request: ${request.subject}`,
       supportRequestHtml(request),
       supportRequestText(request),
+      { kind: 'sendSupportRequestNotification' },
     );
   }
 
@@ -207,6 +218,7 @@ export class MailService {
       'Someone joined your referral network',
       referralJoinHtml(payload.inviteeName, payload.inviteeEmail, referralsUrl),
       referralJoinText(payload.inviteeName, payload.inviteeEmail, referralsUrl),
+      { kind: 'sendReferralJoinNotification', optional: true },
     );
   }
 
@@ -216,6 +228,7 @@ export class MailService {
       `${payload.inviterName} invited you to Dialect Library`,
       referralInviteHtml(payload),
       referralInviteText(payload),
+      { kind: 'sendReferralInviteEmail', optional: true },
     );
   }
 
@@ -237,6 +250,7 @@ export class MailService {
       `You received ${payload.tokenAmount} DL`,
       trainingPayoutCreditedHtml(payload.tokenAmount, payload.reference, dashboardUrl),
       trainingPayoutCreditedText(payload.tokenAmount, payload.reference, dashboardUrl),
+      { kind: 'sendTrainingPayoutCreditedEmail' },
     );
   }
 
@@ -256,6 +270,7 @@ export class MailService {
         : `Course complete: ${payload.courseTitle}`,
       courseCompletedHtml(payload.courseTitle, payload.rewardTokens, coursesUrl),
       courseCompletedText(payload.courseTitle, payload.rewardTokens, coursesUrl),
+      { kind: 'sendCourseCompletedEmail', optional: true },
     );
   }
 
@@ -280,6 +295,7 @@ export class MailService {
       'Your account is on hold for a routine review',
       auditHoldStartedHtml(payload.submissionCount),
       auditHoldStartedText(payload.submissionCount),
+      { kind: 'sendAuditHoldStartedEmail' },
     );
   }
 
@@ -294,6 +310,7 @@ export class MailService {
       'Your account is back in good standing',
       auditHoldReleasedHtml(dashboardUrl),
       auditHoldReleasedText(dashboardUrl),
+      { kind: 'sendAuditHoldReleasedEmail' },
     );
   }
 
@@ -310,6 +327,7 @@ export class MailService {
       `Unusual activity detected on your Voice Stream account`,
       anomalyAlertHtml(payload, dashboardUrl),
       anomalyAlertText(payload, dashboardUrl),
+      { kind: 'sendAnomalyAlertEmail' },
     );
   }
 
@@ -320,6 +338,7 @@ export class MailService {
       'Your phone number is verified',
       phoneVerifiedHtml(phoneNumber, dashboardUrl),
       phoneVerifiedText(phoneNumber, dashboardUrl),
+      { kind: 'sendPhoneVerifiedEmail', optional: true },
     );
   }
 
@@ -331,6 +350,7 @@ export class MailService {
       'A Dialect Library admin has joined your P2P dispute',
       p2pAdminJoinedDisputeHtml(tradeUrl),
       p2pAdminJoinedDisputeText(tradeUrl),
+      { kind: 'sendP2PAdminJoinedDisputeEmail' },
     );
   }
 
@@ -346,6 +366,7 @@ export class MailService {
       'A member is verifying your WhatsApp number',
       whatsAppValidationClaimedHtml(validatorName, validatorPhoneNumber, dashboardUrl),
       whatsAppValidationClaimedText(validatorName, validatorPhoneNumber, dashboardUrl),
+      { kind: 'sendWhatsAppValidationClaimedEmail', optional: true },
     );
   }
 
@@ -357,6 +378,7 @@ export class MailService {
       'Your identity verification needs attention',
       kycDeclinedHtml(payload.reason, dashboardUrl),
       kycDeclinedText(payload.reason, dashboardUrl),
+      { kind: 'sendKycDeclinedEmail' },
     );
   }
 
@@ -368,6 +390,7 @@ export class MailService {
       'Your weekly Dialect Library report',
       weeklyTrainerReportHtml(payload, reportsUrl),
       weeklyTrainerReportText(payload, reportsUrl),
+      { kind: 'sendWeeklyTrainerReportEmail', optional: true },
     );
   }
 
@@ -390,8 +413,7 @@ export class MailService {
       'Your Dialect Library report (PDF)',
       `<p>Hi ${greeting},</p><p>Your requested Dialect Library account report is attached as a PDF.</p><p>You can also view it live any time at <a href="${reportsUrl}">${reportsUrl}</a>.</p>`,
       `Hi ${greeting},\n\nYour requested Dialect Library account report is attached as a PDF.\n\nYou can also view it live any time at ${reportsUrl}\n`,
-      {
-        attachment: {
+      { kind: 'sendTrainerReportPdfEmail', attachment: {
           filename: 'dialect-library-report.pdf',
           content: payload.pdf,
           contentType: 'application/pdf',
@@ -421,6 +443,7 @@ export class MailService {
       'Your Dialect Library account proof report',
       `<p>Hi ${greeting},</p><p>An admin has prepared a full account proof report for you -- a complete breakdown of your token balance, every transaction, and how they add up.</p><p>View and download it any time at <a href="${proofUrl}">${proofUrl}</a>.</p>`,
       `Hi ${greeting},\n\nAn admin has prepared a full account proof report for you -- a complete breakdown of your token balance, every transaction, and how they add up.\n\nView and download it any time at ${proofUrl}\n`,
+      { kind: 'sendProofAccountReportEmail' },
     );
   }
 
@@ -432,8 +455,49 @@ export class MailService {
     options?: {
       footer?: boolean;
       attachment?: { filename: string; content: Buffer; contentType: string };
+      /**
+       * MailService method name, recorded on the audit row so volume can be
+       * grouped by email type. Defaults to "unknown" rather than being
+       * required, so a caller that forgets it still gets logged.
+       */
+      kind?: string;
+      /**
+       * Marks this email as optional, i.e. subject to the recipient's
+       * emailNotificationsEnabled preference. Defaults to FALSE -- opt-in
+       * rather than opt-out, so a new email type is treated as essential
+       * until someone deliberately says otherwise. Getting that default
+       * backwards would silently drop password resets.
+       */
+      optional?: boolean;
     },
   ): Promise<void> {
+    const kind = options?.kind ?? 'unknown';
+
+    // Honour the recipient's own preference before doing anything else.
+    // emailNotificationsEnabled has existed on User (and been editable in
+    // the profile) all along, but nothing ever read it -- users who turned
+    // it off kept receiving everything. Only ever applied to optional mail:
+    // someone who cannot log in has not opted out of a password reset.
+    if (options?.optional) {
+      const recipient = await this.prisma.user
+        .findFirst({
+          where: { email: to },
+          select: { id: true, emailNotificationsEnabled: true },
+        })
+        .catch(() => null);
+      if (recipient && !recipient.emailNotificationsEnabled) {
+        await this.recordSend({
+          userId: recipient.id,
+          toEmail: to,
+          kind,
+          subject,
+          sent: false,
+          suppressedReason: 'USER_OPTED_OUT',
+        });
+        return;
+      }
+    }
+
     const includeFooter = options?.footer ?? true;
     const finalHtml = includeFooter ? html + EMAIL_FOOTER_HTML : html;
     const finalText = includeFooter ? text + EMAIL_FOOTER_TEXT : text;
@@ -453,8 +517,56 @@ export class MailService {
       ...(options?.attachment ? { attachments: [options.attachment] } : {}),
     });
     if (error) {
+      await this.recordSend({
+        toEmail: to,
+        kind,
+        subject,
+        sent: false,
+        errorMessage: error.message,
+      });
       this.logger.error(`Resend send failed for ${to}: ${error.message}`);
       throw new ServiceUnavailableException('Email delivery is temporarily unavailable');
+    }
+    await this.recordSend({ toEmail: to, kind, subject, sent: true });
+  }
+
+  /**
+   * Writes one audit row. Deliberately swallows its own failures: this
+   * table exists to measure email, and a logging problem must never take
+   * down a password reset or an OTP.
+   */
+  private async recordSend(entry: {
+    userId?: string;
+    toEmail: string;
+    kind: string;
+    subject: string;
+    sent: boolean;
+    suppressedReason?: string;
+    errorMessage?: string;
+  }): Promise<void> {
+    try {
+      const userId =
+        entry.userId ??
+        (
+          await this.prisma.user
+            .findFirst({ where: { email: entry.toEmail }, select: { id: true } })
+            .catch(() => null)
+        )?.id;
+      await this.prisma.emailSendLog.create({
+        data: {
+          userId: userId ?? null,
+          toEmail: entry.toEmail,
+          kind: entry.kind,
+          subject: entry.subject,
+          sent: entry.sent,
+          suppressedReason: entry.suppressedReason ?? null,
+          errorMessage: entry.errorMessage ?? null,
+        },
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Could not record email send log for ${entry.toEmail}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   }
 }

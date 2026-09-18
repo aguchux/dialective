@@ -333,16 +333,14 @@ describe('CoursesService', () => {
           data: expect.objectContaining({ type: 'COURSE_COMPLETION_REWARD', reference: 'c1' }),
         }),
       );
-      expect(mail.sendCourseCompletedEmail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          trainerEmail: 'trainer@example.com',
-          courseTitle: 'Intro',
-          rewardTokens: '5',
-        }),
-      );
+      // No completion email: this was the platform's largest email source
+      // (7,693/week) for a message about something the trainer had just
+      // done themselves. The reward crediting above is the behaviour that
+      // actually matters, and it is unchanged.
+      expect(mail.sendCourseCompletedEmail).not.toHaveBeenCalled();
     });
 
-    it('still emails completion with no reward when the course has none', async () => {
+    it('completes a reward-less course without emailing', async () => {
       prisma.course.findFirst.mockResolvedValue({
         ...fiveSlideCourse,
         completionRewardTokens: null,
@@ -359,13 +357,8 @@ describe('CoursesService', () => {
 
       await service.saveProgress('user-1', 'intro', 4, 5);
 
-      expect(mail.sendCourseCompletedEmail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          trainerEmail: 'trainer@example.com',
-          courseTitle: 'Intro',
-          rewardTokens: null,
-        }),
-      );
+      expect(prisma.courseProgress.upsert).toHaveBeenCalled();
+      expect(mail.sendCourseCompletedEmail).not.toHaveBeenCalled();
     });
   });
 
