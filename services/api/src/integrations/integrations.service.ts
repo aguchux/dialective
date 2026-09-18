@@ -191,8 +191,20 @@ export class IntegrationsService implements OnModuleInit {
   async listAllForAdmin() {
     const rows = await this.prisma.integration.findMany({
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      // Surfaces where the work is, so an admin sees which integration has
+      // people waiting without opening each one.
+      include: {
+        _count: {
+          select: {
+            subscriptions: { where: { status: IntegrationSubscriptionStatus.PENDING } },
+          },
+        },
+      },
     });
-    return rows.map((row) => this.toAdminPublic(row));
+    return rows.map((row) => ({
+      ...this.toAdminPublic(row),
+      pendingSubscriptionCount: row._count.subscriptions,
+    }));
   }
 
   /**
@@ -221,15 +233,20 @@ export class IntegrationsService implements OnModuleInit {
    * Every access request, newest-pending first -- the admin queue. Pending
    * sorts ahead of decided rows so the work to do is always at the top.
    */
-  async listSubscriptionsForAdmin(status?: IntegrationSubscriptionStatus) {
+  async listSubscriptionsForAdmin(status?: IntegrationSubscriptionStatus, slug?: string) {
     const rows = await this.prisma.integrationSubscription.findMany({
-      where: status ? { status } : undefined,
+      where: {
+        ...(status ? { status } : {}),
+        // Scoped by integration when the admin is looking at one, so the
+        // per-integration page does not page through everyone else's.
+        ...(slug ? { integration: { slug } } : {}),
+      },
       include: {
         integration: { select: { id: true, slug: true, name: true } },
         user: { select: { id: true, email: true, firstName: true, lastName: true } },
       },
       orderBy: [{ status: 'asc' }, { subscribedAt: 'desc' }],
-      take: 200,
+      take: 500,
     });
     return rows.map((row) => ({
       id: row.id,

@@ -62,7 +62,7 @@ export class IntegrationsController {
   @UseGuards(RolesGuard)
   @Roles(Role.ADMIN)
   adminListSubscriptions(@Query() query: ListIntegrationSubscriptionsDto) {
-    return this.integrations.listSubscriptionsForAdmin(query.status);
+    return this.integrations.listSubscriptionsForAdmin(query.status, query.slug);
   }
 
   @Patch('admin/subscriptions/:id')

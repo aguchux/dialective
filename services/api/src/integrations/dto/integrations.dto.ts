@@ -72,6 +72,11 @@ export class ListIntegrationSubscriptionsDto {
     IntegrationSubscriptionStatus.REJECTED,
   ])
   status?: IntegrationSubscriptionStatus;
+
+  // Scopes the queue to one integration, for its dedicated admin page.
+  @IsOptional()
+  @IsString()
+  slug?: string;
 }
 
 /**

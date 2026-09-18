@@ -137,6 +137,37 @@ describe('IntegrationsService', () => {
     });
   });
 
+  describe('listSubscriptionsForAdmin', () => {
+    beforeEach(() => {
+      prisma.integrationSubscription.findMany.mockResolvedValue([]);
+    });
+
+    it('scopes the queue to one integration when given a slug', async () => {
+      await service.listSubscriptionsForAdmin(undefined, 'whatsapp-validator');
+      expect(prisma.integrationSubscription.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { integration: { slug: 'whatsapp-validator' } },
+        }),
+      );
+    });
+
+    it('returns every integration when no slug is given', async () => {
+      await service.listSubscriptionsForAdmin();
+      expect(prisma.integrationSubscription.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: {} }),
+      );
+    });
+
+    it('sorts pending ahead of decided rows', async () => {
+      await service.listSubscriptionsForAdmin();
+      expect(prisma.integrationSubscription.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ status: 'asc' }, { subscribedAt: 'desc' }],
+        }),
+      );
+    });
+  });
+
   describe('reviewSubscription', () => {
     it('approving is what grants access', async () => {
       prisma.integrationSubscription.findUnique.mockResolvedValue({ id: 'sub-1' });

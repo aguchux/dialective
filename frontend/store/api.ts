@@ -956,6 +956,8 @@ export interface AdminIntegration {
   // How many open claims a single subscribed member may hold on this
   // integration at once (e.g. concurrent WhatsApp Validator requests).
   maxConcurrentClaims: number;
+  /** PENDING access requests waiting on an admin for this integration. */
+  pendingSubscriptionCount: number;
   // How long an issued verification code/request stays valid before
   // expiring, in minutes.
   codeValidityMinutes: number;
@@ -3145,7 +3147,7 @@ export const dialectivaApi = createApi({
     // Admin: the access-request queue and its approve/reject decision.
     getAdminIntegrationSubscriptions: builder.query<
       AdminIntegrationSubscription[],
-      { status?: IntegrationSubscriptionStatus } | void
+      { status?: IntegrationSubscriptionStatus; slug?: string } | void
     >({
       query: (params) => ({
         url: '/integrations/admin/subscriptions',
