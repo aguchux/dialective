@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowRight, Clock, MessageCircle, Plug, Search } from 'lucide-react';
+import { ArrowRight, Clock, MessageCircle, Plug, ScanFace, Search } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { cardClass, EmptyPanel, SectionTitle } from '@/components/dashboard/shared';
 import {
@@ -37,6 +37,7 @@ const ICONS: Record<
   React.ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>
 > = {
   MessageCircle,
+  ScanFace,
 };
 
 /**

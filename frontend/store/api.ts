@@ -944,6 +944,63 @@ export interface AdminIntegrationSubscription {
   user: { id: string; email: string; firstName: string | null; lastName: string | null };
 }
 
+// --- Peer review of identity documents (p2p-kyc-review integration) ---
+
+export interface PeerReviewQueueItem {
+  id: string;
+  documentType: string | null;
+  submittedAt: string;
+  reviewsSoFar: number;
+  /** The name on the account, to match against the name on the card. */
+  accountName: string;
+}
+
+export interface PeerReviewSubject {
+  id: string;
+  documentType: string | null;
+  accountName: string;
+  accountNameParts: string[];
+  evidence: { id: string; kind: string }[];
+  claimExpiresAt: string;
+}
+
+export interface PeerReviewTally {
+  reviewCount: number;
+  approvals: number;
+  declines: number;
+  needsAnotherReviewer: boolean;
+  readyForAdmin: boolean;
+  recommendation: 'APPROVE' | 'DECLINE' | null;
+}
+
+export interface MyPeerReview {
+  id: string;
+  verdict: 'APPROVE' | 'DECLINE';
+  documentNumberMatched: boolean;
+  paidAt: string | null;
+  createdAt: string;
+  kycVerification: { id: string; status: string };
+}
+
+export interface AdminPeerReviewItem {
+  id: string;
+  documentType: string | null;
+  submittedAt: string;
+  user: { id: string; email: string; firstName: string | null; lastName: string | null };
+  reviews: {
+    id: string;
+    verdict: 'APPROVE' | 'DECLINE';
+    documentNumberMatched: boolean;
+    declineReason: string | null;
+    createdAt: string;
+    reviewer: { id: string; email: string; firstName: string | null; lastName: string | null };
+  }[];
+  approvals: number;
+  declines: number;
+  readyForAdmin: boolean;
+  recommendation: 'APPROVE' | 'DECLINE' | null;
+}
+
 export interface AdminIntegration {
   id: string;
   slug: string;
@@ -3145,6 +3202,59 @@ export const dialectivaApi = createApi({
       invalidatesTags: ['Integrations'],
     }),
     // Admin: the access-request queue and its approve/reject decision.
+    listPeerReviewQueue: builder.query<
+      { items: PeerReviewQueueItem[]; total: number; page: number; pageSize: number },
+      { page?: number; pageSize?: number } | void
+    >({
+      query: (params) => ({ url: '/kyc-peer-review/queue', params: params ?? undefined }),
+      providesTags: ['Integrations'],
+    }),
+    listMyPeerReviews: builder.query<
+      { items: MyPeerReview[]; total: number; page: number; pageSize: number },
+      { page?: number; pageSize?: number } | void
+    >({
+      query: (params) => ({ url: '/kyc-peer-review/mine', params: params ?? undefined }),
+      providesTags: ['Integrations'],
+    }),
+    claimPeerReview: builder.mutation<PeerReviewSubject, string>({
+      query: (id) => ({ url: `/kyc-peer-review/${id}/claim`, method: 'POST' }),
+      invalidatesTags: ['Integrations'],
+    }),
+    releasePeerReview: builder.mutation<{ released: boolean }, string>({
+      query: (id) => ({ url: `/kyc-peer-review/${id}/release`, method: 'POST' }),
+      invalidatesTags: ['Integrations'],
+    }),
+    submitPeerReview: builder.mutation<
+      PeerReviewTally,
+      { id: string; verdict: 'APPROVE' | 'DECLINE'; documentNumber: string; declineReason?: string }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/kyc-peer-review/${id}/review`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['Integrations', 'Wallet'],
+    }),
+    // Same blob->object-URL handling as the admin evidence route; consumers
+    // must revoke the URL on unmount/change.
+    getPeerReviewEvidenceImage: builder.query<
+      string,
+      { verificationId: string; evidenceId: string }
+    >({
+      query: ({ verificationId, evidenceId }) => ({
+        url: `/kyc-peer-review/${verificationId}/evidence/${evidenceId}`,
+        responseHandler: (response: Response) => response.blob(),
+      }),
+      transformResponse: (blob: Blob) => URL.createObjectURL(blob),
+    }),
+    getAdminPeerReviewQueue: builder.query<AdminPeerReviewItem[], void>({
+      query: () => '/kyc-peer-review/admin/queue',
+      providesTags: ['Integrations'],
+    }),
+    resetPeerReviews: builder.mutation<{ reset: boolean; cleared: number }, string>({
+      query: (id) => ({ url: `/kyc-peer-review/admin/${id}/reset`, method: 'POST' }),
+      invalidatesTags: ['Integrations'],
+    }),
     getAdminIntegrationSubscriptions: builder.query<
       AdminIntegrationSubscription[],
       { status?: IntegrationSubscriptionStatus; slug?: string } | void
@@ -6059,6 +6169,14 @@ export const {
   useListIntegrationsQuery,
   useListMyIntegrationsQuery,
   useSubscribeToIntegrationMutation,
+  useListPeerReviewQueueQuery,
+  useListMyPeerReviewsQuery,
+  useClaimPeerReviewMutation,
+  useReleasePeerReviewMutation,
+  useSubmitPeerReviewMutation,
+  useLazyGetPeerReviewEvidenceImageQuery,
+  useGetAdminPeerReviewQueueQuery,
+  useResetPeerReviewsMutation,
   useGetAdminIntegrationSubscriptionsQuery,
   useReviewIntegrationSubscriptionMutation,
   useUnsubscribeFromIntegrationMutation,

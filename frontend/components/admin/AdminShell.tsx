@@ -92,7 +92,10 @@ const navGroups: NavGroup[] = [
   },
   {
     label: 'Compliance',
-    items: [{ href: '/admin/kyc', label: 'Identity Verification', icon: IdVerificationIcon }],
+    items: [
+      { href: '/admin/kyc', label: 'Identity Verification', icon: IdVerificationIcon },
+      { href: '/admin/kyc/peer-reviews', label: 'Peer-reviewed IDs', icon: IdVerificationIcon },
+    ],
   },
   {
     label: 'System',
