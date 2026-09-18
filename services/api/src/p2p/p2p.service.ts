@@ -1346,22 +1346,46 @@ export class P2PService {
     // more trades than the users were -- 160 of 223 cancellations were
     // auto-expiries against 63 real user cancellations.
     //
-    // Two things still resolve automatically:
+    // Three things still resolve automatically:
     //  - CANCEL_PENDING past its grace period: somebody asked to cancel, so
     //    finishing that is honouring an explicit request, not overriding one.
-    //  - A trade abandoned unpaid for abandonedTradeHours. Opening a trade
-    //    locks the seller's tokens, so without this backstop an absent buyer
-    //    could freeze a seller's balance indefinitely. 0 disables it.
+    //  - A trade still unpaid unpaidGraceMinutes past its payment deadline.
+    //    This is the real backstop: it returns the seller's escrow and
+    //    relists the offer while the market for it still exists.
+    //  - abandonedTradeHours, the outer net, for operators who set the grace
+    //    window to 0 and want only a long hours-scale policy.
+    //
+    // The grace window exists because the deadline itself must not kill a
+    // trade: a buyer mid-bank-transfer when it elapses keeps their trade,
+    // which is why the old deadline-is-death behaviour was removed (160 of
+    // 223 cancellations were auto-expiries against 63 real user ones). The
+    // grace preserves that -- an overrunning buyer still has slack -- while
+    // capping the seller's exposure at minutes rather than the 48 hours the
+    // hours-only backstop allowed. 59 of 60 buyers who paid did so inside
+    // the 15-minute window, and no trade ever reached 48h, so the outer net
+    // was never the thing protecting sellers.
     const settings = await this.settingsRow();
     const abandonedBefore =
       settings.abandonedTradeHours > 0
         ? new Date(now.getTime() - settings.abandonedTradeHours * 60 * 60 * 1000)
+        : null;
+    const unpaidDeadlineBefore =
+      settings.unpaidGraceMinutes > 0
+        ? new Date(now.getTime() - settings.unpaidGraceMinutes * 60 * 1000)
         : null;
 
     const resolvableTrades = await this.prisma.p2PTokenTrade.findMany({
       where: {
         OR: [
           { status: P2PTradeStatus.CANCEL_PENDING, cancelAvailableAt: { lt: now } },
+          ...(unpaidDeadlineBefore
+            ? [
+                {
+                  status: P2PTradeStatus.AWAITING_PAYMENT,
+                  paymentDeadlineAt: { lt: unpaidDeadlineBefore },
+                },
+              ]
+            : []),
           ...(abandonedBefore
             ? [
                 {
@@ -1372,10 +1396,14 @@ export class P2PService {
             : []),
         ],
       },
-      select: { id: true },
+      select: { id: true, status: true },
       take: 25,
     });
-    for (const trade of resolvableTrades) await this.cancelTrade(trade.id);
+    // Only the unpaid sweep relists. A CANCEL_PENDING trade reaching its
+    // grace period is somebody's explicit cancellation finishing, so its
+    // offer stays down.
+    for (const trade of resolvableTrades)
+      await this.cancelTrade(trade.id, trade.status === P2PTradeStatus.AWAITING_PAYMENT);
   }
 
   private async cancelSellOffer(offerId: string, status: 'EXPIRED' | 'CANCELLED') {
@@ -1413,8 +1441,14 @@ export class P2PService {
     ]);
   }
 
-  private async cancelTrade(tradeId: string) {
-    await this.refundTradeToSeller(tradeId);
+  /**
+   * @param relistOffer true only for the automatic non-payment sweep, where
+   * the seller never asked for their listing to come down. A user-requested
+   * cancel (CANCEL_PENDING completing) is an explicit decision to end the
+   * trade, so it leaves the offer cancelled as before.
+   */
+  private async cancelTrade(tradeId: string, relistOffer = false) {
+    await this.refundTradeToSeller(tradeId, undefined, undefined, undefined, relistOffer);
   }
 
   /**
@@ -1453,6 +1487,16 @@ export class P2PService {
     disputeId?: string,
     adminId?: string,
     resolutionNote?: string,
+    /**
+     * Put the offer back on the market instead of cancelling it with the
+     * trade. Only set for an automatic non-payment sweep: the seller never
+     * asked for their offer to come down, a buyer simply failed to pay, so
+     * killing the listing punishes the wrong party and makes the seller
+     * repost by hand. Deliberately NOT applied to a user-requested cancel,
+     * an admin sweep, or a dispute resolved for the seller -- those are
+     * explicit decisions to end the listing.
+     */
+    relistOffer = false,
   ) {
     const trade = await this.prisma.p2PTokenTrade.findUnique({
       where: { id: tradeId },
@@ -1476,29 +1520,64 @@ export class P2PService {
     // (including inside release()), so the two really can overlap.
     const claimed = await this.claimTradeOutOfPlay(trade.id, trade.status);
     if (!claimed) return;
+    // Relisting only makes sense for a SELL offer, whose escrow was locked
+    // when the offer was posted and merely reserved by the trade. A BUY
+    // offer's escrow is locked by the accepting seller, who is not the
+    // offer's owner -- putting that back on the market would republish a
+    // listing whose backing belongs to someone who has just walked away.
+    const offerToRelist = relistOffer
+      ? await this.prisma.p2PTokenOffer.findUnique({
+          where: { id: trade.offerId },
+          select: { type: true, userId: true },
+        })
+      : null;
+    const doRelist =
+      offerToRelist?.type === P2POfferType.SELL && offerToRelist.userId === trade.sellerId;
+    const relistExpiresAt = doRelist
+      ? new Date(Date.now() + (await this.settingsRow()).offerExpiryMinutes * 60 * 1000)
+      : null;
     await this.prisma.$transaction([
-      this.prisma.wallet.update({
-        where: { id: trade.seller.wallet.id },
-        data: {
-          lockedBalance: { decrement: trade.tokenAmount },
-          balance: { increment: trade.tokenAmount },
-        },
-      }),
-      this.prisma.ledgerEntry.create({
-        data: {
-          walletId: trade.seller.wallet.id,
-          type: LedgerEntryType.P2P_ESCROW_REFUND,
-          amount: trade.tokenAmount,
-          reference: trade.id,
-        },
-      }),
+      // When the offer goes back on the market its tokens must STAY locked:
+      // the relisted offer is still backed by them, exactly as it was
+      // between being posted and being accepted. Unlocking here and
+      // relisting would publish an offer the seller could then spend out
+      // from under, leaving it unbacked.
+      ...(doRelist
+        ? []
+        : [
+            this.prisma.wallet.update({
+              where: { id: trade.seller.wallet.id },
+              data: {
+                lockedBalance: { decrement: trade.tokenAmount },
+                balance: { increment: trade.tokenAmount },
+              },
+            }),
+            this.prisma.ledgerEntry.create({
+              data: {
+                walletId: trade.seller.wallet.id,
+                type: LedgerEntryType.P2P_ESCROW_REFUND,
+                amount: trade.tokenAmount,
+                reference: trade.id,
+              },
+            }),
+          ]),
       this.prisma.p2PTokenTrade.update({
         where: { id: trade.id },
         data: { status: P2PTradeStatus.CANCELLED, cancelledAt: new Date() },
       }),
       this.prisma.p2PTokenOffer.update({
         where: { id: trade.offerId },
-        data: { status: P2POfferStatus.CANCELLED, cancelledAt: new Date() },
+        data: relistExpiresAt
+          ? {
+              status: P2POfferStatus.ACTIVE,
+              // Fresh expiry: the original window elapsed while the offer was
+              // tied up in a trade nobody paid for, so relisting against the
+              // old expiresAt would return it already stale and the next
+              // expireStaleRecords sweep would immediately kill it again.
+              expiresAt: relistExpiresAt,
+              cancelledAt: null,
+            }
+          : { status: P2POfferStatus.CANCELLED, cancelledAt: new Date() },
       }),
       ...(disputeId
         ? [

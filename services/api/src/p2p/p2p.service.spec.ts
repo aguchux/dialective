@@ -835,14 +835,45 @@ describe('P2PService.expireStaleRecords trade handling', () => {
     >;
   }
 
-  it('never selects a trade merely for passing its payment deadline', async () => {
-    const { service, prisma } = setup();
+  it('sweeps an unpaid trade only once it is unpaidGraceMinutes PAST the deadline', async () => {
+    const { service, prisma } = setup({ unpaidGraceMinutes: 10 });
 
     await (service as any).expireStaleRecords();
 
-    const clauses = tradeWhere(prisma);
-    // The old query had { status: AWAITING_PAYMENT, paymentDeadlineAt: { lt: now } }.
-    expect(JSON.stringify(clauses)).not.toContain('paymentDeadlineAt');
+    // The deadline itself still must not kill a trade -- a buyer who is
+    // mid-transfer when it elapses keeps it. The cutoff is the deadline
+    // plus the grace window, so it is strictly in the past by that much.
+    const unpaid = tradeWhere(prisma).find((c) => (c as any).paymentDeadlineAt) as any;
+    expect(unpaid).toBeDefined();
+    expect(unpaid.status).toBe('AWAITING_PAYMENT');
+    const cutoff = unpaid.paymentDeadlineAt.lt as Date;
+    const graceMs = Date.now() - cutoff.getTime();
+    expect(graceMs).toBeGreaterThanOrEqual(10 * 60 * 1000 - 5_000);
+    expect(graceMs).toBeLessThan(11 * 60 * 1000);
+  });
+
+  it('does not sweep on the deadline when unpaidGraceMinutes is 0', async () => {
+    const { service, prisma } = setup({ unpaidGraceMinutes: 0 });
+
+    await (service as any).expireStaleRecords();
+
+    expect(JSON.stringify(tradeWhere(prisma))).not.toContain('paymentDeadlineAt');
+  });
+
+  it('relists only the unpaid sweep, never a user-requested cancellation', async () => {
+    const { service, prisma, cancelTrade } = setup({ unpaidGraceMinutes: 10 });
+    prisma.p2PTokenTrade.findMany.mockResolvedValue([
+      { id: 'unpaid', status: 'AWAITING_PAYMENT' },
+      { id: 'user-cancelled', status: 'CANCEL_PENDING' },
+    ]);
+
+    await (service as any).expireStaleRecords();
+
+    // A seller never asked for their listing to come down just because a
+    // buyer failed to pay, so that offer goes back on the market. A
+    // CANCEL_PENDING trade completing is an explicit decision to end it.
+    expect(cancelTrade).toHaveBeenCalledWith('unpaid', true);
+    expect(cancelTrade).toHaveBeenCalledWith('user-cancelled', false);
   });
 
   it('still finalizes a CANCEL_PENDING trade past its grace period', async () => {
@@ -863,10 +894,9 @@ describe('P2PService.expireStaleRecords trade handling', () => {
     await (service as any).expireStaleRecords();
 
     // Opening a trade locks the seller's tokens, so an absent buyer must not
-    // be able to freeze them forever.
-    const abandoned = tradeWhere(prisma).find(
-      (c) => (c as any).status === 'AWAITING_PAYMENT',
-    ) as any;
+    // be able to freeze them forever. This outer backstop is keyed on
+    // createdAt; the primary unpaid sweep is keyed on paymentDeadlineAt.
+    const abandoned = tradeWhere(prisma).find((c) => (c as any).createdAt) as any;
     expect(abandoned).toBeDefined();
     expect(abandoned.createdAt.lt).toBeInstanceOf(Date);
     expect(abandoned.createdAt.lt.getTime()).toBeLessThan(Date.now());

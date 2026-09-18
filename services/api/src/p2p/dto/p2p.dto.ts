@@ -260,6 +260,13 @@ export class UpdateP2PMarketSettingsDto {
   @Min(0)
   abandonedTradeHours?: number;
 
+  // Minutes past the payment deadline before an unpaid trade is swept and
+  // its offer relisted. 0 falls back to abandonedTradeHours alone.
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  unpaidGraceMinutes?: number;
+
   @IsOptional()
   @IsInt()
   @Min(1)
