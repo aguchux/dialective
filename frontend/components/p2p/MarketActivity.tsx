@@ -310,6 +310,10 @@ function OfferHistoryMessage({ offer }: { offer: P2POffer }) {
   }
   if (offer.status === 'EXPIRED')
     return <p className="text-sm text-muted">Expired without a trade.</p>;
+  // A standing post has no expiry to report -- it stays up until its owner
+  // cancels, deletes or edits it away.
+  if (!offer.expiresAt)
+    return <p className="text-sm text-muted">Listed until you take it down.</p>;
   return <p className="text-sm text-muted">Expires {formatDateTime(offer.expiresAt)}.</p>;
 }
 

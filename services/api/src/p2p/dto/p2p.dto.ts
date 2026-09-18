@@ -26,6 +26,37 @@ export class UpdateP2pPaymentInstructionsDto {
   p2pPaymentInstructions?: string;
 }
 
+/**
+ * Owner edit of a post nobody has traded against. Every field optional --
+ * an edit that only changes the payment accounts must not have to restate
+ * the amount. `type` is deliberately absent: flipping a SELL into a BUY
+ * changes what the escrow means, so that is a delete and repost.
+ */
+export class UpdateOfferDto {
+  @IsOptional()
+  @IsNumber()
+  @Min(0.00000001)
+  tokenAmount?: number;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  fiatCurrency?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  paymentMethod?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(10)
+  @ArrayUnique()
+  @IsUUID('4', { each: true })
+  paymentMethodIds?: string[];
+}
+
 export class CreateOfferDto {
   @IsIn([P2POfferType.SELL, P2POfferType.BUY])
   type!: P2POfferType;
@@ -54,11 +85,6 @@ export class CreateOfferDto {
   @IsUUID('4', { each: true })
   paymentMethodIds?: string[];
 
-  @IsOptional()
-  @IsInt()
-  @Min(5)
-  @Max(10080)
-  expiresInMinutes?: number;
 
   // Required only when PlatformSettings.phoneVerificationRequired is off
   // (replacing the standing phone-verified gate) -- see
@@ -254,28 +280,11 @@ export class UpdateP2PMarketSettingsDto {
   @Min(1)
   paymentWindowMinutes?: number;
 
-  // 0 allowed: disables the backstop for a literal never-expires policy.
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  abandonedTradeHours?: number;
-
-  // Minutes past the payment deadline before an unpaid trade is swept and
-  // its offer relisted. 0 falls back to abandonedTradeHours alone.
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  unpaidGraceMinutes?: number;
-
   @IsOptional()
   @IsInt()
   @Min(1)
   cancelGraceMinutes?: number;
 
-  @IsOptional()
-  @IsInt()
-  @Min(5)
-  offerExpiryMinutes?: number;
 
   @IsOptional()
   @IsInt()

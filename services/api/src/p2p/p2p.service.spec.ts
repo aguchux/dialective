@@ -835,33 +835,51 @@ describe('P2PService.expireStaleRecords trade handling', () => {
     >;
   }
 
-  it('sweeps an unpaid trade only once it is unpaidGraceMinutes PAST the deadline', async () => {
-    const { service, prisma } = setup({ unpaidGraceMinutes: 10 });
+  it('cancels an unpaid trade as soon as its payment deadline passes', async () => {
+    const { service, prisma } = setup();
 
     await (service as any).expireStaleRecords();
 
-    // The deadline itself still must not kill a trade -- a buyer who is
-    // mid-transfer when it elapses keeps it. The cutoff is the deadline
-    // plus the grace window, so it is strictly in the past by that much.
+    // 15 minutes is the whole window now -- there is no extra grace and no
+    // hours-scale backstop behind it.
     const unpaid = tradeWhere(prisma).find((c) => (c as any).paymentDeadlineAt) as any;
     expect(unpaid).toBeDefined();
     expect(unpaid.status).toBe('AWAITING_PAYMENT');
-    const cutoff = unpaid.paymentDeadlineAt.lt as Date;
-    const graceMs = Date.now() - cutoff.getTime();
-    expect(graceMs).toBeGreaterThanOrEqual(10 * 60 * 1000 - 5_000);
-    expect(graceMs).toBeLessThan(11 * 60 * 1000);
+    expect(unpaid.paymentDeadlineAt.lt).toBeInstanceOf(Date);
   });
 
-  it('does not sweep on the deadline when unpaidGraceMinutes is 0', async () => {
-    const { service, prisma } = setup({ unpaidGraceMinutes: 0 });
+  it('never sweeps a trade the buyer has marked paid', async () => {
+    const { service, prisma } = setup();
 
     await (service as any).expireStaleRecords();
 
-    expect(JSON.stringify(tradeWhere(prisma))).not.toContain('paymentDeadlineAt');
+    // Once payment is claimed the clock stops mattering: only a release or
+    // a dispute resolves it from there.
+    expect(JSON.stringify(tradeWhere(prisma))).not.toContain('PAID_MARKED');
+  });
+
+  it('has no hours-scale backstop left', async () => {
+    const { service, prisma } = setup();
+
+    await (service as any).expireStaleRecords();
+
+    // The 48h abandoned-trade net is gone end to end.
+    expect(JSON.stringify(tradeWhere(prisma))).not.toContain('createdAt');
+    expect(tradeWhere(prisma)).toHaveLength(2);
+  });
+
+  it('leaves offers alone entirely -- they do not expire', async () => {
+    const { service, prisma } = setup();
+
+    await (service as any).expireStaleRecords();
+
+    // A post stays listed until its owner takes it down.
+    expect(prisma.p2PTokenOffer.findMany).not.toHaveBeenCalled();
+    expect(prisma.p2PTokenOffer.updateMany).not.toHaveBeenCalled();
   });
 
   it('relists only the unpaid sweep, never a user-requested cancellation', async () => {
-    const { service, prisma, cancelTrade } = setup({ unpaidGraceMinutes: 10 });
+    const { service, prisma, cancelTrade } = setup();
     prisma.p2PTokenTrade.findMany.mockResolvedValue([
       { id: 'unpaid', status: 'AWAITING_PAYMENT' },
       { id: 'user-cancelled', status: 'CANCEL_PENDING' },
@@ -881,36 +899,9 @@ describe('P2PService.expireStaleRecords trade handling', () => {
 
     await (service as any).expireStaleRecords();
 
-    // Somebody explicitly asked to cancel -- completing that honours a
-    // request rather than overriding one.
     expect(tradeWhere(prisma)).toContainEqual(
       expect.objectContaining({ status: 'CANCEL_PENDING' }),
     );
-  });
-
-  it('cancels a trade abandoned unpaid past abandonedTradeHours', async () => {
-    const { service, prisma } = setup({ abandonedTradeHours: 48 });
-
-    await (service as any).expireStaleRecords();
-
-    // Opening a trade locks the seller's tokens, so an absent buyer must not
-    // be able to freeze them forever. This outer backstop is keyed on
-    // createdAt; the primary unpaid sweep is keyed on paymentDeadlineAt.
-    const abandoned = tradeWhere(prisma).find((c) => (c as any).createdAt) as any;
-    expect(abandoned).toBeDefined();
-    expect(abandoned.createdAt.lt).toBeInstanceOf(Date);
-    expect(abandoned.createdAt.lt.getTime()).toBeLessThan(Date.now());
-  });
-
-  it('drops the abandoned-trade backstop entirely when abandonedTradeHours is 0', async () => {
-    const { service, prisma } = setup({ abandonedTradeHours: 0 });
-
-    await (service as any).expireStaleRecords();
-
-    const clauses = tradeWhere(prisma);
-    // Literal never-expires: only explicit cancel requests resolve.
-    expect(clauses).toHaveLength(1);
-    expect(clauses[0]).toEqual(expect.objectContaining({ status: 'CANCEL_PENDING' }));
   });
 });
 
@@ -1099,5 +1090,94 @@ describe('P2PService -- phone verification gate on trading', () => {
       service.acceptOffer('new-user', 'offer-1', {} as any),
     ).rejects.toThrow('Email OTP verification is required to trade on the P2P market');
     expect(prisma.p2PTokenOffer.findUnique).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Owner edit/delete of a post.
+ *
+ * The rule is "no trade already attached or executed". That is checked
+ * against the trade table rather than offer.status alone, because an offer
+ * whose trade later cancelled returns to ACTIVE while still having history
+ * a counterparty saw and a trade row references.
+ */
+describe('P2PService.updateOffer / deleteOffer -- owner edits', () => {
+  function setup(offer: Record<string, unknown> | null, tradeCount = 0) {
+    const prisma: any = {
+      p2PTokenOffer: {
+        findFirst: jest.fn().mockResolvedValue(offer),
+        update: jest.fn().mockResolvedValue({}),
+        delete: jest.fn().mockResolvedValue({}),
+      },
+      p2PTokenTrade: { count: jest.fn().mockResolvedValue(tradeCount) },
+      p2POfferPaymentMethod: { deleteMany: jest.fn().mockResolvedValue({}) },
+      p2POfferView: { deleteMany: jest.fn().mockResolvedValue({}) },
+    };
+    const service = new P2PService(prisma as never, {} as never, {} as never, {} as never);
+    jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
+    return { service, prisma };
+  }
+
+  const activeOffer = {
+    id: 'offer-1',
+    userId: 'owner-1',
+    type: 'SELL',
+    status: 'ACTIVE',
+    tokenAmount: { toString: () => '10' },
+    fiatCurrency: 'NGN',
+    paymentMethod: 'BANK_TRANSFER',
+    paymentMethods: [],
+  };
+
+  it('refuses to edit a post that has any trade attached, even a cancelled one', async () => {
+    const { service, prisma } = setup(activeOffer, 1);
+
+    await expect(service.updateOffer('owner-1', 'offer-1', {} as any)).rejects.toThrow(
+      /already been traded/i,
+    );
+    expect(prisma.p2PTokenOffer.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses to delete a post that has any trade attached', async () => {
+    const { service, prisma } = setup(activeOffer, 1);
+
+    await expect(service.deleteOffer('owner-1', 'offer-1')).rejects.toThrow(
+      /already been traded/i,
+    );
+    expect(prisma.p2PTokenOffer.delete).not.toHaveBeenCalled();
+  });
+
+  it('refuses to edit a post that is mid-trade (RESERVED)', async () => {
+    const { service } = setup({ ...activeOffer, status: 'RESERVED' }, 0);
+
+    await expect(service.updateOffer('owner-1', 'offer-1', {} as any)).rejects.toThrow(
+      /active trade/i,
+    );
+  });
+
+  it('never lets a non-owner edit or delete -- the lookup is scoped by userId', async () => {
+    const { service, prisma } = setup(null, 0);
+
+    await expect(service.updateOffer('someone-else', 'offer-1', {} as any)).rejects.toThrow(
+      'Offer not found',
+    );
+    expect(prisma.p2PTokenOffer.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'offer-1', userId: 'someone-else' } }),
+    );
+  });
+
+  it('deletes a clean post and clears its payment methods and view rows', async () => {
+    const { service, prisma } = setup({ ...activeOffer, type: 'BUY' }, 0);
+
+    const result = await service.deleteOffer('owner-1', 'offer-1');
+
+    expect(result).toEqual({ id: 'offer-1', deleted: true });
+    expect(prisma.p2POfferPaymentMethod.deleteMany).toHaveBeenCalledWith({
+      where: { offerId: 'offer-1' },
+    });
+    expect(prisma.p2POfferView.deleteMany).toHaveBeenCalledWith({
+      where: { offerId: 'offer-1' },
+    });
+    expect(prisma.p2PTokenOffer.delete).toHaveBeenCalledWith({ where: { id: 'offer-1' } });
   });
 });

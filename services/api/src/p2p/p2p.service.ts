@@ -27,6 +27,7 @@ import { decryptPayoutField, EncryptedPayoutField } from '../common/payout-crypt
 import {
   AcceptOfferDto,
   CreateOfferDto,
+  UpdateOfferDto,
   ListDisputesDto,
   ListOffersDto,
   ListTradesDto,
@@ -68,6 +69,15 @@ function formatMinutesRemaining(deadline: Date, now: Date = new Date()): string 
 }
 
 const OPEN_OFFER_STATUSES = [P2POfferStatus.ACTIVE, P2POfferStatus.RESERVED];
+
+/**
+ * Offers do not expire; only their owner takes them down. `expiresAt` is
+ * NOT NULL and is read by existing rows, serializers and clients, so rather
+ * than a migration that has to backfill and re-null every consumer, a
+ * standing offer carries a sentinel far enough out to be unreachable.
+ * serializeOffer maps it back to null so no UI renders a fake date.
+ */
+const NO_OFFER_EXPIRY = new Date('9999-12-31T23:59:59.999Z');
 const OPEN_TRADE_STATUSES = [
   P2PTradeStatus.AWAITING_PAYMENT,
   P2PTradeStatus.PAID_MARKED,
@@ -395,11 +405,10 @@ export class P2PService {
     const quote = await this.resolveOfferQuote(userId, dto.tokenAmount, dto.fiatCurrency);
 
     const offerId = randomUUID();
-    const expiresInMinutes = Math.min(
-      dto.expiresInMinutes ?? settings.offerExpiryMinutes,
-      settings.offerExpiryMinutes,
-    );
-    const expiresAt = addMinutes(new Date(), expiresInMinutes);
+    // Offers do not expire. They stay listed until their owner cancels,
+    // deletes or edits them away, so the column carries a sentinel rather
+    // than a real deadline -- see NO_OFFER_EXPIRY.
+    const expiresAt = NO_OFFER_EXPIRY;
 
     if (dto.type === P2POfferType.BUY) {
       const offer = await this.prisma.p2PTokenOffer.create({
@@ -452,7 +461,7 @@ export class P2PService {
       });
       if (paymentMethodIds.length > 0) {
         await tx.p2POfferPaymentMethod.createMany({
-          data: paymentMethodIds.map((payoutAccountId) => ({ offerId, payoutAccountId })),
+          data: paymentMethodIds.map((payoutAccountId: string) => ({ offerId, payoutAccountId })),
         });
       }
       await tx.ledgerEntry.create({
@@ -816,6 +825,150 @@ export class P2PService {
   }
 
   /**
+   * Loads an offer for an owner-initiated edit or delete, rejecting it if
+   * anything has attached to it.
+   *
+   * "No trade already attached or executed" is checked against the trade
+   * table, not just offer.status. A RESERVED offer is the obvious case, but
+   * an offer whose trade later cancelled returns to ACTIVE, and that one
+   * still has history -- a counterparty saw those terms, and a completed or
+   * disputed trade references them. Editing the row underneath would
+   * silently rewrite what that trade was agreed at.
+   */
+  private async loadEditableOffer(userId: string, offerId: string) {
+    const offer = await this.prisma.p2PTokenOffer.findFirst({
+      where: { id: offerId, userId },
+      include: { paymentMethods: true },
+    });
+    if (!offer) throw new NotFoundException('Offer not found');
+    if (offer.status !== P2POfferStatus.ACTIVE) {
+      throw new UnprocessableEntityException(
+        offer.status === P2POfferStatus.RESERVED
+          ? 'This post is in an active trade and can no longer be changed'
+          : 'Only a live post can be changed',
+      );
+    }
+    const attachedTrades = await this.prisma.p2PTokenTrade.count({
+      where: { offerId: offer.id },
+    });
+    if (attachedTrades > 0) {
+      throw new UnprocessableEntityException(
+        'This post has already been traded and can no longer be changed. Cancel it and post again.',
+      );
+    }
+    return offer;
+  }
+
+  /**
+   * Edit a post that nobody has traded against.
+   *
+   * A SELL offer's tokens are locked at creation, so changing the amount
+   * has to move escrow: lock the difference (failing if the seller cannot
+   * cover it) or release it back. Done inside the same transaction as the
+   * offer update so an offer can never end up listed for more than is
+   * actually held for it.
+   */
+  async updateOffer(userId: string, offerId: string, dto: UpdateOfferDto) {
+    await this.expireStaleRecords();
+    const offer = await this.loadEditableOffer(userId, offerId);
+    const settings = await this.requireMarketEnabled(offer.type);
+
+    const tokenAmount = dto.tokenAmount ?? Number(offer.tokenAmount);
+    const fiatCurrency = (dto.fiatCurrency ?? offer.fiatCurrency).toUpperCase();
+    const paymentMethod = dto.paymentMethod ?? offer.paymentMethod;
+    this.validateTradeInput(settings, tokenAmount, fiatCurrency, paymentMethod);
+
+    // Re-quote whenever the amount or currency moved: the stored fiat/usd
+    // figures are a snapshot of the rate at post time, and leaving them
+    // against a new token amount would list a price that was never quoted.
+    const requote =
+      dto.tokenAmount !== undefined || fiatCurrency !== offer.fiatCurrency.toUpperCase();
+    const quote = requote
+      ? await this.resolveOfferQuote(userId, tokenAmount, fiatCurrency)
+      : null;
+
+    const paymentMethodIds = dto.paymentMethodIds?.length
+      ? dto.paymentMethodIds
+      : offer.paymentMethods.map((method) => method.payoutAccountId);
+    if (offer.type === P2POfferType.SELL) {
+      for (const id of paymentMethodIds) {
+        const account = await this.getEnabledPaymentMethod(userId, id);
+        if (account.currency.toUpperCase() !== fiatCurrency) {
+          throw new UnprocessableEntityException(
+            'Selected payout accounts must all use the offer currency',
+          );
+        }
+      }
+    }
+
+    const delta = offer.type === P2POfferType.SELL ? tokenAmount - Number(offer.tokenAmount) : 0;
+    const wallet =
+      delta !== 0
+        ? await this.prisma.wallet.upsert({ where: { userId }, update: {}, create: { userId } })
+        : null;
+
+    await this.prisma.$transaction(async (tx) => {
+      if (wallet && delta > 0) {
+        const lock = await tx.wallet.updateMany({
+          where: { id: wallet.id, balance: { gte: delta } },
+          data: { balance: { decrement: delta }, lockedBalance: { increment: delta } },
+        });
+        if (lock.count === 0)
+          throw new UnprocessableEntityException('Insufficient spendable token balance');
+      } else if (wallet && delta < 0) {
+        await tx.wallet.update({
+          where: { id: wallet.id },
+          data: { balance: { increment: -delta }, lockedBalance: { decrement: -delta } },
+        });
+      }
+
+      await tx.p2PTokenOffer.update({
+        where: { id: offer.id },
+        data: {
+          tokenAmount,
+          remainingTokens: tokenAmount,
+          fiatCurrency,
+          ...(quote ? { usdAmount: quote.usdAmount, fiatAmount: quote.fiatAmount } : {}),
+          ...(dto.paymentMethod ? { paymentMethod: dto.paymentMethod } : {}),
+          ...(offer.type === P2POfferType.SELL && paymentMethodIds.length
+            ? { paymentMethodId: paymentMethodIds[0] }
+            : {}),
+        },
+      });
+
+      if (offer.type === P2POfferType.SELL && dto.paymentMethodIds?.length) {
+        await tx.p2POfferPaymentMethod.deleteMany({ where: { offerId: offer.id } });
+        await tx.p2POfferPaymentMethod.createMany({
+          data: paymentMethodIds.map((payoutAccountId) => ({
+            offerId: offer.id,
+            payoutAccountId,
+          })),
+        });
+      }
+    });
+
+    return this.getOfferForUser(userId, offer.id);
+  }
+
+  /**
+   * Delete a post nobody has traded against. Releases a SELL offer's escrow
+   * the same way cancelling does, then removes the row -- unlike cancel,
+   * which leaves a CANCELLED record, because a post with no trade history
+   * has nothing to preserve.
+   */
+  async deleteOffer(userId: string, offerId: string) {
+    await this.expireStaleRecords();
+    const offer = await this.loadEditableOffer(userId, offerId);
+    if (offer.type === P2POfferType.SELL) {
+      await this.cancelSellOffer(offer.id, P2POfferStatus.CANCELLED);
+    }
+    await this.prisma.p2POfferPaymentMethod.deleteMany({ where: { offerId: offer.id } });
+    await this.prisma.p2POfferView.deleteMany({ where: { offerId: offer.id } });
+    await this.prisma.p2PTokenOffer.delete({ where: { id: offer.id } });
+    return { id: offer.id, deleted: true };
+  }
+
+  /**
    * Admin kill-switch support: cancels every open offer/trade this user is
    * party to (as offerer, buyer, or seller), refunding escrow the same way
    * cancelSellOffer/cancelTrade already do for their normal cancellation
@@ -866,7 +1019,9 @@ export class P2PService {
       where: { id: offerId },
       include: { paymentMethodRef: true, paymentMethods: true },
     });
-    if (!offer || offer.status !== P2POfferStatus.ACTIVE || offer.expiresAt <= new Date()) {
+    // No expiry check: an ACTIVE offer is tradeable for as long as its
+    // owner leaves it up.
+    if (!offer || offer.status !== P2POfferStatus.ACTIVE) {
       throw new NotFoundException('Active offer not found');
     }
     if (offer.userId === userId) throw new ForbiddenException('You cannot accept your own offer');
@@ -1324,76 +1479,31 @@ export class P2PService {
     return serializeTrade(trade, userId);
   }
 
+  /**
+   * Resolves trades that have run out of time. Offers are NOT swept here:
+   * a posted offer stays on the market until its owner cancels or deletes
+   * it. It is a standing intent to trade, not a perishable one, and
+   * expiring it silently just made sellers repost the same offer.
+   *
+   * Exactly two things resolve automatically, both about a trade:
+   *  - AWAITING_PAYMENT past paymentDeadlineAt. Opening a trade takes the
+   *    offer off the market and holds the seller's escrow, so an unpaid
+   *    trade must not be able to hold either indefinitely. The offer goes
+   *    straight back on the market.
+   *  - CANCEL_PENDING past its grace period: somebody asked to cancel, so
+   *    finishing that honours an explicit request.
+   *
+   * A trade the buyer has marked paid is deliberately NOT here. Once
+   * payment is claimed the clock stops mattering; the only routes out are
+   * the seller releasing or a dispute (see markPaid/requestCancel).
+   */
   private async expireStaleRecords() {
     const now = new Date();
-    const expiredSellOffers = await this.prisma.p2PTokenOffer.findMany({
-      where: { type: P2POfferType.SELL, status: P2POfferStatus.ACTIVE, expiresAt: { lt: now } },
-      select: { id: true },
-      take: 25,
-    });
-    for (const offer of expiredSellOffers)
-      await this.cancelSellOffer(offer.id, P2POfferStatus.EXPIRED);
-
-    await this.prisma.p2PTokenOffer.updateMany({
-      where: { type: P2POfferType.BUY, status: P2POfferStatus.ACTIVE, expiresAt: { lt: now } },
-      data: { status: P2POfferStatus.EXPIRED },
-    });
-
-    // A trade is NO LONGER cancelled just because paymentDeadlineAt passed.
-    // That deadline is now only the countdown both parties see: a buyer who
-    // is mid-bank-transfer when it elapses keeps their trade, and either side
-    // can still requestCancel. Under the old behaviour the timer was killing
-    // more trades than the users were -- 160 of 223 cancellations were
-    // auto-expiries against 63 real user cancellations.
-    //
-    // Three things still resolve automatically:
-    //  - CANCEL_PENDING past its grace period: somebody asked to cancel, so
-    //    finishing that is honouring an explicit request, not overriding one.
-    //  - A trade still unpaid unpaidGraceMinutes past its payment deadline.
-    //    This is the real backstop: it returns the seller's escrow and
-    //    relists the offer while the market for it still exists.
-    //  - abandonedTradeHours, the outer net, for operators who set the grace
-    //    window to 0 and want only a long hours-scale policy.
-    //
-    // The grace window exists because the deadline itself must not kill a
-    // trade: a buyer mid-bank-transfer when it elapses keeps their trade,
-    // which is why the old deadline-is-death behaviour was removed (160 of
-    // 223 cancellations were auto-expiries against 63 real user ones). The
-    // grace preserves that -- an overrunning buyer still has slack -- while
-    // capping the seller's exposure at minutes rather than the 48 hours the
-    // hours-only backstop allowed. 59 of 60 buyers who paid did so inside
-    // the 15-minute window, and no trade ever reached 48h, so the outer net
-    // was never the thing protecting sellers.
-    const settings = await this.settingsRow();
-    const abandonedBefore =
-      settings.abandonedTradeHours > 0
-        ? new Date(now.getTime() - settings.abandonedTradeHours * 60 * 60 * 1000)
-        : null;
-    const unpaidDeadlineBefore =
-      settings.unpaidGraceMinutes > 0
-        ? new Date(now.getTime() - settings.unpaidGraceMinutes * 60 * 1000)
-        : null;
-
     const resolvableTrades = await this.prisma.p2PTokenTrade.findMany({
       where: {
         OR: [
           { status: P2PTradeStatus.CANCEL_PENDING, cancelAvailableAt: { lt: now } },
-          ...(unpaidDeadlineBefore
-            ? [
-                {
-                  status: P2PTradeStatus.AWAITING_PAYMENT,
-                  paymentDeadlineAt: { lt: unpaidDeadlineBefore },
-                },
-              ]
-            : []),
-          ...(abandonedBefore
-            ? [
-                {
-                  status: P2PTradeStatus.AWAITING_PAYMENT,
-                  createdAt: { lt: abandonedBefore },
-                },
-              ]
-            : []),
+          { status: P2PTradeStatus.AWAITING_PAYMENT, paymentDeadlineAt: { lt: now } },
         ],
       },
       select: { id: true, status: true },
@@ -1533,9 +1643,6 @@ export class P2PService {
       : null;
     const doRelist =
       offerToRelist?.type === P2POfferType.SELL && offerToRelist.userId === trade.sellerId;
-    const relistExpiresAt = doRelist
-      ? new Date(Date.now() + (await this.settingsRow()).offerExpiryMinutes * 60 * 1000)
-      : null;
     await this.prisma.$transaction([
       // When the offer goes back on the market its tokens must STAY locked:
       // the relisted offer is still backed by them, exactly as it was
@@ -1567,16 +1674,8 @@ export class P2PService {
       }),
       this.prisma.p2PTokenOffer.update({
         where: { id: trade.offerId },
-        data: relistExpiresAt
-          ? {
-              status: P2POfferStatus.ACTIVE,
-              // Fresh expiry: the original window elapsed while the offer was
-              // tied up in a trade nobody paid for, so relisting against the
-              // old expiresAt would return it already stale and the next
-              // expireStaleRecords sweep would immediately kill it again.
-              expiresAt: relistExpiresAt,
-              cancelledAt: null,
-            }
+        data: doRelist
+          ? { status: P2POfferStatus.ACTIVE, expiresAt: NO_OFFER_EXPIRY, cancelledAt: null }
           : { status: P2POfferStatus.CANCELLED, cancelledAt: new Date() },
       }),
       ...(disputeId
@@ -1814,7 +1913,13 @@ function serializeOffer(offer: any, includePayment: boolean, completedSaleCount?
     // everyone: it is a demand signal for the poster and a liquidity signal
     // for a buyer, and it is a count of viewers, never their identities.
     viewCount: offer.viewCount ?? 0,
-    expiresAt: offer.expiresAt,
+    // null means "does not expire". The column is NOT NULL and standing
+    // offers carry NO_OFFER_EXPIRY, so map the sentinel back rather than
+    // letting a client render the year 9999 as a real date.
+    expiresAt:
+      offer.expiresAt && offer.expiresAt.getTime() >= NO_OFFER_EXPIRY.getTime()
+        ? null
+        : offer.expiresAt,
     completedAt: offer.completedAt,
     cancelledAt: offer.cancelledAt,
     createdAt: offer.createdAt,

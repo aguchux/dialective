@@ -2660,11 +2660,8 @@ model P2PMarketSettings {
   buyRequestsEnabled          Boolean  @default(false)
   minTradeTokens              Decimal  @default(1) @db.Decimal(20, 8)
   maxTradeTokens              Decimal  @default(1000) @db.Decimal(20, 8)
-  paymentWindowMinutes        Int      @default(15) // how long the buyer is given to pay. This drives the countdown both sides see; it NO LONGER kills the trade when it elapses -- an overrunning trade stays AWAITING_PAYMENT and either party can still requestCancel. 160 of 223 cancellations were auto-expiries under the old behaviour, i.e. the timer was killing more trades than the users were.
-  abandonedTradeHours         Int      @default(48) // outer backstop, in hours. Superseded by unpaidGraceMinutes whenever that is > 0; kept so an operator can still express a long "never really expires" policy. 0 disables it.
-  unpaidGraceMinutes          Int      @default(10) // how long AFTER paymentDeadlineAt an unpaid trade is auto-cancelled and its offer relisted. The measured behaviour is that 59 of 60 buyers who paid did so inside the 15-minute window (the single exception took 82 minutes), while 246 trades were cancelled unpaid and NOT ONE ever reached the 48h backstop -- so the hours-scale net was never catching anything, it was just holding sellers' escrow hostage for hours. Anchored to the deadline rather than to createdAt so changing paymentWindowMinutes moves this with it. 0 falls back to abandonedTradeHours alone.
+  paymentWindowMinutes        Int      @default(15) // how long the buyer has to pay. When it elapses on an unpaid trade the trade is cancelled and its offer goes back on the market. Once the buyer marks paid the deadline stops mattering entirely -- only release or a dispute resolves it from there. // how long the buyer is given to pay. This drives the countdown both sides see; it NO LONGER kills the trade when it elapses -- an overrunning trade stays AWAITING_PAYMENT and either party can still requestCancel. 160 of 223 cancellations were auto-expiries under the old behaviour, i.e. the timer was killing more trades than the users were.
   cancelGraceMinutes          Int      @default(5)
-  offerExpiryMinutes          Int      @default(1440)
   maxOpenOffersPerUser        Int      @default(5)
   maxOpenTradesPerUser        Int      @default(3)
   allowedFiatCurrencies       String   @default("NGN,USD,USDT,USDC")

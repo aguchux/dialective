@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { ArrowLeft, CreditCard, Eye, LoaderCircle } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowLeft, CreditCard, Eye, LoaderCircle, Pencil, Trash2 } from 'lucide-react';
 import { Avatar, cardClass, formatDateTime } from '@/components/dashboard/shared';
 import { formatCompactNumber } from '@/lib/format';
 import { CountryFlag } from '@/components/ui/CountryFlag';
@@ -10,10 +11,13 @@ import { ActionButton } from '@/components/ui/ActionButton';
 import { AcceptOfferDialogs } from '@/components/p2p/AcceptOfferDialogs';
 import { useAcceptOffer } from '@/components/p2p/useAcceptOffer';
 import {
+  P2POffer,
   normalizeErrorMessage,
+  useDeleteP2POfferMutation,
   useGetMeQuery,
   useGetP2POfferQuery,
   useGetP2PSettingsQuery,
+  useUpdateP2POfferMutation,
 } from '@/store/api';
 
 /**
@@ -164,14 +168,19 @@ export function OfferDetailView({ offerId }: { offerId: string }) {
 
             <div className="grid gap-1 border-t border-line pt-4 text-sm text-muted">
               <p>Posted {formatDateTime(offer.createdAt)}.</p>
-              {offer.status === 'ACTIVE' && <p>Expires {formatDateTime(offer.expiresAt)}.</p>}
+              {/* expiresAt is null for a standing post -- they no longer
+                  expire, so there is nothing to count down to. */}
+              {offer.status === 'ACTIVE' &&
+                (offer.expiresAt ? (
+                  <p>Expires {formatDateTime(offer.expiresAt)}.</p>
+                ) : (
+                  <p>Stays listed until you take it down.</p>
+                ))}
             </div>
 
             <div className="border-t border-line pt-4">
               {isOwnOffer ? (
-                <p className="text-sm font-bold text-muted">
-                  This is your own post. Manage it from your market activity.
-                </p>
+                <OwnerActions offer={offer} onDeleted={() => router.push(marketHref)} />
               ) : !isTradeable ? (
                 <p className="text-sm font-bold text-muted">
                   This post is no longer available to trade.
@@ -207,6 +216,126 @@ export function OfferDetailView({ offerId }: { offerId: string }) {
       )}
 
       <AcceptOfferDialogs flow={flow} />
+    </div>
+  );
+}
+
+/**
+ * Edit and delete, for the poster looking at their own post.
+ *
+ * Only shown while the post is still clean -- the server rejects an edit
+ * once any trade has attached to it (see P2PService.loadEditableOffer), so
+ * this hides the controls for the same cases rather than offering a button
+ * that is going to fail. A post mid-trade is managed from the trade, not
+ * from here.
+ */
+function OwnerActions({ offer, onDeleted }: { offer: P2POffer; onDeleted: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [tokenAmount, setTokenAmount] = useState(String(offer.tokenAmount));
+  const [error, setError] = useState('');
+  const [updateOffer, { isLoading: saving }] = useUpdateP2POfferMutation();
+  const [deleteOffer, { isLoading: deleting }] = useDeleteP2POfferMutation();
+
+  if (offer.status !== 'ACTIVE') {
+    return (
+      <p className="text-sm font-bold text-muted">
+        This is your own post. It is in a trade now — manage it from My trades.
+      </p>
+    );
+  }
+
+  async function save() {
+    setError('');
+    const amount = Number(tokenAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Enter a valid amount.');
+      return;
+    }
+    try {
+      await updateOffer({ id: offer.id, tokenAmount: amount }).unwrap();
+      setEditing(false);
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not update this post'));
+    }
+  }
+
+  async function remove() {
+    if (!window.confirm('Delete this post? Any DL held for it is returned to your wallet.')) return;
+    setError('');
+    try {
+      await deleteOffer(offer.id).unwrap();
+      onDeleted();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not delete this post'));
+    }
+  }
+
+  return (
+    <div className="grid gap-3">
+      <p className="text-sm font-bold text-muted">This is your own post.</p>
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+          {error}
+        </div>
+      )}
+      {editing ? (
+        <div className="grid gap-3">
+          <label className="grid gap-1.5 text-sm font-bold">
+            Amount (DL)
+            <input
+              autoFocus
+              className="min-h-11 rounded-lg border border-line bg-bg px-3"
+              inputMode="decimal"
+              onChange={(e) => setTokenAmount(e.target.value)}
+              value={tokenAmount}
+            />
+          </label>
+          <p className="text-xs text-muted">
+            The price is re-quoted at the current rate when you save.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <ActionButton
+              className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => void save()}
+              pending={saving}
+              pendingLabel="Saving"
+              type="button"
+            >
+              Save changes
+            </ActionButton>
+            <button
+              className="min-h-11 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted"
+              onClick={() => {
+                setEditing(false);
+                setTokenAmount(String(offer.tokenAmount));
+                setError('');
+              }}
+              type="button"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-line px-5 font-extrabold hover:bg-surface-muted"
+            onClick={() => setEditing(true)}
+            type="button"
+          >
+            <Pencil className="size-4" aria-hidden="true" /> Edit post
+          </button>
+          <ActionButton
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-red-200 px-5 font-extrabold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => void remove()}
+            pending={deleting}
+            pendingLabel="Deleting"
+            type="button"
+          >
+            <Trash2 className="size-4" aria-hidden="true" /> Delete post
+          </ActionButton>
+        </div>
+      )}
     </div>
   );
 }

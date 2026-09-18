@@ -1012,10 +1012,7 @@ export interface P2PMarketSettings {
   minTradeTokens: string;
   maxTradeTokens: string;
   paymentWindowMinutes: number;
-  abandonedTradeHours: number;
-  unpaidGraceMinutes: number;
   cancelGraceMinutes: number;
-  offerExpiryMinutes: number;
   maxOpenOffersPerUser: number;
   maxOpenTradesPerUser: number;
   allowedFiatCurrencies: string;
@@ -1067,7 +1064,8 @@ export interface P2POffer {
   status: P2POfferStatus;
   /** Distinct traders who have opened this offer's detail page. The poster's own visits are not counted. */
   viewCount: number;
-  expiresAt: string;
+  /** null for a standing post -- offers no longer expire, they stay listed until the owner takes them down. */
+  expiresAt: string | null;
   completedAt: string | null;
   cancelledAt: string | null;
   createdAt: string;
@@ -3235,7 +3233,6 @@ export const dialectivaApi = createApi({
         fiatCurrency: string;
         paymentMethod: string;
         paymentMethodIds?: string[];
-        expiresInMinutes?: number;
         otpRequestId?: string;
         code?: string;
       }
@@ -3252,6 +3249,26 @@ export const dialectivaApi = createApi({
     }),
     cancelP2POffer: builder.mutation<P2POffer, string>({
       query: (id) => ({ url: `/p2p/offers/${id}/cancel`, method: 'POST' }),
+      invalidatesTags: ['P2P', 'Wallet'],
+    }),
+    // Owner edit/delete of a post nobody has traded against. Both invalidate
+    // Wallet as well as P2P: editing a SELL amount moves escrow, and
+    // deleting one releases it.
+    updateP2POffer: builder.mutation<
+      P2POffer,
+      {
+        id: string;
+        tokenAmount?: number;
+        fiatCurrency?: string;
+        paymentMethod?: string;
+        paymentMethodIds?: string[];
+      }
+    >({
+      query: ({ id, ...body }) => ({ url: `/p2p/offers/${id}`, method: 'PATCH', body }),
+      invalidatesTags: ['P2P', 'Wallet'],
+    }),
+    deleteP2POffer: builder.mutation<{ id: string; deleted: boolean }, string>({
+      query: (id) => ({ url: `/p2p/offers/${id}`, method: 'DELETE' }),
       invalidatesTags: ['P2P', 'Wallet'],
     }),
     listMyP2PTrades: builder.query<P2PTrade[], { status?: P2PTradeStatus } | void>({
@@ -5802,6 +5819,8 @@ export const {
   useCreateP2POfferMutation,
   useAcceptP2POfferMutation,
   useCancelP2POfferMutation,
+  useUpdateP2POfferMutation,
+  useDeleteP2POfferMutation,
   useListMyP2PTradesQuery,
   useGetP2PTradeQuery,
   useGetP2POfferQuery,

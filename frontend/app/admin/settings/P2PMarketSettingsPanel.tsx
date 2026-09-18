@@ -27,10 +27,7 @@ export function P2PMarketSettingsPanel() {
     minTradeTokens: '1',
     maxTradeTokens: '1000',
     paymentWindowMinutes: 15,
-    abandonedTradeHours: 48,
-    unpaidGraceMinutes: 10,
     cancelGraceMinutes: 5,
-    offerExpiryMinutes: 1440,
     maxOpenOffersPerUser: 5,
     maxOpenTradesPerUser: 3,
     allowedFiatCurrencies: 'NGN,USD,USDT,USDC',
@@ -77,10 +74,7 @@ export function P2PMarketSettingsPanel() {
       minTradeTokens: settings.minTradeTokens,
       maxTradeTokens: settings.maxTradeTokens,
       paymentWindowMinutes: settings.paymentWindowMinutes,
-      abandonedTradeHours: settings.abandonedTradeHours,
-      unpaidGraceMinutes: settings.unpaidGraceMinutes,
       cancelGraceMinutes: settings.cancelGraceMinutes,
-      offerExpiryMinutes: settings.offerExpiryMinutes,
       maxOpenOffersPerUser: settings.maxOpenOffersPerUser,
       maxOpenTradesPerUser: settings.maxOpenTradesPerUser,
       allowedFiatCurrencies: settings.allowedFiatCurrencies,
@@ -171,31 +165,10 @@ export function P2PMarketSettingsPanel() {
           }
         />
         <NumberField
-          label="Unpaid grace minutes (after payment deadline)"
-          value={form.unpaidGraceMinutes}
-          onChange={(unpaidGraceMinutes) =>
-            setForm((current) => ({ ...current, unpaidGraceMinutes }))
-          }
-        />
-        <NumberField
-          label="Abandoned trade hours (outer backstop)"
-          value={form.abandonedTradeHours}
-          onChange={(abandonedTradeHours) =>
-            setForm((current) => ({ ...current, abandonedTradeHours }))
-          }
-        />
-        <NumberField
           label="Cancel grace minutes"
           value={form.cancelGraceMinutes}
           onChange={(cancelGraceMinutes) =>
             setForm((current) => ({ ...current, cancelGraceMinutes }))
-          }
-        />
-        <NumberField
-          label="Offer expiry minutes"
-          value={form.offerExpiryMinutes}
-          onChange={(offerExpiryMinutes) =>
-            setForm((current) => ({ ...current, offerExpiryMinutes }))
           }
         />
         <NumberField

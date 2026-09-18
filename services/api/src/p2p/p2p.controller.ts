@@ -25,6 +25,7 @@ import {
   RequestP2pTradeOtpDto,
   RaiseDisputeDto,
   ResolveDisputeDto,
+  UpdateOfferDto,
   UpdateP2PMarketSettingsDto,
   UpdateP2pPaymentInstructionsDto,
 } from './dto/p2p.dto';
@@ -105,6 +106,20 @@ export class P2PController {
   @Post('offers/:id/cancel')
   cancelOffer(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     return this.p2p.cancelOffer(req.user.sub, id);
+  }
+
+  @Patch('offers/:id')
+  updateOffer(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: UpdateOfferDto,
+  ) {
+    return this.p2p.updateOffer(req.user.sub, id, body);
+  }
+
+  @Delete('offers/:id')
+  deleteOffer(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.p2p.deleteOffer(req.user.sub, id);
   }
 
   @Get('trades/mine')
