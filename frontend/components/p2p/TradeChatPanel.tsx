@@ -39,11 +39,26 @@ export function TradeChatPanel({
   viewerId,
   isViewerAdmin,
   onClose,
+  /**
+   * Render inline instead of as a modal. The trade page embeds the
+   * conversation as its main content -- talking is what a trade mostly is,
+   * so it should not be behind a button. Admin still opens it as an overlay
+   * from the trades table, hence both modes rather than a rewrite.
+   */
+  embedded = false,
+  /**
+   * Bumped by the page header's Raise-a-dispute button to open the
+   * confirmation here. A timestamp rather than a boolean so re-requesting
+   * after dismissing reopens it, with no flag to reset from outside.
+   */
+  disputeRequestedAt = 0,
 }: {
   trade: P2PTrade;
   viewerId: string | undefined;
   isViewerAdmin: boolean;
-  onClose: () => void;
+  onClose?: () => void;
+  embedded?: boolean;
+  disputeRequestedAt?: number;
 }) {
   const { data: messages = [], isLoading } = useListP2PTradeMessagesQuery(trade.id, {
     pollingInterval: 6000,
@@ -56,6 +71,10 @@ export function TradeChatPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const isOpen = !['RELEASED', 'CANCELLED', 'EXPIRED'].includes(trade.status);
+
+  useEffect(() => {
+    if (disputeRequestedAt > 0) setShowDisputeForm(true);
+  }, [disputeRequestedAt]);
 
   useEffect(() => {
     transcriptRef.current?.scrollTo({
@@ -108,33 +127,34 @@ export function TradeChatPanel({
     }
   }
 
-  return (
-    <div
-      aria-modal="true"
-      className="fixed inset-0 z-1000 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
-      role="dialog"
-    >
-      <div className="flex h-[min(88dvh,720px)] w-full max-w-xl flex-col overflow-hidden rounded-t-xl border border-line bg-white shadow-2xl sm:rounded-xl">
-        <header className="flex items-center justify-between gap-3 border-b border-line bg-surface-muted px-4 py-3">
-          <div className="min-w-0">
-            <p className="truncate font-black">
-              {tradePartyName(trade.seller)} <span aria-hidden="true">&rArr;</span>{' '}
-              {tradePartyName(trade.buyer)}
-            </p>
-            <p className="text-xs font-bold text-muted">
-              {formatCompactNumber(trade.tokenAmount)} DL ·{' '}
-              {Number(trade.fiatAmount).toLocaleString()} {trade.fiatCurrency}
-            </p>
-          </div>
-          <button
-            aria-label="Close"
-            className="shrink-0 rounded p-1 hover:bg-white"
-            onClick={onClose}
-            type="button"
-          >
-            <X className="size-5" />
-          </button>
-        </header>
+  const body = (
+    <>
+        {/* Embedded, the page header already names the counterparty and the
+            amount, so repeating them here would just push the transcript
+            down. The modal keeps them: it opens over a table with no other
+            context. */}
+        {!embedded && (
+          <header className="flex items-center justify-between gap-3 border-b border-line bg-surface-muted px-4 py-3">
+            <div className="min-w-0">
+              <p className="truncate font-black">
+                {tradePartyName(trade.seller)} <span aria-hidden="true">&rArr;</span>{' '}
+                {tradePartyName(trade.buyer)}
+              </p>
+              <p className="text-xs font-bold text-muted">
+                {formatCompactNumber(trade.tokenAmount)} DL ·{' '}
+                {Number(trade.fiatAmount).toLocaleString()} {trade.fiatCurrency}
+              </p>
+            </div>
+            <button
+              aria-label="Close"
+              className="shrink-0 rounded p-1 hover:bg-white"
+              onClick={onClose}
+              type="button"
+            >
+              <X className="size-5" />
+            </button>
+          </header>
+        )}
 
         {trade.status === 'DISPUTED' && (
           <div className="flex items-center gap-2 bg-red-50 px-4 py-2 text-sm font-bold text-red-700">
@@ -255,12 +275,37 @@ export function TradeChatPanel({
             )}
           </div>
         )}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="flex h-[min(70dvh,640px)] flex-col overflow-hidden rounded-xl border border-line bg-white">
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-1000 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+      role="dialog"
+    >
+      <div className="flex h-[min(88dvh,720px)] w-full max-w-xl flex-col overflow-hidden rounded-t-xl border border-line bg-white shadow-2xl sm:rounded-xl">
+        {body}
       </div>
     </div>
   );
 }
 
+/**
+ * Raising a dispute freezes the trade and pulls in an admin, so it is
+ * deliberately two deliberate steps: confirm you mean to, then say why.
+ * A single mistap on a red link must never open one.
+ */
 function DisputeForm({ tradeId, onCancel }: { tradeId: string; onCancel: () => void }) {
+  const [confirmed, setConfirmed] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [raiseDispute, { isLoading }] = useRaiseP2PDisputeMutation();
@@ -278,6 +323,36 @@ function DisputeForm({ tradeId, onCancel }: { tradeId: string; onCancel: () => v
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not raise dispute'));
     }
+  }
+
+  if (!confirmed) {
+    return (
+      <div className="border-t border-red-200 bg-red-50 p-3">
+        <p className="flex items-center gap-1.5 text-sm font-black text-red-800">
+          <AlertTriangle className="size-4 shrink-0" aria-hidden="true" /> Raise a dispute?
+        </p>
+        <p className="mt-1 text-sm text-red-900">
+          This freezes the trade and brings an admin into this conversation. Try messaging the
+          other party first &mdash; most problems are a slow transfer, not a dispute.
+        </p>
+        <div className="mt-2 flex justify-end gap-2">
+          <button
+            className="min-h-9 rounded-lg border border-line bg-white px-3 text-sm font-extrabold"
+            onClick={onCancel}
+            type="button"
+          >
+            Keep talking
+          </button>
+          <button
+            className="min-h-9 rounded-lg bg-red-700 px-3 text-sm font-extrabold text-white hover:bg-red-800"
+            onClick={() => setConfirmed(true)}
+            type="button"
+          >
+            Yes, dispute this trade
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

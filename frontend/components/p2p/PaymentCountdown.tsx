@@ -5,11 +5,11 @@ import { useEffect, useState } from 'react';
 /**
  * Live payment countdown, shown to BOTH parties on an open trade.
  *
- * The deadline is informational, not a guillotine: a trade is no longer
- * cancelled when it elapses (see P2PService.expireStaleRecords). So once the
- * timer runs out this keeps counting *up* as "overdue" rather than claiming
- * the trade is dead -- telling a buyer mid-bank-transfer that they are out of
- * time would make them abandon a trade that is still perfectly valid.
+ * The deadline is real: an unpaid trade is cancelled when it elapses and its
+ * offer goes back on the market (see P2PService.expireStaleRecords). The
+ * sweep runs on P2P traffic rather than a cron, so a trade can sit a little
+ * past zero before it is actually resolved -- hence "cancelling now" once it
+ * runs out rather than a claim it is already gone.
  *
  * Ticks once a second from a single interval; no work when the trade is not
  * awaiting payment, since the caller unmounts it.
@@ -57,7 +57,7 @@ export function PaymentCountdown({
         className={`font-mono text-xs font-bold tabular-nums ${
           overdue ? 'text-[#a3242f]' : 'text-ink'
         }`}
-        title={overdue ? 'Payment is overdue -- the trade is still open' : 'Time left to pay'}
+        title={overdue ? 'Out of time -- this trade is being cancelled' : 'Time left to pay'}
       >
         {overdue ? `+${value} overdue` : value}
       </span>
@@ -68,11 +68,10 @@ export function PaymentCountdown({
     <p className={`text-sm ${overdue ? 'font-bold text-[#a3242f]' : 'text-muted'}`}>
       {overdue ? (
         <>
-          Payment overdue by{' '}
-          <span className="font-mono tabular-nums">{value}</span>
+          Out of time by <span className="font-mono tabular-nums">{value}</span>
           {isSeller
-            ? ' — the trade is still open. You can cancel it if the buyer never pays.'
-            : ' — the trade is still open. Pay and mark it paid, or cancel it.'}
+            ? ' — this trade is being cancelled and your DL returned. Your post goes back on the market.'
+            : ' — this trade is being cancelled. If you have already paid, mark it paid now.'}
         </>
       ) : (
         <>

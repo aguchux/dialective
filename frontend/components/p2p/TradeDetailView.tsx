@@ -19,14 +19,17 @@ import {
  * One trade's page -- shared by /dashboard/trades/[id] and
  * /distributor/trades/[id], each mounting it in its own chrome.
  *
- * The conversation (and with it the Raise-a-dispute control) opens here
- * rather than from the list, so disputing is always anchored to the trade
- * you are actually looking at.
+ * The trade summary is the header and the conversation is the body: talking
+ * is what most of a trade actually is, so the thread is the main content
+ * rather than something behind a button. Raising a dispute is anchored here
+ * too, always against the trade you are looking at.
  */
 export function TradeDetailView({ tradeId }: { tradeId: string }) {
   const pathname = usePathname();
   const basePath = pathname?.startsWith('/distributor') ? '/distributor' : '/dashboard';
-  const [chatOpen, setChatOpen] = useState(false);
+  // Set by the header's Raise-a-dispute button; the embedded conversation
+  // owns the confirmation and the reason form.
+  const [disputeRequestedAt, setDisputeRequestedAt] = useState(0);
 
   // Polls so a counterparty's action (marking paid, releasing) shows up
   // without a manual refresh -- the same cadence the list used.
@@ -63,27 +66,31 @@ export function TradeDetailView({ tradeId }: { tradeId: string }) {
       )}
 
       {trade && (
-        <>
+        <div className="grid gap-4">
           <TradeDetail
             cancelling={cancelling}
             markingPaid={markingPaid}
             onCancel={(id) => requestCancel(id).unwrap()}
             onMarkPaid={(id) => markPaid(id).unwrap()}
-            onOpenChat={() => setChatOpen(true)}
+            onRaiseDispute={() => setDisputeRequestedAt(Date.now())}
             onRelease={(id) => releaseTrade(id).unwrap()}
             releasing={releasing}
             trade={trade}
             viewerId={me?.id}
           />
-          {chatOpen && (
+          <div>
+            <h2 className="mb-2 text-sm font-black uppercase tracking-wide text-muted">
+              Conversation
+            </h2>
             <TradeChatPanel
+              disputeRequestedAt={disputeRequestedAt}
+              embedded
               isViewerAdmin={false}
-              onClose={() => setChatOpen(false)}
               trade={trade}
               viewerId={me?.id}
             />
-          )}
-        </>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, Copy, MessageSquare } from 'lucide-react';
+import { AlertTriangle, Check, Clock, Copy } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { cardClass, formatDateTime } from '@/components/dashboard/shared';
 import { WhatsAppContactLink } from '@/components/WhatsAppContactLink';
@@ -52,7 +52,7 @@ export function TradeDetail({
   onMarkPaid,
   onRelease,
   onCancel,
-  onOpenChat,
+  onRaiseDispute,
 }: {
   trade: P2PTrade;
   viewerId: string | undefined;
@@ -62,7 +62,7 @@ export function TradeDetail({
   onMarkPaid: (id: string) => Promise<unknown>;
   onRelease: (id: string) => Promise<unknown>;
   onCancel: (id: string) => Promise<unknown>;
-  onOpenChat: (id: string) => void;
+  onRaiseDispute: () => void;
 }) {
   const [actionError, setActionError] = useState('');
   const [copied, setCopied] = useState(false);
@@ -74,6 +74,9 @@ export function TradeDetail({
     isBuyer && (trade.status === 'AWAITING_PAYMENT' || trade.status === 'CANCEL_PENDING');
   const canRelease = isSeller && trade.status === 'PAID_MARKED';
   const canRequestCancel = isOpen && trade.status !== 'PAID_MARKED';
+  // Once paid, a dispute is the ONLY way out -- request-cancel is rejected
+  // server-side from PAID_MARKED (see P2PService.requestCancel).
+  const canDispute = isOpen && trade.status !== 'DISPUTED';
 
   async function run(action: (id: string) => Promise<unknown>) {
     setActionError('');
@@ -105,11 +108,22 @@ export function TradeDetail({
             {trade.fiatCurrency}
           </p>
         </div>
-        <span
-          className={`rounded-full px-2.5 py-1 text-xs font-black ${statusBadgeClass(trade.status)}`}
-        >
-          {STATUS_LABELS[trade.status]}
-        </span>
+        <div className="grid justify-items-end gap-2">
+          <span
+            className={`rounded-full px-2.5 py-1 text-xs font-black ${statusBadgeClass(trade.status)}`}
+          >
+            {STATUS_LABELS[trade.status]}
+          </span>
+          {/* The live clock belongs in the header, not buried below the
+              payment details: on an unpaid trade it is the single most
+              time-critical thing on the page. */}
+          {trade.status === 'AWAITING_PAYMENT' && (
+            <span className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface-muted px-2.5 py-1.5">
+              <Clock className="size-4 text-muted" aria-hidden="true" />
+              <PaymentCountdown compact deadline={trade.paymentDeadlineAt} isSeller={isSeller} />
+            </span>
+          )}
+        </div>
       </div>
 
       {otherParty.phoneNumber ? (
@@ -215,13 +229,6 @@ export function TradeDetail({
       {actionError && <p className="text-sm font-bold text-danger">{actionError}</p>}
 
       <div className="flex flex-wrap gap-2">
-        <button
-          className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-line px-3 text-sm font-extrabold hover:bg-surface-muted"
-          onClick={() => onOpenChat(trade.id)}
-          type="button"
-        >
-          <MessageSquare className="size-4" aria-hidden="true" /> Conversation
-        </button>
         {canMarkPaid && (
           <ActionButton
             className="min-h-10 rounded-lg bg-accent px-3 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
@@ -254,6 +261,18 @@ export function TradeDetail({
           >
             Request cancel
           </ActionButton>
+        )}
+        {/* The conversation is the page body now, so this replaces the old
+            "Conversation" CTA. It only opens a confirmation -- raising a
+            dispute is never one click. */}
+        {canDispute && (
+          <button
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-red-200 px-3 text-sm font-extrabold text-red-700 hover:bg-red-50"
+            onClick={onRaiseDispute}
+            type="button"
+          >
+            <AlertTriangle className="size-4" aria-hidden="true" /> Raise a dispute
+          </button>
         )}
       </div>
     </div>
