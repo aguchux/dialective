@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRight, Plus } from 'lucide-react';
@@ -142,31 +142,43 @@ export function MarketView() {
   // the two paths would drift. It just sends the id back and lets this run
   // the identical flow the market table has always run.
   //
-  // The param is stripped immediately, so a refresh or back-nav cannot
-  // silently re-trigger an accept -- the accidental-commit risk this whole
-  // change exists to remove.
+  // The param is stripped once the accept has been kicked off, so a refresh
+  // or back-nav cannot silently re-trigger one -- the accidental-commit risk
+  // this whole change exists to remove.
   const acceptParam = searchParams.get('accept');
+  // Guards against running the same hand-off twice (React strict mode's
+  // double-effect, or a re-render that briefly re-reads the same param)
+  // without tying the in-flight accept to the param's lifetime -- see below
+  // for why a cleanup-based cancel is the wrong tool here.
+  const handledAcceptRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!acceptParam) return;
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete('accept');
-    const query = params.toString();
-    router.replace(`${pathname ?? '/dashboard'}${query ? `?${query}` : ''}`, { scroll: false });
+    if (!acceptParam || handledAcceptRef.current === acceptParam) return;
+    // Wait for the settings that decide which branch accept() takes. Firing
+    // early would read the `?? true` fallback for phoneVerificationRequired
+    // and skip the OTP step that the real setting may require.
+    if (!platformSettings || !settings) return;
+    handledAcceptRef.current = acceptParam;
 
-    let cancelled = false;
     void (async () => {
       try {
         const offer = await fetchOfferForAccept(acceptParam).unwrap();
-        if (!cancelled) void accept(offer);
+        await accept(offer);
       } catch (err) {
-        if (!cancelled) setError(normalizeErrorMessage(err, 'Could not open that offer'));
+        setError(normalizeErrorMessage(err, 'Could not open that offer'));
+      } finally {
+        // Stripped only once the accept has actually been kicked off. Doing
+        // it up-front (as this did) rewrote the URL while the offer fetch
+        // was still in flight, which flipped acceptParam to null, ran this
+        // effect's cleanup and cancelled the accept before it ever fired --
+        // the button appeared to do nothing and no trade was created.
+        const params = new URLSearchParams(window.location.search);
+        params.delete('accept');
+        const query = params.toString();
+        router.replace(`${pathname ?? '/dashboard'}${query ? `?${query}` : ''}`, { scroll: false });
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when the accept id itself changes
-  }, [acceptParam]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-runs on the accept id, plus the settings gate above
+  }, [acceptParam, platformSettings, settings]);
 
   function updateTokenAmount(value: string) {
     setTokenAmount(value);
