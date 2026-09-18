@@ -54,9 +54,13 @@ export const INTEGRATION_REGISTRY: IntegrationDefinition[] = [
     defaultSortOrder: 0,
     defaultMaxConcurrentClaims: 5,
     defaultCodeValidityMinutes: 60 * 24,
-    // No bar: relaying a one-time code exposes the validator to nothing
-    // more than a phone number the requester chose to share.
-    eligibility: {},
+    /**
+     * A validator confirms someone else's phone number, so they must have
+     * proven their own first -- and be an identified person, since the
+     * requester is trusting a stranger with a one-time code. No task bar:
+     * relaying a code is not how value leaves the platform.
+     */
+    eligibility: { requirePhoneVerified: true, requireKycApproved: true },
   },
   {
     slug: 'p2p-kyc-review',

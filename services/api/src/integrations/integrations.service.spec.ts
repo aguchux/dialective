@@ -241,7 +241,12 @@ describe('IntegrationsService', () => {
     });
 
     it('leaves an integration with no rule open to everyone', async () => {
-      prisma.integration.findMany.mockResolvedValue([integration]);
+      // A slug absent from the registry falls back to an empty rule. Both
+      // shipped integrations now carry a bar, so this pins the fallback
+      // itself rather than whichever one happens to be unrestricted.
+      prisma.integration.findMany.mockResolvedValue([
+        { ...integration, slug: 'unregistered-integration' },
+      ]);
       prisma.user.findUnique.mockResolvedValue({
         phoneVerifiedAt: null,
         kycStatus: 'NOT_STARTED',
@@ -250,6 +255,38 @@ describe('IntegrationsService', () => {
       const [result] = await service.list(userId, {});
       expect(result.eligible).toBe(true);
       expect(result.eligibilityRequirements).toEqual([]);
+    });
+  });
+
+  /**
+   * WhatsApp Validator confirms someone else's number, so a validator
+   * must have proven their own and be identified -- but no task bar:
+   * relaying a code is not how value leaves the platform.
+   */
+  describe('eligibility -- WhatsApp Validator', () => {
+    it('requires a verified mobile and approved KYC', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        phoneVerifiedAt: null,
+        kycStatus: 'NOT_STARTED',
+        _count: { wordRecordings: 5000 },
+      });
+      await expect(service.subscribe(userId, integration.id)).rejects.toThrow(
+        /Verified phone number.*Approved KYC/s,
+      );
+    });
+
+    it('does NOT require a task history', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        phoneVerifiedAt: new Date(),
+        kycStatus: 'APPROVED',
+        _count: { wordRecordings: 0 },
+      });
+      const [result] = await service.list(userId, {});
+      expect(result.eligible).toBe(true);
+      expect(result.eligibilityRequirements).toEqual([
+        { label: 'Verified phone number', met: true },
+        { label: 'Approved KYC', met: true },
+      ]);
     });
   });
 
