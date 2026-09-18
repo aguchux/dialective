@@ -352,8 +352,16 @@ export function MarketOfferList({
                           // table still cannot commit real escrow. "now"
                           // marks it as the start of that action without
                           // promising an immediate commit.
+                          // Colour splits the two directions apart at a
+                          // glance, so a row scanned quickly is not acted on
+                          // as the wrong side: green for selling (money
+                          // coming in), the standard accent for buying.
                           <Link
-                            className="inline-flex min-h-9 items-center rounded-lg bg-accent px-4 text-sm font-extrabold text-white hover:bg-accent-dark"
+                            className={`inline-flex min-h-9 items-center rounded-lg px-4 text-sm font-extrabold text-white ${
+                              offer.type === 'SELL'
+                                ? 'bg-accent hover:bg-accent-dark'
+                                : 'bg-emerald-700 hover:bg-emerald-800'
+                            }`}
                             href={`${offersBase}/${offer.id}`}
                           >
                             {offer.type === 'SELL' ? 'Buy now' : 'Sell now'}

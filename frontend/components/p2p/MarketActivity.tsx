@@ -199,11 +199,16 @@ function MyTradeTable({
                       )}
                     </td>
                     <td className="px-4 py-3 text-right align-top">
-                      {/* Labelled by the side the viewer is on, matching
-                          the market list's wording, so the trade path reads
-                          the same end to end. */}
+                      {/* Labelled and coloured by the side the viewer is on,
+                          matching the market list, so the trade path reads
+                          the same end to end: green for selling, the
+                          standard accent for buying. */}
                       <Link
-                        className="inline-flex min-h-9 items-center rounded-lg border border-line bg-surface px-4 text-sm font-extrabold text-ink hover:bg-surface-muted"
+                        className={`inline-flex min-h-9 items-center rounded-lg px-4 text-sm font-extrabold text-white ${
+                          isBuyer
+                            ? 'bg-accent hover:bg-accent-dark'
+                            : 'bg-emerald-700 hover:bg-emerald-800'
+                        }`}
                         href={`${basePath}/trades/${trade.id}`}
                       >
                         {isBuyer ? 'Buy' : 'Sell'}
