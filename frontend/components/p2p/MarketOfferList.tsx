@@ -16,7 +16,8 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
-import { countryFlagEmoji, formatCompactNumber } from '@/lib/format';
+import { formatCompactNumber } from '@/lib/format';
+import { CountryFlag } from '@/components/ui/CountryFlag';
 import { Avatar, EmptyPanel, SectionTitle } from '@/components/dashboard/shared';
 import { P2POffer, P2PMarketSettings, useListP2POffersQuery } from '@/store/api';
 
@@ -256,7 +257,6 @@ export function MarketOfferList({
               </thead>
               <tbody>
                 {offers.map((offer) => {
-                  const flag = countryFlagEmoji(offer.user?.country?.code);
                   const priceEach =
                     Number(offer.tokenAmount) > 0
                       ? Number(offer.fiatAmount) / Number(offer.tokenAmount)
@@ -319,7 +319,10 @@ export function MarketOfferList({
                       <td className="px-4 py-3 align-top">
                         {offer.user?.country ? (
                           <span className="inline-flex items-center gap-1.5 text-sm">
-                            <span aria-hidden="true">{flag ?? '🌐'}</span>
+                            <CountryFlag
+                              code={offer.user.country.code}
+                              name={offer.user.country.name}
+                            />
                             {offer.user.country.name}
                           </span>
                         ) : (

@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { ArrowLeft, CreditCard, Eye, LoaderCircle } from 'lucide-react';
 import { Avatar, cardClass, formatDateTime } from '@/components/dashboard/shared';
-import { countryFlagEmoji, formatCompactNumber } from '@/lib/format';
+import { formatCompactNumber } from '@/lib/format';
+import { CountryFlag } from '@/components/ui/CountryFlag';
 import {
   normalizeErrorMessage,
   useGetMeQuery,
@@ -114,9 +115,10 @@ export function OfferDetailView({ offerId }: { offerId: string }) {
                       {offer.user.country && (
                         <>
                           {' · '}
-                          <span aria-hidden="true">
-                            {countryFlagEmoji(offer.user.country.code) ?? '🌐'}
-                          </span>{' '}
+                          <CountryFlag
+                            code={offer.user.country.code}
+                            name={offer.user.country.name}
+                          />{' '}
                           {offer.user.country.name}
                         </>
                       )}

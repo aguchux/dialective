@@ -16,7 +16,18 @@ const compactNumberFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 2,
 });
 
-/** e.g. "NG" -> "🇳🇬" -- regional indicator symbols are 0x1F1E6 + (letter offset from 'A'), one per ISO 3166-1 alpha-2 letter. Returns null for anything that isn't exactly two A-Z letters, so a missing/malformed code renders nothing instead of a broken glyph. */
+/**
+ * e.g. "NG" -> "🇳🇬" -- regional indicator symbols are 0x1F1E6 + (letter
+ * offset from 'A'), one per ISO 3166-1 alpha-2 letter. Returns null for
+ * anything that isn't exactly two A-Z letters.
+ *
+ * @deprecated Do NOT use this to display a flag. Windows ships no font with
+ * glyphs for these codepoints, so Chrome/Edge on desktop draw the raw
+ * letters instead -- "NG" where a Nigerian flag should be. It renders
+ * correctly on mobile, which is exactly why the gap kept shipping unnoticed.
+ * Use the CountryFlag component (components/ui/CountryFlag.tsx), which
+ * serves a real flag image.
+ */
 export function countryFlagEmoji(isoAlpha2: string | null | undefined): string | null {
   if (!isoAlpha2 || !/^[A-Za-z]{2}$/.test(isoAlpha2)) return null;
   const codePoints = [...isoAlpha2.toUpperCase()].map(
