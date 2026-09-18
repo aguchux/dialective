@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleInit,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { IntegrationSubscriptionStatus, Prisma } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { INTEGRATION_REGISTRY } from './integration-registry';
@@ -166,6 +172,24 @@ export class IntegrationsService implements OnModuleInit {
    * not access -- fulfilling an integration means handling other members'
    * identity documents and being paid for it.
    */
+  /**
+   * Whether this member is a certified (staff-grade) reviewer for the
+   * integration. Requires APPROVED as well as the flag, so revoking
+   * approval revokes certification with it rather than leaving a
+   * certified-but-unapproved row quietly privileged.
+   */
+  async isCertified(userId: string, slug: string): Promise<boolean> {
+    const count = await this.prisma.integrationSubscription.count({
+      where: {
+        userId,
+        integration: { slug },
+        status: IntegrationSubscriptionStatus.APPROVED,
+        certified: true,
+      },
+    });
+    return count > 0;
+  }
+
   async isSubscribed(userId: string, slug: string): Promise<boolean> {
     const count = await this.prisma.integrationSubscription.count({
       where: {
@@ -254,6 +278,8 @@ export class IntegrationsService implements OnModuleInit {
       subscribedAt: row.subscribedAt,
       reviewedAt: row.reviewedAt,
       reviewNote: row.reviewNote,
+      certified: row.certified,
+      certifiedAt: row.certifiedAt,
       integration: row.integration,
       user: row.user,
     }));
@@ -267,6 +293,52 @@ export class IntegrationsService implements OnModuleInit {
    * the member can see they were declined and why, and the decision is not
    * silently lost if they ask again.
    */
+  /**
+   * Grant or withdraw certified (staff-grade) status.
+   *
+   * Only ever on an APPROVED row: certifying someone who has not been
+   * approved would hand them the larger privilege while they still lack
+   * the smaller one.
+   */
+  async setSubscriptionCertified(adminId: string, subscriptionId: string, certified: boolean) {
+    const existing = await this.prisma.integrationSubscription.findUnique({
+      where: { id: subscriptionId },
+      include: { integration: { select: { slug: true } } },
+    });
+    if (!existing) throw new NotFoundException('Subscription request not found');
+    if (certified && existing.status !== IntegrationSubscriptionStatus.APPROVED) {
+      throw new UnprocessableEntityException(
+        'Approve this member before certifying them',
+      );
+    }
+    const row = await this.prisma.integrationSubscription.update({
+      where: { id: subscriptionId },
+      data: {
+        certified,
+        certifiedAt: certified ? new Date() : null,
+        certifiedByAdminId: certified ? adminId : null,
+      },
+      include: {
+        integration: { select: { id: true, slug: true, name: true } },
+        user: { select: { id: true, email: true, firstName: true, lastName: true } },
+      },
+    });
+    this.logger.warn(
+      `Integration certification ${certified ? 'GRANTED' : 'REVOKED'}: admin=${adminId} user=${row.userId} integration=${row.integration.slug}`,
+    );
+    return {
+      id: row.id,
+      status: row.status,
+      subscribedAt: row.subscribedAt,
+      reviewedAt: row.reviewedAt,
+      reviewNote: row.reviewNote,
+      certified: row.certified,
+      certifiedAt: row.certifiedAt,
+      integration: row.integration,
+      user: row.user,
+    };
+  }
+
   async reviewSubscription(
     adminId: string,
     subscriptionId: string,
@@ -302,6 +374,8 @@ export class IntegrationsService implements OnModuleInit {
       subscribedAt: row.subscribedAt,
       reviewedAt: row.reviewedAt,
       reviewNote: row.reviewNote,
+      certified: row.certified,
+      certifiedAt: row.certifiedAt,
       integration: row.integration,
       user: row.user,
     };

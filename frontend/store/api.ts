@@ -940,6 +940,9 @@ export interface AdminIntegrationSubscription {
   subscribedAt: string;
   reviewedAt: string | null;
   reviewNote: string | null;
+  /** Staff-grade: sees documents unobscured and decides outright. */
+  certified: boolean;
+  certifiedAt: string | null;
   integration: { id: string; slug: string; name: string };
   user: { id: string; email: string; firstName: string | null; lastName: string | null };
 }
@@ -958,6 +961,8 @@ export interface PeerReviewQueueItem {
 export interface PeerReviewSubject {
   id: string;
   documentType: string | null;
+  /** When true the client shows the document plainly, with no magnifier. */
+  certifiedReviewer: boolean;
   accountName: string;
   accountNameParts: string[];
   evidence: { id: string; kind: string }[];
@@ -965,6 +970,8 @@ export interface PeerReviewSubject {
 }
 
 export interface PeerReviewTally {
+  /** True when a certified reviewer's verdict settled it on the spot. */
+  decidedByCertifiedReviewer?: boolean;
   reviewCount: number;
   approvals: number;
   declines: number;
@@ -3264,6 +3271,17 @@ export const dialectivaApi = createApi({
         params: params ?? undefined,
       }),
       providesTags: ['Integrations'],
+    }),
+    setIntegrationSubscriptionCertified: builder.mutation<
+      AdminIntegrationSubscription,
+      { id: string; certified: boolean }
+    >({
+      query: ({ id, certified }) => ({
+        url: `/integrations/admin/subscriptions/${id}/certified`,
+        method: 'PATCH',
+        body: { certified },
+      }),
+      invalidatesTags: ['Integrations'],
     }),
     reviewIntegrationSubscription: builder.mutation<
       AdminIntegrationSubscription,
@@ -6179,6 +6197,7 @@ export const {
   useResetPeerReviewsMutation,
   useGetAdminIntegrationSubscriptionsQuery,
   useReviewIntegrationSubscriptionMutation,
+  useSetIntegrationSubscriptionCertifiedMutation,
   useUnsubscribeFromIntegrationMutation,
   useRequestWhatsAppValidationMutation,
   useRegenerateWhatsAppValidationCodeMutation,

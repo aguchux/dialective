@@ -89,12 +89,23 @@ export class KycPeerReviewController {
     @Res() res: Response,
   ): Promise<void> {
     const evidence = await this.peerReview.getClaimedEvidenceRow(req.user.sub, id, evidenceId);
-    await this.peerReview.logEvidenceView(req.user.sub, id, evidenceId, 'PEER');
+    const certified = await this.peerReview.isCertifiedReviewer(req.user.sub);
+    await this.peerReview.logEvidenceView(
+      req.user.sub,
+      id,
+      evidenceId,
+      certified ? 'CERTIFIED' : 'PEER',
+    );
     const raw = await this.storage.getObjectBuffer(evidence.bucket, evidence.key);
-    const redacted = await this.redaction.toReviewCopy(raw);
-    res.setHeader('Content-Type', 'image/jpeg');
+    // A certified reviewer sees the document as captured. They are trained
+    // staff making the actual decision, and the grayscale watermark that
+    // de-identifies a document for a community reviewer also obscures the
+    // detail that decision depends on. The trade is deliberate, and the
+    // view is logged either way.
+    const body = certified ? raw : await this.redaction.toReviewCopy(raw);
+    res.setHeader('Content-Type', certified ? 'image/jpeg' : 'image/jpeg');
     res.setHeader('Cache-Control', 'no-store');
-    res.send(redacted);
+    res.send(body);
   }
 
   @Post(':id/review')

@@ -94,3 +94,13 @@ export class ReviewIntegrationSubscriptionDto {
   @MaxLength(500)
   reviewNote?: string;
 }
+
+/**
+ * Certified (staff-grade) reviewer status. Deliberately its own endpoint
+ * rather than a field on the approve/reject DTO: granting it is a
+ * separate, larger decision than approving access.
+ */
+export class SetSubscriptionCertifiedDto {
+  @IsBoolean()
+  certified!: boolean;
+}

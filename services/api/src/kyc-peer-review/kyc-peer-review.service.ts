@@ -1,9 +1,11 @@
 import {
   ForbiddenException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
   UnprocessableEntityException,
+  forwardRef,
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import {
@@ -15,6 +17,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { decryptKycField } from '../common/kyc-crypto.util';
+import { KycService } from '../kyc/kyc.service';
 
 export const INTEGRATION_SLUG = 'p2p-kyc-review';
 
@@ -51,6 +54,11 @@ export class KycPeerReviewService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly integrations: IntegrationsService,
+    // forwardRef: KycModule imports this module (its admin-approve route
+    // pays reviewers), and a certified reviewer's verdict needs KycService
+    // back. Neither is needed at construction time.
+    @Inject(forwardRef(() => KycService))
+    private readonly kyc: KycService,
   ) {}
 
   /**
@@ -70,6 +78,22 @@ export class KycPeerReviewService {
       );
     }
     return this.integrations.requireEnabled(INTEGRATION_SLUG);
+  }
+
+  /**
+   * Certified reviewers are the platform's own trained staff working from
+   * the trainer app rather than the admin panel. Their verdict decides a
+   * verification outright and they see documents unobscured, so this is
+   * checked separately at every point those two things differ from an
+   * ordinary peer's.
+   */
+  private certified(userId: string) {
+    return this.integrations.isCertified(userId, INTEGRATION_SLUG);
+  }
+
+  /** Public form of the certification check, for the controller's image route. */
+  isCertifiedReviewer(userId: string) {
+    return this.certified(userId);
   }
 
   private async expireStaleClaims(now: Date) {
@@ -116,9 +140,12 @@ export class KycPeerReviewService {
       this.prisma.kycVerification.count({ where }),
     ]);
 
+    const isCertified = await this.certified(userId);
     return {
       items: rows
-        .filter((row) => row._count.peerReviews < KYC_PEER_REVIEW_MAX_REVIEWS)
+        // Same reasoning as claim(): a certified reviewer resolves what
+        // peers could not, so a document at the cap must still reach them.
+        .filter((row) => isCertified || row._count.peerReviews < KYC_PEER_REVIEW_MAX_REVIEWS)
         .map((row) => ({
           id: row.id,
           documentType: row.documentType,
@@ -168,7 +195,13 @@ export class KycPeerReviewService {
     if (verification.userId === userId) {
       throw new ForbiddenException('You cannot review your own verification');
     }
-    if (verification._count.peerReviews >= KYC_PEER_REVIEW_MAX_REVIEWS) {
+    // The review cap protects a trainer from having their document shown
+    // to an unbounded number of community members. A certified reviewer is
+    // staff and ENDS the process rather than adding to it, so the cap does
+    // not apply to them -- otherwise a document stuck at three split peer
+    // verdicts could never be resolved from the trainer app at all.
+    const isCertified = await this.certified(userId);
+    if (!isCertified && verification._count.peerReviews >= KYC_PEER_REVIEW_MAX_REVIEWS) {
       throw new UnprocessableEntityException('This verification already has enough reviews');
     }
 
@@ -256,6 +289,10 @@ export class KycPeerReviewService {
     return {
       id: verification.id,
       documentType: verification.documentType,
+      // Drives whether the client renders the magnifier. The server does
+      // not depend on this for anything -- it is a rendering hint, and the
+      // real difference (a decisive verdict) is enforced in submitReview.
+      certifiedReviewer: await this.certified(userId),
       accountName: [verification.user.firstName, verification.user.lastName]
         .filter(Boolean)
         .join(' '),
@@ -295,12 +332,16 @@ export class KycPeerReviewService {
    * are served, so a view is logged even if the transfer then fails -- the
    * log exists to make access attributable, and an unlogged successful
    * view is the failure mode that matters.
+   *
+   * viewerRole distinguishes CERTIFIED from PEER because they see
+   * different things: a certified reviewer gets the document as captured,
+   * a peer gets the grayscale watermarked copy.
    */
   async logEvidenceView(
     viewerId: string,
     kycVerificationId: string,
     evidenceId: string,
-    viewerRole: 'PEER' | 'ADMIN',
+    viewerRole: 'PEER' | 'CERTIFIED' | 'ADMIN',
   ) {
     await this.prisma.kycEvidenceViewLog
       .create({ data: { viewerId, kycVerificationId, evidenceId, viewerRole } })
@@ -364,10 +405,35 @@ export class KycPeerReviewService {
       }),
     ]);
 
+    const isCertified = await this.certified(userId);
     this.logger.log(
-      `Peer review submitted: reviewer=${userId} verification=${verificationId} verdict=${dto.verdict} numberMatched=${matched}`,
+      `Peer review submitted: reviewer=${userId} verification=${verificationId} verdict=${dto.verdict} numberMatched=${matched} certified=${isCertified}`,
     );
-    return this.tally(verificationId);
+
+    if (isCertified) {
+      // A certified reviewer IS the decision. Their verdict moves the
+      // trainer's KycStatus directly, through the same methods the admin
+      // panel uses, so the decision record, notification and audit trail
+      // are identical to an admin having pressed the button.
+      this.logger.warn(
+        `Certified reviewer ${userId} ${dto.verdict === 'APPROVE' ? 'APPROVED' : 'DECLINED'} KycVerification ${verificationId} without admin action`,
+      );
+      if (dto.verdict === 'APPROVE') {
+        await this.kyc.adminApproveSelfHosted(verificationId);
+        await this.payReviewers(verificationId);
+      } else {
+        await this.kyc.adminDeclineSelfHosted(
+          verificationId,
+          dto.declineReason?.trim() || 'Document did not match the account',
+        );
+        // Declines pay too: the work of checking was done either way, and
+        // paying only for approvals would reward waving documents through.
+        await this.payReviewers(verificationId);
+      }
+      return { ...(await this.tally(verificationId)), decidedByCertifiedReviewer: true };
+    }
+
+    return { ...(await this.tally(verificationId)), decidedByCertifiedReviewer: false };
   }
 
   /**

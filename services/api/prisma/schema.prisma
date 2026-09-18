@@ -253,6 +253,7 @@ model User {
   faqsCreated                       Faq[]                            @relation("FaqCreatedBy")
   integrationSubscriptions          IntegrationSubscription[]
   integrationSubscriptionsReviewed  IntegrationSubscription[]        @relation("IntegrationSubscriptionReviewer")
+  integrationSubscriptionsCertified IntegrationSubscription[]        @relation("IntegrationSubscriptionCertifier")
   whatsappValidationRequestsMade    WhatsAppValidationRequest[]      @relation("WhatsAppValidationRequester")
   whatsappValidationRequestsClaimed WhatsAppValidationRequest[]      @relation("WhatsAppValidationValidator")
 
@@ -789,6 +790,22 @@ model IntegrationSubscription {
   reviewedByAdminId String?
   reviewedByAdmin   User?                     @relation("IntegrationSubscriptionReviewer", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
   reviewNote      String?
+
+  /// Staff-grade reviewer, set by an admin on an already-APPROVED row.
+  ///
+  /// For ID Review this is a large privilege, not a convenience flag: a
+  /// certified reviewer sees the document unobscured (no magnifier), and
+  /// their single verdict decides the verification outright -- no second
+  /// peer, no admin confirmation. It exists so the platform's own trained
+  /// reviewers can clear KYC from the trainer app instead of the admin
+  /// panel.
+  ///
+  /// Meaningless without status APPROVED; every gate checks both, so
+  /// revoking approval revokes certification with it.
+  certified       Boolean  @default(false)
+  certifiedAt     DateTime?
+  certifiedByAdminId String?
+  certifiedByAdmin   User? @relation("IntegrationSubscriptionCertifier", fields: [certifiedByAdminId], references: [id], onDelete: SetNull)
 
   @@unique([integrationId, userId])
   @@index([userId])

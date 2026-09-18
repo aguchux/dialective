@@ -19,6 +19,7 @@ import {
   ListIntegrationSubscriptionsDto,
   ListIntegrationsDto,
   ReviewIntegrationSubscriptionDto,
+  SetSubscriptionCertifiedDto,
   UpdateIntegrationDto,
 } from './dto/integrations.dto';
 
@@ -63,6 +64,24 @@ export class IntegrationsController {
   @Roles(Role.ADMIN)
   adminListSubscriptions(@Query() query: ListIntegrationSubscriptionsDto) {
     return this.integrations.listSubscriptionsForAdmin(query.status, query.slug);
+  }
+
+  /**
+   * Grant or withdraw certified (staff-grade) reviewer status.
+   *
+   * For ID Review this is a large privilege: a certified reviewer sees
+   * documents unobscured and their single verdict decides a verification
+   * with no second peer and no admin confirmation.
+   */
+  @Patch('admin/subscriptions/:id/certified')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  adminSetCertified(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: SetSubscriptionCertifiedDto,
+  ) {
+    return this.integrations.setSubscriptionCertified(req.user.sub, id, body.certified);
   }
 
   @Patch('admin/subscriptions/:id')

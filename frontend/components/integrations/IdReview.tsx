@@ -26,6 +26,12 @@ import {
  * the name matches the account, types the number they can read, and
  * approves or declines. Two agreeing verdicts send it to an admin, who
  * makes the actual decision.
+ *
+ * A CERTIFIED reviewer is the platform's own trained staff: they see the
+ * document plainly rather than through the magnifier, and their single
+ * verdict settles the verification with no second reviewer and no admin
+ * step. The copy changes to say so, because someone whose click is final
+ * should know that before they click.
  */
 export function IdReview() {
   const pathname = usePathname();
@@ -74,7 +80,8 @@ export function IdReview() {
       </h1>
       <p className="mt-1 mb-5 text-sm text-muted">
         Check that the name on a member&rsquo;s ID matches their account. Two reviewers who agree
-        send it to an admin, who makes the final decision.
+        send it to an admin, who makes the final decision. Certified reviewers decide on their
+        own.
       </p>
 
       <div className="mb-4 flex gap-2">
@@ -187,9 +194,13 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
         declineReason: verdict === 'DECLINE' ? declineReason.trim() : undefined,
       }).unwrap();
       setDone(
-        tally.readyForAdmin
-          ? 'Thanks — this document now has enough reviews and is with an admin.'
-          : 'Thanks — another reviewer will look at this one too.',
+        tally.decidedByCertifiedReviewer
+          ? verdict === 'APPROVE'
+            ? 'Approved. This member’s KYC is now verified.'
+            : 'Declined. The member has been notified.'
+          : tally.readyForAdmin
+            ? 'Thanks — this document now has enough reviews and is with an admin.'
+            : 'Thanks — another reviewer will look at this one too.',
       );
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Could not submit your review'));
@@ -258,7 +269,20 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
             <p className="text-sm font-bold text-muted">Loading the document...</p>
           </div>
         ) : imageUrl ? (
-          <DocumentMagnifier alt="Identity document under review" src={imageUrl} />
+          subject.certifiedReviewer ? (
+            /* Certified reviewers are trained staff making the actual
+               decision, so they see the document as captured. The blur
+               that de-identifies it for a community reviewer would hide
+               the detail that decision depends on. */
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              alt="Identity document under review"
+              className="w-full rounded-lg border border-line"
+              src={imageUrl}
+            />
+          ) : (
+            <DocumentMagnifier alt="Identity document under review" src={imageUrl} />
+          )
         ) : (
           <p className="text-sm text-muted">This document could not be loaded.</p>
         )}
@@ -266,6 +290,13 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
         <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-900">
           This is someone&rsquo;s identity document. Every time you open one it is recorded against
           your account. Do not photograph, copy or share it.
+          {subject.certifiedReviewer && (
+            <>
+              {' '}
+              You are a certified reviewer: your decision is final and takes effect immediately,
+              with no second reviewer and no admin check.
+            </>
+          )}
         </p>
 
         <label className="grid gap-1.5 text-sm font-bold">
@@ -307,7 +338,7 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
               pendingLabel="Submitting"
               type="button"
             >
-              Name matches — approve
+              {subject.certifiedReviewer ? 'Approve this KYC' : 'Name matches — approve'}
             </ActionButton>
           )}
           <ActionButton

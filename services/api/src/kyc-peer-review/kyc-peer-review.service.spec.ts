@@ -47,10 +47,19 @@ describe('KycPeerReviewService', () => {
     };
     const integrations: any = {
       isSubscribed: jest.fn().mockResolvedValue(true),
+      isCertified: jest.fn().mockResolvedValue(false),
       requireEnabled: jest.fn().mockResolvedValue({ maxConcurrentClaims: 2, enabled: true }),
     };
-    const service = new KycPeerReviewService(prisma as never, integrations as never);
-    return { service, prisma, integrations };
+    const kyc: any = {
+      adminApproveSelfHosted: jest.fn().mockResolvedValue({}),
+      adminDeclineSelfHosted: jest.fn().mockResolvedValue({}),
+    };
+    const service = new KycPeerReviewService(
+      prisma as never,
+      integrations as never,
+      kyc as never,
+    );
+    return { service, prisma, integrations, kyc };
   }
 
   describe('hashDocumentNumber', () => {
@@ -249,6 +258,112 @@ describe('KycPeerReviewService', () => {
           documentNumber: 'AB123456',
         }),
       ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('certified reviewers', () => {
+    function claimed(certified: boolean) {
+      const s = setup();
+      s.integrations.isCertified.mockResolvedValue(certified);
+      s.prisma.kycPeerReviewClaim.findFirst.mockResolvedValue({ id: 'claim-1' });
+      s.prisma.kycVerification.findUnique.mockResolvedValue({
+        id: 'kyc-1',
+        status: 'IN_REVIEW',
+        userId: 'other',
+        decisionEncryptedJson: null,
+        _count: { peerReviews: 0 },
+      });
+      return s;
+    }
+
+    it('decides the verification outright on approve -- no second peer, no admin', async () => {
+      const { service, kyc } = claimed(true);
+      const result = await service.submitReview('staff-1', 'kyc-1', {
+        verdict: 'APPROVE',
+        documentNumber: 'AB123456',
+      });
+      expect(kyc.adminApproveSelfHosted).toHaveBeenCalledWith('kyc-1');
+      expect(result.decidedByCertifiedReviewer).toBe(true);
+    });
+
+    it('declines outright too, passing the reason through', async () => {
+      const { service, kyc } = claimed(true);
+      await service.submitReview('staff-1', 'kyc-1', {
+        verdict: 'DECLINE',
+        documentNumber: 'AB123456',
+        declineReason: 'Name does not match',
+      });
+      expect(kyc.adminDeclineSelfHosted).toHaveBeenCalledWith('kyc-1', 'Name does not match');
+    });
+
+    it('leaves an ordinary peer verdict to the normal quorum', async () => {
+      const { service, kyc } = claimed(false);
+      const result = await service.submitReview('peer-1', 'kyc-1', {
+        verdict: 'APPROVE',
+        documentNumber: 'AB123456',
+      });
+      expect(kyc.adminApproveSelfHosted).not.toHaveBeenCalled();
+      expect(kyc.adminDeclineSelfHosted).not.toHaveBeenCalled();
+      expect(result.decidedByCertifiedReviewer).toBe(false);
+    });
+
+    it('is NOT certified when the subscription is merely approved', async () => {
+      const { service, integrations, kyc } = claimed(false);
+      integrations.isSubscribed.mockResolvedValue(true);
+      await service.submitReview('peer-1', 'kyc-1', {
+        verdict: 'APPROVE',
+        documentNumber: 'AB123456',
+      });
+      // Approval alone must never confer the decisive privilege.
+      expect(kyc.adminApproveSelfHosted).not.toHaveBeenCalled();
+    });
+
+    it('can still take a document that has hit the peer-review cap', async () => {
+      const { service, prisma, integrations } = setup();
+      integrations.isCertified.mockResolvedValue(true);
+      // claim() finishes by returning getForReview(), which reads the
+      // user and evidence relations -- so the mock has to carry them.
+      prisma.kycVerification.findUnique.mockResolvedValue({
+        id: 'kyc-1',
+        status: 'IN_REVIEW',
+        userId: 'other',
+        documentType: 'PASSPORT',
+        user: { firstName: 'Ada', lastName: 'Lovelace' },
+        captureEvidence: [],
+        _count: { peerReviews: KYC_PEER_REVIEW_MAX_REVIEWS },
+      });
+      prisma.kycPeerReviewClaim.findFirst.mockResolvedValue({
+        id: 'claim-1',
+        claimExpiresAt: new Date(Date.now() + 60000),
+      });
+      // A document deadlocked at three split peer verdicts must still be
+      // resolvable from the trainer app.
+      await expect(service.claim('staff-1', 'kyc-1')).resolves.toBeDefined();
+    });
+
+    it('still blocks an ordinary peer at the cap', async () => {
+      const { service, prisma } = setup();
+      prisma.kycVerification.findUnique.mockResolvedValue({
+        id: 'kyc-1',
+        status: 'IN_REVIEW',
+        userId: 'other',
+        _count: { peerReviews: KYC_PEER_REVIEW_MAX_REVIEWS },
+      });
+      await expect(service.claim('peer-1', 'kyc-1')).rejects.toThrow(
+        'already has enough reviews',
+      );
+    });
+
+    it('never lets a certified reviewer review their own verification', async () => {
+      const { service, prisma, integrations } = setup();
+      integrations.isCertified.mockResolvedValue(true);
+      prisma.kycVerification.findUnique.mockResolvedValue({
+        id: 'kyc-1',
+        status: 'IN_REVIEW',
+        userId: 'staff-1',
+        _count: { peerReviews: 0 },
+      });
+      await expect(service.claim('staff-1', 'kyc-1')).rejects.toThrow(ForbiddenException);
     });
   });
 

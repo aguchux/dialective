@@ -1,7 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { StorageModule } from '../storage/storage.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
 import { KycEvidenceRedactionService } from '../kyc/kyc-evidence-redaction.service';
+import { KycModule } from '../kyc/kyc.module';
 import { KycPeerReviewController } from './kyc-peer-review.controller';
 import { KycPeerReviewService } from './kyc-peer-review.service';
 
@@ -14,7 +15,9 @@ import { KycPeerReviewService } from './kyc-peer-review.service';
  * widening KycModule's public surface for one consumer.
  */
 @Module({
-  imports: [StorageModule, IntegrationsModule],
+  // forwardRef on KycModule: it imports this module to pay reviewers on
+  // admin approval, and a certified reviewer's verdict needs KycService.
+  imports: [StorageModule, IntegrationsModule, forwardRef(() => KycModule)],
   controllers: [KycPeerReviewController],
   providers: [KycPeerReviewService, KycEvidenceRedactionService],
   exports: [KycPeerReviewService],

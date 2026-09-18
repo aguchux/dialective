@@ -15,6 +15,7 @@ import {
   useGetAdminIntegrationSubscriptionsQuery,
   useListAdminIntegrationsQuery,
   useReviewIntegrationSubscriptionMutation,
+  useSetIntegrationSubscriptionCertifiedMutation,
 } from '@/store/api';
 
 /**
@@ -38,12 +39,39 @@ export default function AdminIntegrationSubscriptionsPage() {
 
   const { data: requests = [], isLoading } = useGetAdminIntegrationSubscriptionsQuery({ slug });
   const [review, { isLoading: reviewing }] = useReviewIntegrationSubscriptionMutation();
+  const [setCertified] = useSetIntegrationSubscriptionCertifiedMutation();
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [declining, setDeclining] = useState<AdminIntegrationSubscription | null>(null);
   const [declineNote, setDeclineNote] = useState('');
   const [error, setError] = useState('');
 
   const pendingCount = requests.filter((row) => row.status === 'PENDING').length;
+
+  /**
+   * Certification is a much larger grant than approval -- an unobscured
+   * document view and a verdict that settles a verification on its own --
+   * so granting it confirms explicitly. Revoking does not: making it
+   * harder to take a privilege away than to give it is the wrong way
+   * round.
+   */
+  async function toggleCertified(row: AdminIntegrationSubscription, certified: boolean) {
+    if (
+      certified &&
+      !window.confirm(
+        `Certify ${row.user.email}?
+
+They will see ID documents unobscured, and their single decision will approve or decline a member's KYC with no second reviewer and no admin confirmation.`,
+      )
+    ) {
+      return;
+    }
+    setError('');
+    try {
+      await setCertified({ id: row.id, certified }).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Could not change certification'));
+    }
+  }
 
   async function decide(
     row: AdminIntegrationSubscription,
@@ -104,6 +132,25 @@ export default function AdminIntegrationSubscriptionsPage() {
           {row.reviewNote && <p className="mt-1 text-xs text-muted">{row.reviewNote}</p>}
         </div>
       ),
+    },
+    {
+      key: 'certified',
+      header: 'Certified',
+      searchable: false,
+      sortValue: (row) => (row.certified ? 1 : 0),
+      render: (row) =>
+        row.status !== 'APPROVED' ? (
+          <span className="text-xs text-muted">—</span>
+        ) : (
+          <label className="inline-flex items-center gap-2 text-sm font-bold">
+            <input
+              checked={row.certified}
+              onChange={(e) => void toggleCertified(row, e.target.checked)}
+              type="checkbox"
+            />
+            {row.certified ? 'Certified' : 'Peer'}
+          </label>
+        ),
     },
     {
       key: 'actions',

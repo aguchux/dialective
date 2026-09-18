@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { KycController } from './kyc.controller';
 import { KycService } from './kyc.service';
 import { DiditService } from './didit.service';
@@ -13,8 +13,15 @@ import { KycPeerReviewModule } from '../kyc-peer-review/kyc-peer-review.module';
 
 @Module({
   // KycPeerReviewModule: the admin-approve route pays peer reviewers.
-  imports: [StorageModule, LlmModule, MailModule, SmsModule, KycPeerReviewModule],
+  imports: [
+    StorageModule,
+    LlmModule,
+    MailModule,
+    SmsModule,
+    forwardRef(() => KycPeerReviewModule),
+  ],
   controllers: [KycController],
+  exports: [KycService],
   providers: [
     KycService,
     DiditService,
