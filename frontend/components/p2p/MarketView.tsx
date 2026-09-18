@@ -8,10 +8,11 @@ import { ActionButton } from '@/components/ui/ActionButton';
 import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/Dialog';
 import { Avatar, cardClass, formatDate } from '@/components/dashboard/shared';
 import { MarketOfferList } from '@/components/p2p/MarketOfferList';
+import { AcceptOfferDialogs } from '@/components/p2p/AcceptOfferDialogs';
+import { useAcceptOffer } from '@/components/p2p/useAcceptOffer';
 import {
   P2POffer,
   normalizeErrorMessage,
-  useAcceptP2POfferMutation,
   useLazyGetP2POfferQuery,
   useCancelP2POfferMutation,
   useCreateP2POfferMutation,
@@ -44,6 +45,7 @@ export function MarketView() {
   const activityHref = pathname?.startsWith('/distributor')
     ? '/distributor/market-activity'
     : '/dashboard/market-activity';
+  const tradesBase = pathname?.startsWith('/distributor') ? '/distributor' : '/dashboard';
   const [offerType, setOfferType] = useState<'SELL' | 'BUY'>('SELL');
   const [tokenAmount, setTokenAmount] = useState('10');
   const [fiatCurrency, setFiatCurrency] = useState('NGN');
@@ -55,7 +57,6 @@ export function MarketView() {
   const { data: me } = useGetMeQuery();
   const { data: platformSettings } = useGetPlatformSettingsQuery();
   const [createOffer, { isLoading: offerSaving }] = useCreateP2POfferMutation();
-  const [acceptOffer, { isLoading: accepting }] = useAcceptP2POfferMutation();
   const [fetchOfferForAccept] = useLazyGetP2POfferQuery();
   const [cancelOffer, { isLoading: cancellingOffer, originalArgs: cancellingOfferId }] =
     useCancelP2POfferMutation();
@@ -86,15 +87,13 @@ export function MarketView() {
   const marketDisabled = !settings?.enabled || (phoneVerificationRequired && !phoneVerified);
   const [offerOtpRequestId, setOfferOtpRequestId] = useState<string | null>(null);
   const [offerOtpCode, setOfferOtpCode] = useState('');
-  const [pendingAcceptOffer, setPendingAcceptOffer] = useState<P2POffer | null>(null);
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
-  // Set when a SELL offer lists more than one receive-account -- the buyer
-  // must pick which one they'll pay into before accepting proceeds (see
-  // P2PService.acceptOffer's offer-listed-accounts validation).
-  const [accountPickerOffer, setAccountPickerOffer] = useState<P2POffer | null>(null);
-  const [chosenSellerPaymentMethodId, setChosenSellerPaymentMethodId] = useState<string | null>(
-    null,
-  );
+  // Accepting is shared with the offer detail page so the two cannot drift.
+  // Accepting from the table lands on the new trade, same as the detail page.
+  const acceptFlow = useAcceptOffer({
+    onAccepted: (trade) => router.push(`${tradesBase}/trades/${trade.id}`),
+  });
+  const accepting = acceptFlow.accepting;
 
   const availableCurrencies = referenceRate?.availableCurrencies ?? [];
   const activeQuote = availableCurrencies.find((quote) => quote.currencyCode === fiatCurrency);
@@ -135,21 +134,15 @@ export function MarketView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately only re-checking when the raw query string changes, not on every router/pathname identity change
   }, [searchParams]);
 
-  // ?accept=<offerId> is the hand-off from an offer's detail page, which is
-  // now where a trader commits to a trade. The detail page deliberately does
-  // NOT re-implement accept: the OTP challenge, the multi-account picker and
-  // the phone-verification gate all live here, and duplicating them is how
-  // the two paths would drift. It just sends the id back and lets this run
-  // the identical flow the market table has always run.
+  // ?accept=<offerId> is a legacy hand-off: the offer detail page now
+  // commits in place (see OfferDetailView) rather than bouncing back here.
+  // Kept so links and bookmarks already pointing at it still work.
   //
-  // The param is stripped once the accept has been kicked off, so a refresh
-  // or back-nav cannot silently re-trigger one -- the accidental-commit risk
-  // this whole change exists to remove.
+  // The param is stripped once the accept has been kicked off, never before
+  // -- stripping it up-front flipped this effect's own dependency, fired its
+  // cleanup and cancelled the accept while the offer fetch was still in
+  // flight, so nothing happened at all.
   const acceptParam = searchParams.get('accept');
-  // Guards against running the same hand-off twice (React strict mode's
-  // double-effect, or a re-render that briefly re-reads the same param)
-  // without tying the in-flight accept to the param's lifetime -- see below
-  // for why a cleanup-based cancel is the wrong tool here.
   const handledAcceptRef = useRef<string | null>(null);
   useEffect(() => {
     if (!acceptParam || handledAcceptRef.current === acceptParam) return;
@@ -162,15 +155,10 @@ export function MarketView() {
     void (async () => {
       try {
         const offer = await fetchOfferForAccept(acceptParam).unwrap();
-        await accept(offer);
+        await acceptFlow.accept(offer);
       } catch (err) {
         setError(normalizeErrorMessage(err, 'Could not open that offer'));
       } finally {
-        // Stripped only once the accept has actually been kicked off. Doing
-        // it up-front (as this did) rewrote the URL while the offer fetch
-        // was still in flight, which flipped acceptParam to null, ran this
-        // effect's cleanup and cancelled the accept before it ever fired --
-        // the button appeared to do nothing and no trade was created.
         const params = new URLSearchParams(window.location.search);
         params.delete('accept');
         const query = params.toString();
@@ -228,59 +216,6 @@ export function MarketView() {
           offerOtpRequestId ? 'Could not verify this code' : 'Could not post market offer',
         ),
       );
-    }
-  }
-
-  async function accept(offer: P2POffer) {
-    setError('');
-    // A SELL offer with more than one receive-account needs the buyer to
-    // pick one before anything else happens -- show the picker and let its
-    // confirm button re-invoke accept() with the choice already made.
-    if (offer.type === 'SELL' && offer.paymentMethods.length > 1 && !chosenSellerPaymentMethodId) {
-      setAccountPickerOffer(offer);
-      return;
-    }
-    const sellerPaymentMethodId =
-      offer.type === 'SELL' ? (chosenSellerPaymentMethodId ?? undefined) : primaryMethod?.id;
-    if (!phoneVerificationRequired) {
-      try {
-        const otp = await requestTradeOtp({ action: 'accept-offer', offerId: offer.id }).unwrap();
-        setOfferOtpRequestId(otp.otpRequestId);
-        setOfferOtpCode('');
-        setPendingAcceptOffer(offer);
-      } catch (err) {
-        setError(normalizeErrorMessage(err, 'Could not send verification code'));
-      }
-      return;
-    }
-    try {
-      await acceptOffer({ id: offer.id, sellerPaymentMethodId }).unwrap();
-      setChosenSellerPaymentMethodId(null);
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Could not accept offer'));
-    }
-  }
-
-  async function confirmAcceptOffer() {
-    if (!pendingAcceptOffer || !offerOtpRequestId) return;
-    setError('');
-    const sellerPaymentMethodId =
-      pendingAcceptOffer.type === 'SELL'
-        ? (chosenSellerPaymentMethodId ?? undefined)
-        : primaryMethod?.id;
-    try {
-      await acceptOffer({
-        id: pendingAcceptOffer.id,
-        sellerPaymentMethodId,
-        otpRequestId: offerOtpRequestId,
-        code: offerOtpCode.trim(),
-      }).unwrap();
-      setPendingAcceptOffer(null);
-      setOfferOtpRequestId(null);
-      setOfferOtpCode('');
-      setChosenSellerPaymentMethodId(null);
-    } catch (err) {
-      setError(normalizeErrorMessage(err, 'Could not verify this code'));
     }
   }
 
@@ -511,9 +446,9 @@ export function MarketView() {
           </Dialog>
         </div>
       </div>
-      {error && (
+      {(error || acceptFlow.error) && (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
-          {error}
+          {error || acceptFlow.error}
         </div>
       )}
       {!settings?.enabled && (
@@ -531,7 +466,7 @@ export function MarketView() {
         cancellingOfferId={cancellingOfferId}
         disabled={marketDisabled}
         settings={settings}
-        onAccept={accept}
+        onAccept={(offer) => void acceptFlow.accept(offer)}
         onCancel={cancelPost}
         onOpenProfile={setProfileUserId}
         viewerId={me?.id}
@@ -542,105 +477,7 @@ export function MarketView() {
         userId={profileUserId}
       />
 
-      {accountPickerOffer && (
-        <Dialog
-          open
-          onOpenChange={(open) => {
-            if (!open) {
-              setAccountPickerOffer(null);
-              setChosenSellerPaymentMethodId(null);
-            }
-          }}
-        >
-          <DialogContent
-            title="Choose payment account"
-            description="This seller accepts payment to more than one account -- pick which one you'll pay."
-          >
-            <div className="grid gap-3">
-              <div className="grid gap-1.5">
-                {accountPickerOffer.paymentMethods.map((method) => (
-                  <label
-                    className="flex items-center gap-2 rounded-lg border border-line bg-bg px-3 py-2 text-sm font-bold"
-                    key={method.id}
-                  >
-                    <input
-                      checked={chosenSellerPaymentMethodId === method.id}
-                      name="seller-payment-method"
-                      onChange={() => setChosenSellerPaymentMethodId(method.id)}
-                      type="radio"
-                    />
-                    {method.label}
-                    {!method.verified && (
-                      <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-xs font-black text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-                        Unverified
-                      </span>
-                    )}
-                  </label>
-                ))}
-              </div>
-              {error && <p className="text-sm font-bold text-danger">{error}</p>}
-              <ActionButton
-                className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!chosenSellerPaymentMethodId}
-                onClick={() => {
-                  const offer = accountPickerOffer;
-                  setAccountPickerOffer(null);
-                  if (offer) void accept(offer);
-                }}
-                pending={accepting}
-                pendingLabel="Continuing"
-                type="button"
-              >
-                Continue
-              </ActionButton>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {pendingAcceptOffer && (
-        <Dialog
-          open
-          onOpenChange={(open) => {
-            if (!open) {
-              setPendingAcceptOffer(null);
-              setOfferOtpRequestId(null);
-              setOfferOtpCode('');
-              setChosenSellerPaymentMethodId(null);
-            }
-          }}
-        >
-          <DialogContent
-            title="Confirm this trade"
-            description="We emailed a 6-digit code to confirm this trade."
-          >
-            <div className="grid gap-3">
-              <label className="grid gap-1.5 text-sm font-bold">
-                Email verification code
-                <input
-                  autoFocus
-                  className="min-h-11 rounded-lg border border-line bg-bg px-3"
-                  inputMode="numeric"
-                  maxLength={6}
-                  onChange={(e) => setOfferOtpCode(e.target.value)}
-                  value={offerOtpCode}
-                />
-              </label>
-              {error && <p className="text-sm font-bold text-danger">{error}</p>}
-              <ActionButton
-                className="min-h-11 rounded-lg bg-accent px-4 font-extrabold text-white disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!offerOtpCode.trim()}
-                onClick={() => void confirmAcceptOffer()}
-                pending={accepting}
-                pendingLabel="Confirming"
-                type="button"
-              >
-                Confirm
-              </ActionButton>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+      <AcceptOfferDialogs flow={acceptFlow} />
     </div>
   );
 }

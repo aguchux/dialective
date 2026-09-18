@@ -6,6 +6,9 @@ import { ArrowLeft, CreditCard, Eye, LoaderCircle } from 'lucide-react';
 import { Avatar, cardClass, formatDateTime } from '@/components/dashboard/shared';
 import { formatCompactNumber } from '@/lib/format';
 import { CountryFlag } from '@/components/ui/CountryFlag';
+import { ActionButton } from '@/components/ui/ActionButton';
+import { AcceptOfferDialogs } from '@/components/p2p/AcceptOfferDialogs';
+import { useAcceptOffer } from '@/components/p2p/useAcceptOffer';
 import {
   normalizeErrorMessage,
   useGetMeQuery,
@@ -21,10 +24,16 @@ import {
  * from the row left no record of the interest that did not convert. Merely
  * loading this page records the view (see P2PService.getOfferDetail).
  *
- * The commit button hands off to the market view via ?accept=<id> rather
- * than accepting here: the OTP challenge, multi-account picker and
- * phone-verification gate all live there, and a second implementation is
- * how the two would drift apart.
+ * Committing happens here, on this page, and lands the trader on the
+ * resulting trade so they can chat or manage it straight away. It shares
+ * the market table's accept logic via useAcceptOffer rather than
+ * reimplementing the OTP challenge, multi-account picker and
+ * phone-verification gate, so the two paths cannot drift.
+ *
+ * This replaced a ?accept=<id> hand-off to the market view, which was
+ * broken: the effect that consumed the param stripped it from the URL
+ * before its offer fetch resolved, flipping its own dependency and firing
+ * the cleanup that cancelled the accept. The button did nothing at all.
  */
 export function OfferDetailView({ offerId }: { offerId: string }) {
   const router = useRouter();
@@ -38,6 +47,12 @@ export function OfferDetailView({ offerId }: { offerId: string }) {
   const { data: offer, isLoading, error } = useGetP2POfferQuery(offerId);
   const { data: me } = useGetMeQuery();
   const { data: settings } = useGetP2PSettingsQuery();
+  const tradesBase = pathname?.startsWith('/distributor') ? '/distributor' : '/dashboard';
+  // Straight to the new trade: that page is where payment, chat and dispute
+  // live, so it is the only useful destination after committing.
+  const flow = useAcceptOffer({
+    onAccepted: (trade) => router.push(`${tradesBase}/trades/${trade.id}`),
+  });
 
   const isOwnOffer = offer?.userId === me?.id;
   const isTradeable = offer?.status === 'ACTIVE';
@@ -163,13 +178,20 @@ export function OfferDetailView({ offerId }: { offerId: string }) {
                 </p>
               ) : (
                 <>
-                  <button
-                    className="inline-flex min-h-12 items-center justify-center rounded-lg bg-accent px-6 font-extrabold text-white hover:bg-accent-dark"
-                    onClick={() => router.push(`${marketHref}?accept=${offer.id}`)}
+                  {flow.error && (
+                    <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-bold text-red-700">
+                      {flow.error}
+                    </div>
+                  )}
+                  <ActionButton
+                    className="inline-flex min-h-12 items-center justify-center rounded-lg bg-accent px-6 font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => void flow.accept(offer)}
+                    pending={flow.accepting}
+                    pendingLabel="Starting trade"
                     type="button"
                   >
                     {offer.type === 'SELL' ? 'Buy this DL' : 'Sell DL to this trader'}
-                  </button>
+                  </ActionButton>
                   <p className="mt-2 text-xs text-muted">
                     You&rsquo;ll confirm before anything is committed
                     {settings?.paymentWindowMinutes
@@ -183,6 +205,8 @@ export function OfferDetailView({ offerId }: { offerId: string }) {
           </div>
         </>
       )}
+
+      <AcceptOfferDialogs flow={flow} />
     </div>
   );
 }
