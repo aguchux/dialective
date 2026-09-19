@@ -388,11 +388,32 @@ export class KycPeerReviewService {
       throw new UnprocessableEntityException('Say why you are declining this document');
     }
 
-    // Three genuinely different states, kept distinct for the admin who
-    // makes the final call: a number that matched, a number that did NOT
-    // match (a real red flag), and no number to compare because the
-    // document does not carry one. Collapsing the last into "did not
-    // match" would turn "nothing to check" into "failed the check".
+    const isCertified = await this.certified(userId);
+
+    // An ordinary peer must type the number back when approving: it is the
+    // only evidence they actually read the document rather than clicking
+    // through, and their verdict combines with one other to approve a
+    // stranger's identity unsupervised. Certified reviewers are the
+    // platform's own trained staff and are trusted to judge a document
+    // without re-keying it.
+    //
+    // Only on APPROVE. A decline needs no number -- "no ID uploaded" or an
+    // unreadable scan is precisely the case where there is nothing to type.
+    // Not extended to documents that genuinely carry no number: those are
+    // valid IDs and declining one would be wrong. A peer who cannot find a
+    // number releases the claim and leaves it for a certified reviewer,
+    // who can approve without typing one.
+    if (dto.verdict === 'APPROVE' && !isCertified && !dto.documentNumber?.trim()) {
+      throw new UnprocessableEntityException(
+        'Type the document number to approve. If this document has no number anywhere on it, leave it for a certified reviewer rather than declining it.',
+      );
+    }
+
+    // Three genuinely different states, kept distinct for whoever reads the
+    // evidence later: a number that matched, a number that did NOT match (a
+    // real red flag), and no number to compare because the document does
+    // not carry one. Collapsing the last into "did not match" would turn
+    // "nothing to check" into "failed the check".
     const typed = dto.documentNumber?.trim();
     const typedHash = typed ? KycPeerReviewService.hashDocumentNumber(typed) : null;
     const onFile = this.readDocumentNumber(verification.decisionEncryptedJson);
@@ -420,7 +441,6 @@ export class KycPeerReviewService {
       }),
     ]);
 
-    const isCertified = await this.certified(userId);
     this.logger.log(
       `Peer review submitted: reviewer=${userId} verification=${verificationId} verdict=${dto.verdict} numberMatched=${matched} certified=${isCertified}`,
     );

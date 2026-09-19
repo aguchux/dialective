@@ -357,6 +357,7 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
         {!declining && (
           <label className="grid gap-1.5 text-sm font-bold">
             Document number, exactly as printed
+            {!subject.certifiedReviewer && <span className="text-red-700"> (required)</span>}
             <input
               className="min-h-11 rounded-lg border border-line bg-bg px-3 font-mono"
               maxLength={64}
@@ -366,10 +367,15 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
               }
               value={documentNumber}
             />
-            {/* Said plainly, so a reviewer holding a numberless document
-                leaves it empty rather than inventing something to submit. */}
+            {/* An ordinary peer must type it: two of them can approve a
+                stranger's identity between them, and the number is the only
+                evidence either actually read the document. Certified staff
+                are trusted to judge without re-keying, so they keep the
+                empty-is-fine path for documents that carry no number. */}
             <span className="text-xs font-bold text-muted">
-              Leave empty if this document has no number printed on it.
+              {subject.certifiedReviewer
+                ? 'Leave empty if this document has no number printed on it.'
+                : 'Needed to approve. If this document has no number anywhere on it, leave it for a certified reviewer instead of declining it.'}
             </span>
           </label>
         )}
@@ -428,6 +434,10 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
           {!declining && (
             <ActionButton
               className="min-h-11 rounded-lg bg-accent px-5 font-extrabold text-white disabled:opacity-50"
+              // Mirrors the server's rule so an ordinary peer is stopped
+              // here rather than by a rejected submission. The server still
+              // enforces it -- this only saves the round trip.
+              disabled={!subject.certifiedReviewer && !documentNumber.trim()}
               onClick={() => void send('APPROVE')}
               pending={submitting}
               pendingLabel="Submitting"

@@ -207,8 +207,9 @@ describe('KycPeerReviewService', () => {
   });
 
   describe('submitReview', () => {
-    function claimed() {
+    function claimed(certified = false) {
       const s = setup();
+      s.integrations.isCertified.mockResolvedValue(certified);
       s.prisma.kycPeerReviewClaim.findFirst.mockResolvedValue({ id: 'claim-1' });
       s.prisma.kycVerification.findUnique.mockResolvedValue({
         id: 'kyc-1',
@@ -248,9 +249,13 @@ describe('KycPeerReviewService', () => {
      * match (a red flag), and nothing to compare. Collapsing the last
      * into the second would turn an absence into an accusation.
      */
-    describe('documents with no number', () => {
+    // Only a CERTIFIED reviewer can approve without a number -- an ordinary
+    // peer is required to type one (see the rule's own tests below). The
+    // three-state semantics still matter here: this is the path a valid but
+    // numberless document takes.
+    describe('documents with no number (certified reviewer)', () => {
       it('accepts a review with no document number at all', async () => {
-        const { service, prisma } = claimed();
+        const { service, prisma } = claimed(true);
         await service.submitReview('user-1', 'kyc-1', { verdict: 'APPROVE' });
         const created = prisma.kycPeerReview.create.mock.calls[0][0].data;
         expect(created.documentNumberHash).toBeNull();
@@ -259,7 +264,7 @@ describe('KycPeerReviewService', () => {
       });
 
       it('treats an empty/whitespace number as no number', async () => {
-        const { service, prisma } = claimed();
+        const { service, prisma } = claimed(true);
         await service.submitReview('user-1', 'kyc-1', {
           verdict: 'APPROVE',
           documentNumber: '   ',
@@ -456,6 +461,41 @@ describe('KycPeerReviewService', () => {
             .some((d: any) => d.type === 'KYC_REVIEW_FEE_BURN'),
         ).toBe(false);
       });
+    });
+
+    it('requires an ordinary peer to type the number when approving', async () => {
+      // Two peers can approve a stranger's identity between them with no
+      // admin involved, so the number is the evidence they read the card.
+      const { service } = claimed(false);
+      await expect(
+        service.submitReview('peer-1', 'kyc-1', { verdict: 'APPROVE' }),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('rejects a whitespace-only number from an ordinary peer', async () => {
+      const { service } = claimed(false);
+      await expect(
+        service.submitReview('peer-1', 'kyc-1', { verdict: 'APPROVE', documentNumber: '   ' }),
+      ).rejects.toThrow(UnprocessableEntityException);
+    });
+
+    it('lets a certified reviewer approve without a number', async () => {
+      // Trained staff are trusted to judge a document without re-keying it,
+      // which is also the only route for a valid ID that carries no number.
+      const { service, kyc } = claimed(true);
+      await service.submitReview('staff-1', 'kyc-1', { verdict: 'APPROVE' });
+      expect(kyc.adminApproveSelfHosted).toHaveBeenCalledWith('kyc-1');
+    });
+
+    it('never asks for a number on a decline', async () => {
+      // "No ID uploaded" or an unreadable scan is exactly the case where
+      // there is nothing to type.
+      const { service, prisma } = claimed(false);
+      await service.submitReview('peer-1', 'kyc-1', {
+        verdict: 'DECLINE',
+        declineReason: 'No ID uploaded',
+      });
+      expect(prisma.kycPeerReview.create).toHaveBeenCalled();
     });
 
     it('does not decide on a single ordinary peer verdict', async () => {
