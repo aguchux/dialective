@@ -13,6 +13,14 @@ import {
 } from './integration-registry';
 import { ListIntegrationsDto, UpdateIntegrationDto } from './dto/integrations.dto';
 
+/**
+ * The only integration where certification means anything: a certified
+ * ID Review reviewer sees documents unobscured and decides a verification
+ * on their own. Kept here rather than imported from KycPeerReviewService
+ * to avoid a module cycle for one string.
+ */
+const CERTIFIABLE_INTEGRATION_SLUG = 'p2p-kyc-review';
+
 /** What a member must have to request access, and whether they have it. */
 export interface IntegrationEligibility {
   eligible: boolean;
@@ -502,6 +510,15 @@ export class IntegrationsService implements OnModuleInit {
       include: { integration: { select: { slug: true } } },
     });
     if (!existing) throw new NotFoundException('Subscription request not found');
+    // Certification is an ID Review concept specifically: a certified
+    // reviewer sees the document unobscured and their single verdict
+    // decides a verification outright. No other integration has anything
+    // for it to mean, so it must not be settable on one.
+    if (certified && existing.integration.slug !== CERTIFIABLE_INTEGRATION_SLUG) {
+      throw new UnprocessableEntityException(
+        'Certification only applies to ID Review',
+      );
+    }
     if (certified && existing.status !== IntegrationSubscriptionStatus.APPROVED) {
       throw new UnprocessableEntityException(
         'Approve this member before certifying them',

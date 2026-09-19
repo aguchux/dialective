@@ -46,6 +46,8 @@ export default function AdminIntegrationSubscriptionsPage() {
   const [error, setError] = useState('');
 
   const pendingCount = requests.filter((row) => row.status === 'PENDING').length;
+  // Only ID Review has certified reviewers (see the certified column below).
+  const supportsCertification = slug === 'p2p-kyc-review';
 
   /**
    * Certification is a much larger grant than approval -- an unobscured
@@ -186,25 +188,33 @@ They will see ID documents unobscured, and their single decision will approve or
         </div>
       ),
     },
-    {
-      key: 'certified',
-      header: 'Certified',
-      searchable: false,
-      sortValue: (row) => (row.certified ? 1 : 0),
-      render: (row) =>
-        row.status !== 'APPROVED' ? (
-          <span className="text-xs text-muted">—</span>
-        ) : (
-          <label className="inline-flex items-center gap-2 text-sm font-bold">
-            <input
-              checked={row.certified}
-              onChange={(e) => void toggleCertified(row, e.target.checked)}
-              type="checkbox"
-            />
-            {row.certified ? 'Certified' : 'Peer'}
-          </label>
-        ),
-    },
+    // Certification is an ID Review concept -- a certified reviewer sees
+    // documents unobscured and decides a verification outright. It means
+    // nothing for any other integration, so the column is omitted rather
+    // than shown as a control that does nothing.
+    ...(supportsCertification
+      ? [
+          {
+            key: 'certified',
+            header: 'Certified',
+            searchable: false,
+            sortValue: (row: AdminIntegrationSubscription) => (row.certified ? 1 : 0),
+            render: (row: AdminIntegrationSubscription) =>
+              row.status !== 'APPROVED' ? (
+                <span className="text-xs text-muted">—</span>
+              ) : (
+                <label className="inline-flex items-center gap-2 text-sm font-bold">
+                  <input
+                    checked={row.certified}
+                    onChange={(e) => void toggleCertified(row, e.target.checked)}
+                    type="checkbox"
+                  />
+                  {row.certified ? 'Certified' : 'Peer'}
+                </label>
+              ),
+          },
+        ]
+      : []),
     {
       key: 'actions',
       header: '',

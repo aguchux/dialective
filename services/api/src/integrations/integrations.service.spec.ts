@@ -471,6 +471,75 @@ describe('IntegrationsService', () => {
     });
   });
 
+  /**
+   * Certification is an ID Review concept: a certified reviewer sees
+   * documents unobscured and their single verdict decides a verification
+   * outright. It means nothing anywhere else, and granting it on another
+   * integration would be a privilege with no definition.
+   */
+  describe('setSubscriptionCertified', () => {
+    function subscription(slug: string, status = 'APPROVED') {
+      return {
+        id: 'sub-1',
+        status,
+        integration: { slug },
+      };
+    }
+
+    beforeEach(() => {
+      prisma.integrationSubscription.update.mockResolvedValue({
+        id: 'sub-1',
+        userId,
+        status: 'APPROVED',
+        subscribedAt: new Date(),
+        reviewedAt: null,
+        reviewNote: null,
+        certified: true,
+        certifiedAt: new Date(),
+        integration: { id: 'i1', slug: 'p2p-kyc-review', name: 'ID Review' },
+        user: adminUser,
+      });
+    });
+
+    it('certifies an approved ID Review reviewer', async () => {
+      prisma.integrationSubscription.findUnique.mockResolvedValue(
+        subscription('p2p-kyc-review'),
+      );
+      const result = await service.setSubscriptionCertified('admin-1', 'sub-1', true);
+      expect(result.certified).toBe(true);
+    });
+
+    it('refuses to certify a WhatsApp Validator subscriber', async () => {
+      prisma.integrationSubscription.findUnique.mockResolvedValue(
+        subscription('whatsapp-validator'),
+      );
+      await expect(
+        service.setSubscriptionCertified('admin-1', 'sub-1', true),
+      ).rejects.toThrow('Certification only applies to ID Review');
+      expect(prisma.integrationSubscription.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses to certify a member who is not approved yet', async () => {
+      prisma.integrationSubscription.findUnique.mockResolvedValue(
+        subscription('p2p-kyc-review', 'PENDING'),
+      );
+      await expect(
+        service.setSubscriptionCertified('admin-1', 'sub-1', true),
+      ).rejects.toThrow('Approve this member before certifying them');
+    });
+
+    it('allows REVOKING certification on any integration, without the slug check', async () => {
+      // Taking a privilege away must never be harder than granting it --
+      // including cleaning up a row certified before the guard existed.
+      prisma.integrationSubscription.findUnique.mockResolvedValue(
+        subscription('whatsapp-validator'),
+      );
+      await expect(
+        service.setSubscriptionCertified('admin-1', 'sub-1', false),
+      ).resolves.toBeDefined();
+    });
+  });
+
   describe('requireEnabled', () => {
     it('throws when the integration is disabled', async () => {
       prisma.integration.findUnique.mockResolvedValue({ ...integration, enabled: false });
