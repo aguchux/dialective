@@ -270,8 +270,8 @@ export function GeneralSettingsPanel() {
               className={inputClass}
               id="task-token-cost"
               type="number"
-              step="0.01"
-              min="0"
+              step="0.001"
+              min="0.001"
               placeholder="Default"
               value={taskTokenCost}
               onChange={(e) => setTaskTokenCost(e.target.value)}

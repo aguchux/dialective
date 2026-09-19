@@ -243,9 +243,9 @@ export function DomainConversationSettingsPanel() {
             <input
               className={`${inputClass} max-w-40`}
               id="domain-conversation-token-cost"
-              min="0"
+              min="0.001"
               onChange={(e) => setTaskTokenCost(e.target.value)}
-              step="0.1"
+              step="0.001"
               type="number"
               value={taskTokenCost}
             />

@@ -102,6 +102,7 @@ export class UpdatePlatformSettingsDto {
   trainingPayoutBonusCapMultiple?: number;
 
   @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 3 })
   @IsPositive()
   taskTokenCost?: number;
 
@@ -161,6 +162,7 @@ export class UpdatePlatformSettingsDto {
   domainConversationMaxDurationSeconds?: number;
 
   @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 3 })
   @IsPositive()
   domainConversationTaskTokenCost?: number;
 
@@ -242,7 +244,7 @@ export class UpdatePlatformSettingsDto {
   manualPhoneVerificationEnabled?: boolean;
 
   @IsOptional()
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 3 })
   @Min(0)
   manualPhoneVerificationFeeTokens?: number;
 
@@ -793,7 +795,7 @@ export class UpdatePlatformSettingsDto {
   withdrawalFeeMode?: string;
 
   @IsOptional()
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 3 })
   @Min(0)
   withdrawalFeeTokenAmount?: number;
 

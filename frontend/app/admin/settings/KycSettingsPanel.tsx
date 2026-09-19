@@ -536,7 +536,7 @@ export function KycSettingsPanel() {
                   id="manual-phone-fee"
                   min="0"
                   onChange={(event) => setManualPhoneVerificationFeeTokens(event.target.value)}
-                  step="0.01"
+                  step="0.001"
                   type="number"
                   value={manualPhoneVerificationFeeTokens}
                 />

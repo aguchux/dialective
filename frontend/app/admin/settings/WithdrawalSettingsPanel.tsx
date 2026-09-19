@@ -338,7 +338,7 @@ export function WithdrawalSettingsPanel() {
                   id="withdrawal-fee-token-amount"
                   min="0"
                   onChange={(e) => setWithdrawalFeeTokenAmount(e.target.value)}
-                  step="0.01"
+                  step="0.001"
                   type="number"
                   value={withdrawalFeeTokenAmount}
                 />
