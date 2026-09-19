@@ -1,4 +1,5 @@
 import { ForbiddenException, UnprocessableEntityException } from '@nestjs/common';
+import { Prisma } from '@dialectiva/db';
 import {
   KYC_PEER_REVIEW_MAX_REVIEWS,
   KYC_PEER_REVIEW_QUORUM,
@@ -368,14 +369,19 @@ describe('KycPeerReviewService', () => {
   });
 
   describe('payReviewers', () => {
-    function withFee(fee: number) {
+    function withFee(fee: number, applicantFunded = fee * 10) {
       const s = setup();
+      // A real Decimal: payReviewers now multiplies the fee by the
+      // reviewer count to compare against what the applicant paid.
       s.prisma.integration.findUnique.mockResolvedValue({
         enabled: true,
-        feeTokenAmount: {
-          lessThanOrEqualTo: (n: number) => fee <= n,
-          toString: () => String(fee),
-        },
+        feeTokenAmount: new Prisma.Decimal(fee),
+      });
+      // The applicant's contribution, charged at submission. Defaults
+      // high so the default case mints nothing.
+      s.prisma.kycVerification.findUnique.mockResolvedValue({
+        reviewFeeTokenAmount: new Prisma.Decimal(applicantFunded),
+        reviewFeeShortfall: new Prisma.Decimal(0),
       });
       return s;
     }
@@ -396,6 +402,34 @@ describe('KycPeerReviewService', () => {
       const result = await service.payReviewers('kyc-1');
       expect(result.paid).toBe(2);
       expect(prisma.ledgerEntry.create).toHaveBeenCalledTimes(2);
+    });
+
+    /**
+     * The applicant funds their own review, so this path should mint
+     * nothing in the normal case. Reviewers are paid in full regardless
+     * -- an applicant who could not pay is the platform's problem, never
+     * the reviewer's.
+     */
+    it('pays reviewers in full even when the applicant underfunded the review', async () => {
+      // Two reviewers owed 1 each, but the applicant only managed 0.5.
+      const { service, prisma } = withFee(1, 0.5);
+      prisma.kycPeerReview.findMany.mockResolvedValue([
+        { id: 'r1', reviewerId: 'u1' },
+        { id: 'r2', reviewerId: 'u2' },
+      ]);
+      const result = await service.payReviewers('kyc-1');
+      expect(result.paid).toBe(2);
+      expect(prisma.ledgerEntry.create).toHaveBeenCalledTimes(2);
+    });
+
+    it('pays reviewers when the applicant paid nothing at all', async () => {
+      // A verification charged before the fee existed, or a full
+      // shortfall: reviewFeeTokenAmount is null.
+      const { service, prisma } = withFee(1);
+      prisma.kycVerification.findUnique.mockResolvedValue(null);
+      prisma.kycPeerReview.findMany.mockResolvedValue([{ id: 'r1', reviewerId: 'u1' }]);
+      const result = await service.payReviewers('kyc-1');
+      expect(result.paid).toBe(1);
     });
 
     it('does not pay a review whose paidAt was already claimed', async () => {

@@ -904,6 +904,20 @@ model KycVerification {
   decisionEncryptedJson Json?
   declineReason         String?
   webhookReceivedAt     DateTime?
+  // What the member paid toward their own ID Review, and when. The
+  // applicant funds the reviewers rather than the platform minting their
+  // fee -- see KycService.chargeReviewFee.
+  //
+  // reviewFeeChargedAt is the idempotency guard: a resubmit of the same
+  // verification never charges twice. reviewFeeShortfall records the part
+  // the platform had to cover because the member could not afford it; KYC
+  // is a compliance requirement, so a thin wallet never blocks it. That
+  // column is what tells us whether a lending/credit system is actually
+  // needed before building one.
+  reviewFeeTokenAmount  Decimal?             @db.Decimal(20, 8)
+  reviewFeeChargedAt    DateTime?
+  reviewFeeRefundedAt   DateTime?
+  reviewFeeShortfall    Decimal?             @db.Decimal(20, 8)
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
   captureEvidence       KycCaptureEvidence[]
@@ -2034,6 +2048,14 @@ enum LedgerEntryType {
   // ADMIN_ADJUSTMENT (manual, admin-initiated) -- see
   // clawBackNoAudioBonus and WordRecording.noAudioFlagCount.
   NO_AUDIO_BONUS_CLAWBACK
+  // The member being verified pays for their own ID Review, instead of
+  // the platform minting the reviewers' fee. Debited when they submit for
+  // review; refunded by KYC_REVIEW_FEE_REFUND if the verification is
+  // cancelled or resolved without any peer review having happened.
+  // reference is the KycVerification id, so a resubmit cannot double-charge
+  // the same verification -- see KycService.chargeReviewFee.
+  KYC_REVIEW_FEE
+  KYC_REVIEW_FEE_REFUND
   VALIDATION_REWARD // Phase 3 validator payout, minted on ValidatorDeck publish -- see packages/db/src/validator-payouts.ts. reference is "validator-deck:<deckId>:creator" (or ":reassigned-owner") for the base-reward payee and "validator-deck:<deckId>:approver:<actorUserId>" for each approving tier's additive bonus, so a retried/duplicate publish() call never double-credits.
 }
 

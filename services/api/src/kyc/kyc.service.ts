@@ -6,7 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { KycRecheckRunTrigger, KycStatus, Prisma } from '@dialectiva/db';
+import { KycRecheckRunTrigger, KycStatus, LedgerEntryType, Prisma } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { MailService } from '../mail/mail.service';
@@ -469,6 +469,10 @@ export class KycService {
       declineReason: null,
       raw: { provider: 'self', adminOverride: 'approve' },
     });
+    // Self-guards on the peer-review count: if reviewers did the work the
+    // fee is theirs and this is a no-op. Only an admin deciding without
+    // any peer review gives the member their money back.
+    await this.refundReviewFeeIfUnreviewed(verification.id);
     return this.prisma.kycVerification.findUniqueOrThrow({ where: { id } });
   }
 
@@ -484,6 +488,7 @@ export class KycService {
       declineReason: reason,
       raw: { provider: 'self', adminOverride: 'decline', reason },
     });
+    await this.refundReviewFeeIfUnreviewed(verification.id);
     await this.notifyKycDeclined(verification.userId, reason);
     return this.prisma.kycVerification.findUniqueOrThrow({ where: { id } });
   }
@@ -630,7 +635,168 @@ export class KycService {
     const decision = await this.selfHosted.evaluate(verificationId, userId);
     const status = mapSelfHostedStatus(decision.status);
     await this.applyDecision(verification.id, userId, status, decision);
+    // Charged on submission, before any reviewer spends effort. Only for
+    // a verification that actually lands in peer review -- one auto-decided
+    // outright never reaches a reviewer, so there is nothing to fund.
+    if (status === KycStatus.IN_REVIEW) {
+      await this.chargeReviewFee(verification.id, userId);
+    }
     return this.getMyStatus(userId);
+  }
+
+  /**
+   * Charge the applicant for their own ID Review.
+   *
+   * Peer reviewers used to be paid with freshly minted DL, which made
+   * every verification an issuance event. The member being verified funds
+   * it instead, so the fee CIRCULATES (applicant -> reviewers) rather than
+   * inflating supply, and a member has a concrete reason to acquire DL.
+   *
+   * Never blocks verification. KYC is a compliance requirement, and a
+   * member who cannot withdraw or trade without it must not be stranded by
+   * a thin wallet -- so a member who cannot pay is charged whatever they
+   * have and the platform absorbs the rest, recorded in
+   * reviewFeeShortfall. That column is the evidence for whether a lending
+   * system is actually needed: if it stays empty, nobody was ever blocked.
+   *
+   * Idempotent via reviewFeeChargedAt, claimed with an updateMany guard so
+   * two concurrent submissions of the same verification cannot both charge.
+   */
+  async chargeReviewFee(verificationId: string, userId: string): Promise<void> {
+    const integration = await this.prisma.integration.findUnique({
+      where: { slug: 'p2p-kyc-review' },
+    });
+    // No integration, disabled, or a zero fee -- nothing to charge, and
+    // the platform keeps funding reviewers exactly as before.
+    if (!integration || !integration.enabled) return;
+    const fee = integration.feeTokenAmount;
+    if (fee.lessThanOrEqualTo(0)) return;
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // Claim first: if another call already charged this verification,
+        // this updates nothing and we stop rather than double-charging.
+        const claimed = await tx.kycVerification.updateMany({
+          where: { id: verificationId, reviewFeeChargedAt: null },
+          data: { reviewFeeChargedAt: new Date() },
+        });
+        if (claimed.count === 0) return;
+
+        const wallet = await tx.wallet.upsert({
+          where: { userId },
+          update: {},
+          create: { userId },
+        });
+        // Take what they have, up to the fee. Decimal.min keeps this
+        // exact rather than rounding through a float.
+        const charged = Prisma.Decimal.min(wallet.balance, fee);
+        const shortfall = fee.minus(charged);
+
+        if (charged.greaterThan(0)) {
+          await tx.wallet.update({
+            where: { id: wallet.id },
+            data: { balance: { decrement: charged } },
+          });
+          await tx.ledgerEntry.create({
+            data: {
+              walletId: wallet.id,
+              type: LedgerEntryType.KYC_REVIEW_FEE,
+              amount: charged.negated(),
+              reference: verificationId,
+            },
+          });
+        }
+        await tx.kycVerification.update({
+          where: { id: verificationId },
+          data: { reviewFeeTokenAmount: charged, reviewFeeShortfall: shortfall },
+        });
+
+        if (shortfall.greaterThan(0)) {
+          this.logger.warn(
+            `KYC review fee shortfall: user=${userId} verification=${verificationId} owed=${fee.toString()} paid=${charged.toString()} shortfall=${shortfall.toString()}`,
+          );
+        }
+      });
+    } catch (err) {
+      // Never fail a verification over its fee -- the member has already
+      // done the work of submitting, and KYC must not be gated on billing.
+      this.logger.error(
+        `Failed to charge KYC review fee for ${verificationId}: ${String(err)}`,
+      );
+    }
+  }
+
+  /**
+   * Give the fee back when nobody reviewed the document.
+   *
+   * A verification that is cancelled, expires, or is decided by an admin
+   * without any peer review consumed none of the work the fee pays for.
+   * Refunds only what was actually taken (reviewFeeTokenAmount), never the
+   * shortfall the platform covered.
+   */
+  async refundReviewFeeIfUnreviewed(verificationId: string): Promise<void> {
+    try {
+      const verification = await this.prisma.kycVerification.findUnique({
+        where: { id: verificationId },
+        select: {
+          userId: true,
+          reviewFeeTokenAmount: true,
+          reviewFeeChargedAt: true,
+          reviewFeeRefundedAt: true,
+          _count: { select: { peerReviews: true } },
+        },
+      });
+      if (
+        !verification ||
+        !verification.reviewFeeChargedAt ||
+        verification.reviewFeeRefundedAt ||
+        // Somebody did the work -- the fee is theirs, not refundable.
+        verification._count.peerReviews > 0
+      ) {
+        return;
+      }
+      const amount = verification.reviewFeeTokenAmount;
+      if (!amount || amount.lessThanOrEqualTo(0)) {
+        // Nothing was taken (full shortfall); just close it out so a
+        // later call does not keep re-examining this row.
+        await this.prisma.kycVerification.updateMany({
+          where: { id: verificationId, reviewFeeRefundedAt: null },
+          data: { reviewFeeRefundedAt: new Date() },
+        });
+        return;
+      }
+
+      await this.prisma.$transaction(async (tx) => {
+        const claimed = await tx.kycVerification.updateMany({
+          where: { id: verificationId, reviewFeeRefundedAt: null },
+          data: { reviewFeeRefundedAt: new Date() },
+        });
+        if (claimed.count === 0) return;
+
+        const wallet = await tx.wallet.upsert({
+          where: { userId: verification.userId },
+          update: {},
+          create: { userId: verification.userId },
+        });
+        await tx.wallet.update({
+          where: { id: wallet.id },
+          data: { balance: { increment: amount } },
+        });
+        await tx.ledgerEntry.create({
+          data: {
+            walletId: wallet.id,
+            type: LedgerEntryType.KYC_REVIEW_FEE_REFUND,
+            amount,
+            reference: verificationId,
+          },
+        });
+      });
+      this.logger.log(`Refunded unreviewed KYC review fee for ${verificationId}`);
+    } catch (err) {
+      this.logger.error(
+        `Failed to refund KYC review fee for ${verificationId}: ${String(err)}`,
+      );
+    }
   }
 
   /** Fallback poll used only by the admin "Refresh from Didit" action -- see didit.service.ts's getDecision doc comment. */

@@ -555,9 +555,21 @@ export class KycPeerReviewService {
    * Credit every reviewer of this verification, once.
    *
    * Called when an admin APPROVES a verification that went through peer
-   * review. The platform pays -- there is no debit against the trainer
-   * being verified. Guarded by paidAt so a repeated admin action, or an
+   * review. Guarded by paidAt so a repeated admin action, or an
    * approve-after-reset, cannot pay the same review twice.
+   *
+   * Funded by the member being verified, who was charged at submission
+   * (KycService.chargeReviewFee). The fee therefore CIRCULATES rather than
+   * being minted. Two cases still mint, deliberately:
+   *
+   *  - the applicant could not afford the full fee, so the platform
+   *    absorbed the shortfall rather than blocking their KYC; and
+   *  - more reviewers than expected worked the verification (a split
+   *    decision polls a third), so the pot is spread thinner than the
+   *    per-reviewer fee.
+   *
+   * Reviewers are always paid in full for work done -- the applicant's
+   * shortfall is the platform's problem, never the reviewer's.
    */
   async payReviewers(verificationId: string) {
     const integration = await this.prisma.integration.findUnique({
@@ -572,6 +584,21 @@ export class KycPeerReviewService {
       select: { id: true, reviewerId: true },
     });
     if (unpaid.length === 0) return { paid: 0 };
+
+    // What the applicant actually contributed. Anything the reviewers are
+    // paid beyond this is newly minted, and worth knowing about -- this
+    // path was 100% minted before the applicant started paying.
+    const verification = await this.prisma.kycVerification.findUnique({
+      where: { id: verificationId },
+      select: { reviewFeeTokenAmount: true, reviewFeeShortfall: true },
+    });
+    const funded = verification?.reviewFeeTokenAmount ?? new Prisma.Decimal(0);
+    const owed = fee.mul(unpaid.length);
+    if (owed.greaterThan(funded)) {
+      this.logger.log(
+        `KYC review payout exceeds applicant funding: verification=${verificationId} reviewers=${unpaid.length} owed=${owed.toString()} funded=${funded.toString()} minted=${owed.minus(funded).toString()}`,
+      );
+    }
 
     let paid = 0;
     for (const review of unpaid) {
