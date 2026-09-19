@@ -918,6 +918,13 @@ model KycVerification {
   reviewFeeChargedAt    DateTime?
   reviewFeeRefundedAt   DateTime?
   reviewFeeShortfall    Decimal?             @db.Decimal(20, 8)
+  /// How much of the applicant's fee was DESTROYED rather than paid to a
+  /// reviewer, because a certified (staff) reviewer decided this
+  /// verification. Certified reviewers are compensated outside the token
+  /// economy, so crediting them DL would recycle supply for work already
+  /// paid for. Null means no burn -- the fee went to peer reviewers.
+  reviewFeeBurnedAmount Decimal?             @db.Decimal(20, 8)
+  reviewFeeBurnedAt     DateTime?
   createdAt             DateTime             @default(now())
   updatedAt             DateTime             @updatedAt
   captureEvidence       KycCaptureEvidence[]
@@ -2062,6 +2069,20 @@ enum LedgerEntryType {
   // the same verification -- see KycService.chargeReviewFee.
   KYC_REVIEW_FEE
   KYC_REVIEW_FEE_REFUND
+  // Marks the applicant's already-debited fee as DESTROYED rather than
+  // paid to a reviewer, when a CERTIFIED reviewer decided the
+  // verification. Certified reviewers are the platform's own staff,
+  // compensated outside the token economy, so crediting them DL would
+  // recycle supply for work already paid for -- burning removes it.
+  //
+  // Written against the applicant's own wallet with a POSITIVE amount
+  // that does NOT touch the balance. The balance already moved on
+  // KYC_REVIEW_FEE; this row names how much of that debit was destroyed
+  // rather than paid to a reviewer, so SUM(amount) over these entries is
+  // the total DL burned by this mechanism. Anything reconciling wallet
+  // balances against the ledger must exclude this type -- it is an audit
+  // annotation on a movement already recorded, not a movement itself.
+  KYC_REVIEW_FEE_BURN
   VALIDATION_REWARD // Phase 3 validator payout, minted on ValidatorDeck publish -- see packages/db/src/validator-payouts.ts. reference is "validator-deck:<deckId>:creator" (or ":reassigned-owner") for the base-reward payee and "validator-deck:<deckId>:approver:<actorUserId>" for each approving tier's additive bonus, so a retried/duplicate publish() call never double-credits.
 }
 

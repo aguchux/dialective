@@ -428,16 +428,24 @@ export class KycPeerReviewService {
       );
       if (dto.verdict === 'APPROVE') {
         await this.kyc.adminApproveSelfHosted(verificationId);
-        await this.payReviewers(verificationId);
       } else {
         await this.kyc.adminDeclineSelfHosted(
           verificationId,
           dto.declineReason?.trim() || 'Document did not match the account',
         );
-        // Declines pay too: the work of checking was done either way, and
-        // paying only for approvals would reward waving documents through.
-        await this.payReviewers(verificationId);
       }
+      // Peers who reviewed this document BEFORE the certified reviewer
+      // stepped in did real work and are still owed for it -- their
+      // reviews are unaffected by who ultimately decided. The certified
+      // reviewer's own review is excluded from payout inside
+      // payReviewers.
+      await this.payReviewers(verificationId);
+      // Whatever is left of the applicant's fee is burned rather than
+      // paid. A certified reviewer is the platform's own staff,
+      // compensated outside the token economy, so crediting them DL
+      // would recycle the fee back into circulation as payment for work
+      // already paid for. Destroying it makes the fee a real sink.
+      await this.burnReviewFee(verificationId);
       return { ...(await this.tally(verificationId)), decidedByCertifiedReviewer: true };
     }
 
@@ -579,6 +587,79 @@ export class KycPeerReviewService {
    * Reviewers are always paid in full for work done -- the applicant's
    * shortfall is the platform's problem, never the reviewer's.
    */
+  /**
+   * Destroy the applicant's fee instead of paying it to a reviewer.
+   *
+   * Used when a CERTIFIED reviewer decided the verification. They are the
+   * platform's own staff, compensated outside the token economy, so
+   * crediting them DL would hand back the applicant's fee as payment for
+   * work already paid for -- the fee would circulate rather than leave.
+   * Burning it is what makes this a genuine sink.
+   *
+   * No balance moves here: the applicant was already debited when they
+   * submitted (KycService.chargeReviewFee). This records that the DL
+   * taken then was destroyed rather than passed on, in two places -- a
+   * column answering "what happened to this verification's fee", and a
+   * ledger row whose amounts sum to the total ever burned.
+   *
+   * Idempotent via a reviewFeeBurnedAt claim guard.
+   */
+  async burnReviewFee(verificationId: string) {
+    try {
+      const verification = await this.prisma.kycVerification.findUnique({
+        where: { id: verificationId },
+        select: { userId: true, reviewFeeTokenAmount: true, reviewFeeBurnedAt: true },
+      });
+      if (!verification || verification.reviewFeeBurnedAt) return { burned: '0' };
+      const amount = verification.reviewFeeTokenAmount;
+      // Nothing was collected (fee disabled, or a full shortfall the
+      // platform absorbed) -- there is nothing to destroy.
+      if (!amount || amount.lessThanOrEqualTo(0)) return { burned: '0' };
+
+      await this.prisma.$transaction(async (tx) => {
+        const claimed = await tx.kycVerification.updateMany({
+          where: { id: verificationId, reviewFeeBurnedAt: null },
+          data: { reviewFeeBurnedAt: new Date(), reviewFeeBurnedAmount: amount },
+        });
+        if (claimed.count === 0) return;
+
+        // Stamp the certified reviewer's own review as settled. It will
+        // never be paid, so leaving paidAt null would have payReviewers
+        // re-examine it forever and make "unpaid" mean two things.
+        await tx.kycPeerReview.updateMany({
+          where: { kycVerificationId: verificationId, paidAt: null },
+          data: { paidAt: new Date() },
+        });
+
+        const wallet = await tx.wallet.upsert({
+          where: { userId: verification.userId },
+          update: {},
+          create: { userId: verification.userId },
+        });
+        // Deliberately does NOT touch wallet.balance: the debit already
+        // happened on KYC_REVIEW_FEE. This row is an audit annotation
+        // naming how much of it was destroyed.
+        await tx.ledgerEntry.create({
+          data: {
+            walletId: wallet.id,
+            type: LedgerEntryType.KYC_REVIEW_FEE_BURN,
+            amount,
+            reference: verificationId,
+          },
+        });
+      });
+      this.logger.log(
+        `Burned KYC review fee: verification=${verificationId} amount=${amount.toString()} (certified reviewer, not paid out)`,
+      );
+      return { burned: amount.toString() };
+    } catch (err) {
+      // A failed burn must never undo a decision the reviewer already
+      // made; the verification is decided either way.
+      this.logger.error(`Failed to burn KYC review fee for ${verificationId}: ${String(err)}`);
+      return { burned: '0' };
+    }
+  }
+
   async payReviewers(verificationId: string) {
     const integration = await this.prisma.integration.findUnique({
       where: { slug: INTEGRATION_SLUG },
@@ -587,10 +668,20 @@ export class KycPeerReviewService {
     const fee = integration.feeTokenAmount;
     if (fee.lessThanOrEqualTo(0)) return { paid: 0 };
 
-    const unpaid = await this.prisma.kycPeerReview.findMany({
+    const candidates = await this.prisma.kycPeerReview.findMany({
       where: { kycVerificationId: verificationId, paidAt: null },
       select: { id: true, reviewerId: true },
     });
+    if (candidates.length === 0) return { paid: 0 };
+
+    // Certified reviewers are the platform's own staff, compensated
+    // outside the token economy -- their fee is burned instead (see
+    // burnReviewFee). Filtered here rather than at the call site so no
+    // payout path can pay a certified reviewer by omission.
+    const certifiedFlags = await Promise.all(
+      candidates.map((review) => this.certified(review.reviewerId)),
+    );
+    const unpaid = candidates.filter((_, i) => !certifiedFlags[i]);
     if (unpaid.length === 0) return { paid: 0 };
 
     // What the applicant actually contributed. Anything the reviewers are

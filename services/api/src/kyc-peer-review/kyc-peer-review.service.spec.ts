@@ -18,6 +18,8 @@ describe('KycPeerReviewService', () => {
         findUnique: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
         count: jest.fn().mockResolvedValue(0),
+        // The burn's idempotency claim guard.
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       kycPeerReview: {
         findMany: jest.fn().mockResolvedValue([]),
@@ -343,6 +345,119 @@ describe('KycPeerReviewService', () => {
       expect(kyc.adminDeclineSelfHosted).toHaveBeenCalledWith('kyc-1', 'Name does not match');
     });
 
+    /**
+     * A certified reviewer is the platform's own staff, compensated
+     * outside the token economy. Paying them DL would hand the
+     * applicant's fee straight back into circulation as payment for work
+     * already paid for; burning it makes the fee a genuine sink.
+     */
+    describe('the fee is burned, not paid', () => {
+      function withFee(fee: number, collected = fee) {
+        const s = claimed(true);
+        s.prisma.integration.findUnique.mockResolvedValue({
+          enabled: true,
+          feeTokenAmount: new Prisma.Decimal(fee),
+        });
+        s.prisma.kycVerification.findUnique.mockResolvedValue({
+          id: 'kyc-1',
+          status: 'IN_REVIEW',
+          userId: 'applicant-1',
+          decisionEncryptedJson: null,
+          _count: { peerReviews: 0 },
+          reviewFeeTokenAmount: new Prisma.Decimal(collected),
+          reviewFeeShortfall: new Prisma.Decimal(0),
+          reviewFeeBurnedAt: null,
+        });
+        return s;
+      }
+
+      it('records the burn against the verification and the ledger', async () => {
+        const { service, prisma } = withFee(3);
+        await service.submitReview('staff-1', 'kyc-1', {
+          verdict: 'APPROVE',
+          documentNumber: 'AB123456',
+        });
+        const burn = prisma.ledgerEntry.create.mock.calls
+          .map((c: any[]) => c[0].data)
+          .find((d: any) => d.type === 'KYC_REVIEW_FEE_BURN');
+        expect(burn).toBeDefined();
+        expect(Number(burn.amount)).toBeCloseTo(3);
+        expect(burn.reference).toBe('kyc-1');
+      });
+
+      it('never credits the certified reviewer', async () => {
+        const { service, prisma } = withFee(3);
+        await service.submitReview('staff-1', 'kyc-1', {
+          verdict: 'APPROVE',
+          documentNumber: 'AB123456',
+        });
+        const payout = prisma.ledgerEntry.create.mock.calls
+          .map((c: any[]) => c[0].data)
+          .find((d: any) => d.type === 'VALIDATION_REWARD');
+        expect(payout).toBeUndefined();
+      });
+
+      it('burns on a decline too', async () => {
+        const { service, prisma } = withFee(3);
+        await service.submitReview('staff-1', 'kyc-1', {
+          verdict: 'DECLINE',
+          documentNumber: 'AB123456',
+          declineReason: 'Name does not match',
+        });
+        expect(
+          prisma.ledgerEntry.create.mock.calls
+            .map((c: any[]) => c[0].data)
+            .some((d: any) => d.type === 'KYC_REVIEW_FEE_BURN'),
+        ).toBe(true);
+      });
+
+      it('does not move the applicant balance -- they were debited at submission', async () => {
+        const { service, prisma } = withFee(3);
+        await service.submitReview('staff-1', 'kyc-1', {
+          verdict: 'APPROVE',
+          documentNumber: 'AB123456',
+        });
+        expect(prisma.wallet.update).not.toHaveBeenCalled();
+      });
+
+      it('burns nothing when the applicant paid nothing', async () => {
+        // Full shortfall: the platform covered the fee, so there is no
+        // member DL to destroy.
+        const { service, prisma } = withFee(3, 0);
+        await service.submitReview('staff-1', 'kyc-1', {
+          verdict: 'APPROVE',
+          documentNumber: 'AB123456',
+        });
+        expect(
+          prisma.ledgerEntry.create.mock.calls
+            .map((c: any[]) => c[0].data)
+            .some((d: any) => d.type === 'KYC_REVIEW_FEE_BURN'),
+        ).toBe(false);
+      });
+
+      it('does not burn twice', async () => {
+        const { service, prisma } = withFee(3);
+        prisma.kycVerification.findUnique.mockResolvedValue({
+          id: 'kyc-1',
+          status: 'IN_REVIEW',
+          userId: 'applicant-1',
+          decisionEncryptedJson: null,
+          _count: { peerReviews: 0 },
+          reviewFeeTokenAmount: new Prisma.Decimal(3),
+          reviewFeeBurnedAt: new Date(),
+        });
+        await service.submitReview('staff-1', 'kyc-1', {
+          verdict: 'APPROVE',
+          documentNumber: 'AB123456',
+        });
+        expect(
+          prisma.ledgerEntry.create.mock.calls
+            .map((c: any[]) => c[0].data)
+            .some((d: any) => d.type === 'KYC_REVIEW_FEE_BURN'),
+        ).toBe(false);
+      });
+    });
+
     it('leaves an ordinary peer verdict to the normal quorum', async () => {
       const { service, kyc } = claimed(false);
       const result = await service.submitReview('peer-1', 'kyc-1', {
@@ -456,6 +571,20 @@ describe('KycPeerReviewService', () => {
      * -- an applicant who could not pay is the platform's problem, never
      * the reviewer's.
      */
+    it('never pays a certified reviewer -- their fee is burned instead', async () => {
+      const { service, prisma, integrations } = withFee(1);
+      prisma.kycPeerReview.findMany.mockResolvedValue([
+        { id: 'r1', reviewerId: 'peer-1' },
+        { id: 'r2', reviewerId: 'staff-1' },
+      ]);
+      // staff-1 is certified; peer-1 is not.
+      integrations.isCertified.mockImplementation(async (userId: string) => userId === 'staff-1');
+      const result = await service.payReviewers('kyc-1');
+      // The peer who did real work is still paid; the staff member is not.
+      expect(result.paid).toBe(1);
+      expect(prisma.ledgerEntry.create).toHaveBeenCalledTimes(1);
+    });
+
     it('pays reviewers in full even when the applicant underfunded the review', async () => {
       // Two reviewers owed 1 each, but the applicant only managed 0.5.
       const { service, prisma } = withFee(1, 0.5);
