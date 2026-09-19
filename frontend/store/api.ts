@@ -1042,6 +1042,12 @@ export interface AdminIntegration {
   // How long an issued verification code/request stays valid before
   // expiring, in minutes.
   codeValidityMinutes: number;
+  // Who may REQUEST access. Enforced on subscribe and shown on the
+  // marketplace card; all three off means open to anyone.
+  requirePhoneVerified: boolean;
+  requireKycApproved: boolean;
+  /** Settled tasks required. 0 switches the task bar off. */
+  minCompletedTasks: number;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -4993,6 +4999,9 @@ export const dialectivaApi = createApi({
         maxConcurrentClaims?: number;
         codeValidityMinutes?: number;
         sortOrder?: number;
+        requirePhoneVerified?: boolean;
+        requireKycApproved?: boolean;
+        minCompletedTasks?: number;
       }
     >({
       query: ({ id, ...body }) => ({ url: `/integrations/admin/${id}`, method: 'PATCH', body }),

@@ -23,23 +23,19 @@ export interface IntegrationDefinition {
   /** Default minutes an issued code/request stays valid before expiring, until an admin changes it via the gate. */
   defaultCodeValidityMinutes: number;
   /**
-   * Who is allowed to request access at all. Checked when a member hits
-   * subscribe, and shown on the marketplace card so the bar is visible
-   * before they try rather than only in a rejection.
-   *
-   * This is a property of the integration, not a global policy: fulfilling
-   * ID Review means handling other members' identity documents, which
-   * warrants a verified, established member. WhatsApp Validator carries no
-   * such exposure and deliberately has no bar.
+   * SEED value for who may request access, applied only when this slug
+   * first appears in the database. After that the admin owns it, editable
+   * per integration in Admin -> Integrations (see the columns of the same
+   * names on the Integration model); syncRegistry never overwrites it.
    */
-  eligibility: IntegrationEligibilityRule;
+  defaultEligibility: IntegrationEligibilityRule;
 }
 
 /** An empty rule (all fields absent/0) means anyone may request access. */
 export interface IntegrationEligibilityRule {
   requirePhoneVerified?: boolean;
   requireKycApproved?: boolean;
-  /** Lifetime completed word recordings ("tasks") the member must have. */
+  /** Settled tasks the member must have completed. 0/absent disables the bar. */
   minTasks?: number;
 }
 
@@ -60,7 +56,7 @@ export const INTEGRATION_REGISTRY: IntegrationDefinition[] = [
      * requester is trusting a stranger with a one-time code. No task bar:
      * relaying a code is not how value leaves the platform.
      */
-    eligibility: { requirePhoneVerified: true, requireKycApproved: true },
+    defaultEligibility: { requirePhoneVerified: true, requireKycApproved: true },
   },
   {
     slug: 'p2p-kyc-review',
@@ -83,6 +79,6 @@ export const INTEGRATION_REGISTRY: IntegrationDefinition[] = [
      * passed KYC themselves, and have a real track record on the platform
      * rather than being a fresh account that signed up to harvest IDs.
      */
-    eligibility: { requirePhoneVerified: true, requireKycApproved: true, minTasks: 100 },
+    defaultEligibility: { requirePhoneVerified: true, requireKycApproved: true, minTasks: 100 },
   },
 ];

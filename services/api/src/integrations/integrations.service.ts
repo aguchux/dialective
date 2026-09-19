@@ -71,6 +71,9 @@ export class IntegrationsService implements OnModuleInit {
           sortOrder: definition.defaultSortOrder,
           maxConcurrentClaims: definition.defaultMaxConcurrentClaims,
           codeValidityMinutes: definition.defaultCodeValidityMinutes,
+          requirePhoneVerified: definition.defaultEligibility.requirePhoneVerified ?? false,
+          requireKycApproved: definition.defaultEligibility.requireKycApproved ?? false,
+          minCompletedTasks: definition.defaultEligibility.minTasks ?? 0,
         },
         update: {
           name: definition.name,
@@ -84,25 +87,29 @@ export class IntegrationsService implements OnModuleInit {
   }
 
   /**
-   * Loads the handful of User facts the eligibility rules read. Task count
-   * is the lifetime word-recording count, the same measure the admin users
-   * list and the audit-hold queue already use for "how much work has this
-   * member done".
+   * Loads the handful of User facts the eligibility rules read.
+   *
+   * Tasks are counted as SETTLED work across all three kinds -- exactly
+   * as the withdrawal gate and the P2P selling gate count them -- so
+   * "100 tasks" means the same thing everywhere it is shown. Counting
+   * raw word recordings here instead would quietly make this bar easier
+   * than the identically-worded ones elsewhere.
    */
   private async loadEligibilityFacts(userId: string): Promise<EligibilityFacts> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        phoneVerifiedAt: true,
-        kycStatus: true,
-        _count: { select: { wordRecordings: true } },
-      },
-    });
+    const [user, wordRecordings, conversationRecordings, validations] = await Promise.all([
+      this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { phoneVerifiedAt: true, kycStatus: true },
+      }),
+      this.prisma.wordRecording.count({ where: { userId, status: 'SETTLED' } }),
+      this.prisma.domainConversationRecording.count({ where: { userId, status: 'SETTLED' } }),
+      this.prisma.wordValidation.count({ where: { validatorId: userId, status: 'SETTLED' } }),
+    ]);
     if (!user) throw new NotFoundException('User not found');
     return {
       phoneVerified: user.phoneVerifiedAt !== null,
       kycApproved: user.kycStatus === KycStatus.APPROVED,
-      taskCount: user._count.wordRecordings,
+      taskCount: wordRecordings + conversationRecordings + validations,
     };
   }
 
@@ -133,9 +140,21 @@ export class IntegrationsService implements OnModuleInit {
     return { eligible: requirements.every((r) => r.met), requirements };
   }
 
-  /** The rule for a slug, or an empty (open to all) rule for an unknown one. */
-  private ruleFor(slug: string): IntegrationEligibilityRule {
-    return INTEGRATION_REGISTRY.find((d) => d.slug === slug)?.eligibility ?? {};
+  /**
+   * The admin-set rule carried on the integration row itself. The code
+   * registry only ever seeded these columns (see syncRegistry); the live
+   * values are whatever an admin last saved.
+   */
+  private ruleFor(row: {
+    requirePhoneVerified: boolean;
+    requireKycApproved: boolean;
+    minCompletedTasks: number;
+  }): IntegrationEligibilityRule {
+    return {
+      requirePhoneVerified: row.requirePhoneVerified,
+      requireKycApproved: row.requireKycApproved,
+      minTasks: row.minCompletedTasks,
+    };
   }
 
   /** Public-facing list -- disabled integrations are excluded here (see listAllForAdmin for the unfiltered admin view). */
@@ -173,7 +192,7 @@ export class IntegrationsService implements OnModuleInit {
       this.toPublic(
         row,
         statusByIntegration.get(row.id) ?? null,
-        this.evaluateEligibility(this.ruleFor(row.slug), facts),
+        this.evaluateEligibility(this.ruleFor(row), facts),
       ),
     );
   }
@@ -191,7 +210,7 @@ export class IntegrationsService implements OnModuleInit {
       this.toPublic(
         s.integration,
         s.status,
-        this.evaluateEligibility(this.ruleFor(s.integration.slug), facts),
+        this.evaluateEligibility(this.ruleFor(s.integration), facts),
       ),
     );
   }
@@ -224,7 +243,7 @@ export class IntegrationsService implements OnModuleInit {
     // after the fact -- withdrawing access is the admin's call, not a
     // silent side effect.
     const facts = await this.loadEligibilityFacts(userId);
-    const eligibility = this.evaluateEligibility(this.ruleFor(integration.slug), facts);
+    const eligibility = this.evaluateEligibility(this.ruleFor(integration), facts);
     if (existing && existing.status !== IntegrationSubscriptionStatus.REJECTED) {
       return this.toPublic(integration, existing.status, eligibility);
     }
@@ -357,8 +376,23 @@ export class IntegrationsService implements OnModuleInit {
         maxConcurrentClaims: dto.maxConcurrentClaims,
         codeValidityMinutes: dto.codeValidityMinutes,
         sortOrder: dto.sortOrder,
+        requirePhoneVerified: dto.requirePhoneVerified,
+        requireKycApproved: dto.requireKycApproved,
+        minCompletedTasks: dto.minCompletedTasks,
       },
     });
+    // Loosening or tightening who may fulfil an integration is worth an
+    // audit line -- it is the difference between a vetted pool and an
+    // open one.
+    if (
+      dto.requirePhoneVerified !== undefined ||
+      dto.requireKycApproved !== undefined ||
+      dto.minCompletedTasks !== undefined
+    ) {
+      this.logger.warn(
+        `Integration eligibility changed: ${row.slug} phone=${row.requirePhoneVerified} kyc=${row.requireKycApproved} minTasks=${row.minCompletedTasks}`,
+      );
+    }
     return this.toAdminPublic(row);
   }
 
@@ -572,6 +606,9 @@ export class IntegrationsService implements OnModuleInit {
     feeTokenAmount: Prisma.Decimal;
     maxConcurrentClaims: number;
     codeValidityMinutes: number;
+    requirePhoneVerified: boolean;
+    requireKycApproved: boolean;
+    minCompletedTasks: number;
     sortOrder: number;
     createdAt: Date;
     updatedAt: Date;
@@ -587,6 +624,9 @@ export class IntegrationsService implements OnModuleInit {
       feeTokenAmount: row.feeTokenAmount.toString(),
       maxConcurrentClaims: row.maxConcurrentClaims,
       codeValidityMinutes: row.codeValidityMinutes,
+      requirePhoneVerified: row.requirePhoneVerified,
+      requireKycApproved: row.requireKycApproved,
+      minCompletedTasks: row.minCompletedTasks,
       sortOrder: row.sortOrder,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,

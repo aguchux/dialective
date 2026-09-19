@@ -15,6 +15,12 @@ describe('IntegrationsService', () => {
     enabled: true,
     feeTokenAmount: new Prisma.Decimal(2),
     sortOrder: 0,
+    // The eligibility rule now lives on the row, admin-editable, rather
+    // than in the code registry. This fixture carries WhatsApp
+    // Validator's shipped rule: identity, no task bar.
+    requirePhoneVerified: true,
+    requireKycApproved: true,
+    minCompletedTasks: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -23,11 +29,9 @@ describe('IntegrationsService', () => {
    * The eligibility facts loadEligibilityFacts reads. Defaults to a member
    * who clears every bar, so a test only states the fact it is about.
    */
-  const eligibleUser = {
-    phoneVerifiedAt: new Date(),
-    kycStatus: 'APPROVED',
-    _count: { wordRecordings: 500 },
-  };
+  const eligibleUser = { phoneVerifiedAt: new Date(), kycStatus: 'APPROVED' };
+  /** Settled tasks are three separate counts, summed. */
+  const SETTLED_TASKS = 500;
 
   /** The user shape the admin queue selects, for update() mock returns. */
   const adminUser = {
@@ -47,6 +51,11 @@ describe('IntegrationsService', () => {
   beforeEach(() => {
     prisma = {
       user: { findUnique: jest.fn().mockResolvedValue(eligibleUser) },
+      // Settled-task counts, summed by loadEligibilityFacts. Put on the
+      // first so a test can set one number and mean "this many tasks".
+      wordRecording: { count: jest.fn().mockResolvedValue(SETTLED_TASKS) },
+      domainConversationRecording: { count: jest.fn().mockResolvedValue(0) },
+      wordValidation: { count: jest.fn().mockResolvedValue(0) },
       integration: {
         findMany: jest.fn().mockResolvedValue([integration]),
         findUnique: jest.fn().mockResolvedValue(integration),
@@ -157,12 +166,21 @@ describe('IntegrationsService', () => {
    * above passes an unqualified member without noticing.
    */
   describe('eligibility -- who may request access', () => {
+    // ID Review's shipped rule, as it sits on the row: identity plus 100
+    // tasks. An admin can change any of it; these tests are about the
+    // rule being applied, not about which values it happens to hold.
     const idReview = {
       ...integration,
       id: 'integration-2',
       slug: 'p2p-kyc-review',
       name: 'ID Review',
+      minCompletedTasks: 100,
     };
+
+    /** Sets the member's settled-task total across the three counts. */
+    function setTasks(total: number) {
+      prisma.wordRecording.count.mockResolvedValue(total);
+    }
 
     beforeEach(() => {
       prisma.integration.findUnique.mockResolvedValue(idReview);
@@ -176,34 +194,49 @@ describe('IntegrationsService', () => {
     });
 
     it.each([
-      ['an unverified phone', { phoneVerifiedAt: null }],
-      ['unapproved KYC', { kycStatus: 'IN_REVIEW' }],
-      ['too few tasks', { _count: { wordRecordings: 99 } }],
-    ])('refuses a member with %s, without reaching the admin queue', async (_label, override) => {
-      prisma.user.findUnique.mockResolvedValue({ ...eligibleUser, ...override });
-      await expect(service.subscribe(userId, idReview.id)).rejects.toThrow(
-        UnprocessableEntityException,
-      );
-      expect(prisma.integrationSubscription.create).not.toHaveBeenCalled();
-    });
+      ['an unverified phone', { phoneVerifiedAt: null }, 500],
+      ['unapproved KYC', { kycStatus: 'IN_REVIEW' }, 500],
+      ['too few tasks', {}, 99],
+    ])(
+      'refuses a member with %s, without reaching the admin queue',
+      async (_label, override, tasks) => {
+        prisma.user.findUnique.mockResolvedValue({ ...eligibleUser, ...override });
+        setTasks(tasks);
+        await expect(service.subscribe(userId, idReview.id)).rejects.toThrow(
+          UnprocessableEntityException,
+        );
+        expect(prisma.integrationSubscription.create).not.toHaveBeenCalled();
+      },
+    );
 
     it('names every unmet requirement, so the member knows the whole bar', async () => {
-      prisma.user.findUnique.mockResolvedValue({
-        phoneVerifiedAt: null,
-        kycStatus: 'NOT_STARTED',
-        _count: { wordRecordings: 3 },
-      });
+      prisma.user.findUnique.mockResolvedValue({ phoneVerifiedAt: null, kycStatus: 'NOT_STARTED' });
+      setTasks(3);
       await expect(service.subscribe(userId, idReview.id)).rejects.toThrow(
         /Verified phone number.*Approved KYC.*100 completed tasks/s,
       );
     });
 
     it('counts exactly the minimum as enough', async () => {
-      prisma.user.findUnique.mockResolvedValue({
-        ...eligibleUser,
-        _count: { wordRecordings: 100 },
-      });
+      setTasks(100);
       await expect(service.subscribe(userId, idReview.id)).resolves.toBeDefined();
+    });
+
+    it('sums the three task kinds rather than counting recordings alone', async () => {
+      // 40 + 30 + 30 = exactly the 100 the rule asks for.
+      setTasks(40);
+      prisma.domainConversationRecording.count.mockResolvedValue(30);
+      prisma.wordValidation.count.mockResolvedValue(30);
+      await expect(service.subscribe(userId, idReview.id)).resolves.toBeDefined();
+    });
+
+    it('counts only SETTLED work, matching the withdrawal and P2P gates', async () => {
+      await service.subscribe(userId, idReview.id).catch(() => undefined);
+      for (const model of ['wordRecording', 'domainConversationRecording', 'wordValidation']) {
+        expect(prisma[model].count).toHaveBeenCalledWith(
+          expect.objectContaining({ where: expect.objectContaining({ status: 'SETTLED' }) }),
+        );
+      }
     });
 
     it('does not re-gate a member who is already approved', async () => {
@@ -230,7 +263,7 @@ describe('IntegrationsService', () => {
     });
 
     it('shows the full bar on the marketplace card, met or not', async () => {
-      prisma.user.findUnique.mockResolvedValue({ ...eligibleUser, _count: { wordRecordings: 40 } });
+      setTasks(40);
       const [result] = await service.list(userId, {});
       expect(result.eligible).toBe(false);
       expect(result.eligibilityRequirements).toEqual([
@@ -240,21 +273,37 @@ describe('IntegrationsService', () => {
       ]);
     });
 
-    it('leaves an integration with no rule open to everyone', async () => {
-      // A slug absent from the registry falls back to an empty rule. Both
-      // shipped integrations now carry a bar, so this pins the fallback
-      // itself rather than whichever one happens to be unrestricted.
+    it('leaves an integration whose rule an admin cleared open to everyone', async () => {
       prisma.integration.findMany.mockResolvedValue([
-        { ...integration, slug: 'unregistered-integration' },
+        {
+          ...integration,
+          requirePhoneVerified: false,
+          requireKycApproved: false,
+          minCompletedTasks: 0,
+        },
       ]);
-      prisma.user.findUnique.mockResolvedValue({
-        phoneVerifiedAt: null,
-        kycStatus: 'NOT_STARTED',
-        _count: { wordRecordings: 0 },
-      });
+      prisma.user.findUnique.mockResolvedValue({ phoneVerifiedAt: null, kycStatus: 'NOT_STARTED' });
+      setTasks(0);
       const [result] = await service.list(userId, {});
       expect(result.eligible).toBe(true);
       expect(result.eligibilityRequirements).toEqual([]);
+    });
+
+    it('follows the admin-set rule on the row, not the code registry', async () => {
+      // The registry only ever seeds a brand-new slug; once the row
+      // exists, what the admin saved is what is enforced. Here ID Review
+      // has been loosened to identity-only.
+      prisma.integration.findUnique.mockResolvedValue({ ...idReview, minCompletedTasks: 0 });
+      setTasks(0);
+      await expect(service.subscribe(userId, idReview.id)).resolves.toBeDefined();
+    });
+
+    it('enforces a raised bar an admin has set beyond the registry default', async () => {
+      prisma.integration.findUnique.mockResolvedValue({ ...idReview, minCompletedTasks: 750 });
+      setTasks(500);
+      await expect(service.subscribe(userId, idReview.id)).rejects.toThrow(
+        '750 completed tasks (you have 500)',
+      );
     });
   });
 
@@ -265,22 +314,14 @@ describe('IntegrationsService', () => {
    */
   describe('eligibility -- WhatsApp Validator', () => {
     it('requires a verified mobile and approved KYC', async () => {
-      prisma.user.findUnique.mockResolvedValue({
-        phoneVerifiedAt: null,
-        kycStatus: 'NOT_STARTED',
-        _count: { wordRecordings: 5000 },
-      });
+      prisma.user.findUnique.mockResolvedValue({ phoneVerifiedAt: null, kycStatus: 'NOT_STARTED' });
       await expect(service.subscribe(userId, integration.id)).rejects.toThrow(
         /Verified phone number.*Approved KYC/s,
       );
     });
 
     it('does NOT require a task history', async () => {
-      prisma.user.findUnique.mockResolvedValue({
-        phoneVerifiedAt: new Date(),
-        kycStatus: 'APPROVED',
-        _count: { wordRecordings: 0 },
-      });
+      prisma.wordRecording.count.mockResolvedValue(0);
       const [result] = await service.list(userId, {});
       expect(result.eligible).toBe(true);
       expect(result.eligibilityRequirements).toEqual([
@@ -466,15 +507,64 @@ describe('IntegrationsService', () => {
         );
       }
     });
+
+    it('seeds the eligibility rule on create but never overwrites it on update', async () => {
+      await service.syncRegistry();
+      for (const definition of INTEGRATION_REGISTRY) {
+        const call = prisma.integration.upsert.mock.calls.find(
+          ([arg]: [any]) => arg.where.slug === definition.slug,
+        );
+        expect(call[0].create).toMatchObject({
+          requirePhoneVerified: definition.defaultEligibility.requirePhoneVerified ?? false,
+          requireKycApproved: definition.defaultEligibility.requireKycApproved ?? false,
+          minCompletedTasks: definition.defaultEligibility.minTasks ?? 0,
+        });
+        // The admin owns these once the row exists -- a deploy must not
+        // reset a rule they deliberately changed.
+        for (const field of [
+          'requirePhoneVerified',
+          'requireKycApproved',
+          'minCompletedTasks',
+        ]) {
+          expect(call[0].update).not.toHaveProperty(field);
+        }
+      }
+    });
   });
 
   describe('update (admin gate)', () => {
-    it('only writes enabled/feeTokenAmount/sortOrder, never name/description/category/slug', async () => {
+    it('only writes the gate fields, never name/description/category/slug', async () => {
       await service.update(integration.id, { enabled: false, feeTokenAmount: 5, sortOrder: 2 });
-      expect(prisma.integration.update).toHaveBeenCalledWith({
-        where: { id: integration.id },
-        data: { enabled: false, feeTokenAmount: 5, sortOrder: 2 },
+      const { data } = prisma.integration.update.mock.calls[0][0];
+      expect(data).toMatchObject({ enabled: false, feeTokenAmount: 5, sortOrder: 2 });
+      // Registry-owned metadata must never be writable from this path.
+      for (const field of ['name', 'description', 'category', 'iconKey', 'slug']) {
+        expect(data).not.toHaveProperty(field);
+      }
+    });
+
+    it('writes the three eligibility fields an admin sets', async () => {
+      await service.update(integration.id, {
+        requirePhoneVerified: true,
+        requireKycApproved: false,
+        minCompletedTasks: 250,
       });
+      expect(prisma.integration.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            requirePhoneVerified: true,
+            requireKycApproved: false,
+            minCompletedTasks: 250,
+          }),
+        }),
+      );
+    });
+
+    it('accepts 0 tasks as "no task bar" rather than treating it as unset', async () => {
+      await service.update(integration.id, { minCompletedTasks: 0 });
+      expect(prisma.integration.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ minCompletedTasks: 0 }) }),
+      );
     });
 
     it('rejects updating a non-existent integration', async () => {

@@ -59,6 +59,27 @@ export default function AdminIntegrationsPage() {
     }
   }
 
+  /**
+   * The eligibility rule is three fields but one decision, so they save
+   * through one handler and render in one column rather than reading as
+   * three unrelated knobs.
+   */
+  async function handleEligibilityChange(
+    id: string,
+    patch: {
+      requirePhoneVerified?: boolean;
+      requireKycApproved?: boolean;
+      minCompletedTasks?: number;
+    },
+  ) {
+    setError('');
+    try {
+      await updateIntegration({ id, ...patch }).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to update this integration.'));
+    }
+  }
+
   const columns: DataTableColumn<AdminIntegration>[] = [
     {
       key: 'name',
@@ -153,6 +174,62 @@ export default function AdminIntegrationsPage() {
       ),
     },
     {
+      key: 'eligibility',
+      header: 'Who may apply',
+      searchable: false,
+      render: (row) => {
+        const open = !row.requirePhoneVerified && !row.requireKycApproved && !row.minCompletedTasks;
+        return (
+          <div className="grid gap-1.5">
+            <label className="inline-flex items-center gap-2 text-sm font-bold">
+              <input
+                checked={row.requirePhoneVerified}
+                className="size-4 accent-[#6F16B9]"
+                onChange={(e) =>
+                  handleEligibilityChange(row.id, { requirePhoneVerified: e.target.checked })
+                }
+                type="checkbox"
+              />
+              Mobile verified
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm font-bold">
+              <input
+                checked={row.requireKycApproved}
+                className="size-4 accent-[#6F16B9]"
+                onChange={(e) =>
+                  handleEligibilityChange(row.id, { requireKycApproved: e.target.checked })
+                }
+                type="checkbox"
+              />
+              KYC approved
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm font-bold">
+              <input
+                className="min-h-9 w-20 rounded-lg border border-line bg-surface px-2 text-sm"
+                defaultValue={row.minCompletedTasks}
+                key={row.id + row.minCompletedTasks}
+                min="0"
+                onBlur={(e) => {
+                  const next = Number(e.target.value);
+                  if (Number.isInteger(next) && next >= 0 && next !== row.minCompletedTasks) {
+                    handleEligibilityChange(row.id, { minCompletedTasks: next });
+                  }
+                }}
+                step="1"
+                type="number"
+              />
+              <span className="font-bold">min tasks</span>
+            </label>
+            {/* An all-off rule is easy to reach by unticking and easy to
+                miss, so it says so rather than just looking empty. */}
+            <p className="text-xs font-bold text-muted">
+              {open ? 'Open to anyone' : '0 tasks = no task bar'}
+            </p>
+          </div>
+        );
+      },
+    },
+    {
       key: 'enabled',
       header: 'Enabled',
       searchable: false,
@@ -178,11 +255,13 @@ export default function AdminIntegrationsPage() {
         <div>
           <h1 className="text-2xl font-black">Integrations</h1>
           <p className="text-sm text-muted">
-            Gate each peer-fulfilled product's enablement, fee, how many claims a single member may
-            hold at once, and how long an issued code stays valid -- independently. New integrations
-            are added by implementing them in code, not from this page -- they appear here
-            automatically once shipped. Click an integration&rsquo;s name to review who may fulfil
-            it.
+            Gate each peer-fulfilled product independently: whether it&rsquo;s live, its fee, how
+            many claims a member may hold at once, how long an issued code stays valid, and who is
+            allowed to apply in the first place. Eligibility is checked when a member requests
+            access, and the requirements are shown on their marketplace card. Changing it never
+            affects members already approved &mdash; withdraw those from the integration&rsquo;s own
+            page. New integrations are added by implementing them in code, not from this page.
+            Click an integration&rsquo;s name to review who may fulfil it.
           </p>
         </div>
 

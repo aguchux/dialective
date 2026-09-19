@@ -62,6 +62,23 @@ export class UpdateIntegrationDto {
   @Type(() => Number)
   @IsNumber()
   sortOrder?: number;
+
+  // Who may request access. Enforced in IntegrationsService.subscribe and
+  // shown on the marketplace card.
+  @IsOptional()
+  @IsBoolean()
+  requirePhoneVerified?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  requireKycApproved?: boolean;
+
+  /** Settled tasks required. 0 switches the task bar off entirely. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  minCompletedTasks?: number;
 }
 
 export class ListIntegrationSubscriptionsDto {
