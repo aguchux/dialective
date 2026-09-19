@@ -19,24 +19,24 @@ import {
 } from '@/store/api';
 
 /**
- * What a reviewer is actually asked to check: does the name on the card
- * match the account, and is the document itself readable and intact.
+ * Four buckets, each covering a family of problems rather than one
+ * specific fault.
  *
- * Deliberately shorter than the admin's list. An admin declining a
- * verification can weigh liveness, duplicate identity and the full
- * decision payload; a reviewer sees one document image and the account
- * name, so offering them reasons they cannot assess would invite
- * guesses. "Something else" keeps the long tail without pretending the
- * list is exhaustive.
+ * A longer list looks more precise but reviewers end up guessing between
+ * neighbouring options -- "blurry", "cut off" and "unreadable number" are
+ * the same finding to the person looking at the card, and splitting them
+ * makes decline data noisier rather than richer. The detail box carries
+ * whatever specificity the case actually warrants.
+ *
+ * Deliberately shorter than the admin's list too: an admin weighs
+ * liveness, duplicate identity and the full decision payload, while a
+ * reviewer sees one image and the account name.
  */
 const PEER_DECLINE_REASONS = [
-  'Name on the document does not match the account',
-  'Document number is unreadable',
-  'Document is blurry or cut off',
-  'Document appears altered or tampered with',
-  'Document has expired',
-  'Not an acceptable ID document',
-  'Something else (explain below)',
+  'No ID uploaded',
+  'Name does not match the account',
+  'Document is not clear enough to read',
+  'Document is not valid or not acceptable',
 ] as const;
 
 /** Reason plus optional detail, as one string for the member to read. */
@@ -51,9 +51,10 @@ function composeDeclineReason(reason: string, detail: string): string {
  *
  * Two tabs: documents waiting to be checked, and this reviewer's own
  * history. Claiming one opens it under a magnifier; the reviewer confirms
- * the name matches the account, types the number they can read, and
- * approves or declines. Two agreeing verdicts send it to an admin, who
- * makes the actual decision.
+ * the name matches the account and either approves -- typing the number
+ * they can read, if the document has one -- or declines by picking a
+ * reason. Two agreeing verdicts send it to an admin, who makes the actual
+ * decision.
  *
  * A CERTIFIED reviewer is the platform's own trained staff: they see the
  * whole document at once rather than through the magnifier (the image is
@@ -208,9 +209,9 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
 
   async function send(verdict: 'APPROVE' | 'DECLINE') {
     setError('');
-    // Optional: some accepted documents carry no number. Sending nothing
-    // records that there was nothing to compare, which is better evidence
-    // than a reviewer inventing a value to get past a required field.
+    // The number is optional even when approving: some accepted documents
+    // carry none, and recording that is better evidence than a reviewer
+    // inventing a value to get past a required field.
     if (verdict === 'DECLINE' && !declineReason) {
       setError('Pick a reason for declining.');
       return;
@@ -219,7 +220,9 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
       const tally = await submit({
         id: subject.id,
         verdict,
-        documentNumber: documentNumber.trim() || undefined,
+        // Never sent with a decline: the field is hidden then, so any
+        // value is left over from before the reviewer changed their mind.
+        documentNumber: verdict === 'APPROVE' ? documentNumber.trim() || undefined : undefined,
         declineReason:
           verdict === 'DECLINE'
             ? composeDeclineReason(declineReason, declineDetail)
@@ -343,23 +346,29 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
           )}
         </p>
 
-        <label className="grid gap-1.5 text-sm font-bold">
-          Document number, exactly as printed
-          <input
-            className="min-h-11 rounded-lg border border-line bg-bg px-3 font-mono"
-            maxLength={64}
-            onChange={(e) => setDocumentNumber(e.target.value)}
-            placeholder={
-              subject.certifiedReviewer ? 'As printed on the card' : 'Read it under the magnifier'
-            }
-            value={documentNumber}
-          />
-          {/* Said plainly, so a reviewer holding a numberless document
-              leaves it empty rather than inventing something to submit. */}
-          <span className="text-xs font-bold text-muted">
-            Leave empty if this document has no number printed on it.
-          </span>
-        </label>
+        {/* Only asked when approving. The number exists to confirm a
+            document the reviewer accepts; asking for it while they
+            reject a missing, unreadable or invalid ID is asking them to
+            read something they have just said they cannot read. */}
+        {!declining && (
+          <label className="grid gap-1.5 text-sm font-bold">
+            Document number, exactly as printed
+            <input
+              className="min-h-11 rounded-lg border border-line bg-bg px-3 font-mono"
+              maxLength={64}
+              onChange={(e) => setDocumentNumber(e.target.value)}
+              placeholder={
+                subject.certifiedReviewer ? 'As printed on the card' : 'Read it under the magnifier'
+              }
+              value={documentNumber}
+            />
+            {/* Said plainly, so a reviewer holding a numberless document
+                leaves it empty rather than inventing something to submit. */}
+            <span className="text-xs font-bold text-muted">
+              Leave empty if this document has no number printed on it.
+            </span>
+          </label>
+        )}
 
         {declining && (
           <div className="grid gap-2">
