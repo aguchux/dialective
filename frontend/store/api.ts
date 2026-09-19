@@ -926,6 +926,12 @@ export interface Integration {
   category: string;
   iconKey: string | null;
   feeTokenAmount: string;
+  /**
+   * What one fulfiller actually receives. On ID Review the requester's fee
+   * is split between the reviewers who decide, so this is the fee divided
+   * by the consensus count -- use it, not feeTokenAmount, for "you earn".
+   */
+  earningPerFulfilment: string;
   /** True only when an admin has APPROVED the request -- i.e. real access. */
   subscribed: boolean;
   /** null when never requested. PENDING means waiting on an admin, not access. */

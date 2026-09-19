@@ -699,13 +699,15 @@ describe('KycPeerReviewService', () => {
   });
 
   describe('payReviewers', () => {
-    function withFee(fee: number, applicantFunded = fee * 10) {
+    function withFee(fee: number, applicantFunded = fee * 10, consensusCount = 2) {
       const s = setup();
-      // A real Decimal: payReviewers now multiplies the fee by the
-      // reviewer count to compare against what the applicant paid.
+      // A real Decimal: payReviewers divides the fee by the consensus count
+      // to get each reviewer's share, then compares the total against what
+      // the applicant actually paid.
       s.prisma.integration.findUnique.mockResolvedValue({
         enabled: true,
         feeTokenAmount: new Prisma.Decimal(fee),
+        consensusCount,
       });
       // The applicant's contribution, charged at submission. Defaults
       // high so the default case mints nothing.
@@ -732,6 +734,58 @@ describe('KycPeerReviewService', () => {
       const result = await service.payReviewers('kyc-1');
       expect(result.paid).toBe(2);
       expect(prisma.ledgerEntry.create).toHaveBeenCalledTimes(2);
+    });
+
+    /**
+     * The applicant pays the fee ONCE and the deciding reviewers share it.
+     * Paying each of them the whole fee is what turned every verification
+     * into an issuance event -- the thing charging the applicant was meant
+     * to stop.
+     */
+    it('splits one fee between the reviewers rather than paying each in full', async () => {
+      const { service, prisma } = withFee(1, 1);
+      prisma.kycPeerReview.findMany.mockResolvedValue([
+        { id: 'r1', reviewerId: 'u1' },
+        { id: 'r2', reviewerId: 'u2' },
+      ]);
+      await service.payReviewers('kyc-1');
+      const credits = prisma.ledgerEntry.create.mock.calls.map((c: any) =>
+        Number(c[0].data.amount),
+      );
+      expect(credits).toEqual([0.5, 0.5]);
+      // The whole point: what went out equals what the applicant put in.
+      expect(credits.reduce((a: number, b: number) => a + b, 0)).toBe(1);
+    });
+
+    it('sizes the share by the consensus count, not the reviews that landed', async () => {
+      // A third peer polled to break a tie must not dock everyone's pay:
+      // reviewers could not know their rate before agreeing to review.
+      const { service, prisma } = withFee(1, 1, 2);
+      prisma.kycPeerReview.findMany.mockResolvedValue([
+        { id: 'r1', reviewerId: 'u1' },
+        { id: 'r2', reviewerId: 'u2' },
+        { id: 'r3', reviewerId: 'u3' },
+      ]);
+      await service.payReviewers('kyc-1');
+      const credits = prisma.ledgerEntry.create.mock.calls.map((c: any) =>
+        Number(c[0].data.amount),
+      );
+      // Still half each -- the tie-breaker's share is the bounded cost of
+      // disagreement, not a pay cut for the other two.
+      expect(credits).toEqual([0.5, 0.5, 0.5]);
+    });
+
+    it('divides by a raised consensus count', async () => {
+      const { service, prisma } = withFee(1, 1, 4);
+      prisma.kycPeerReview.findMany.mockResolvedValue([
+        { id: 'r1', reviewerId: 'u1' },
+        { id: 'r2', reviewerId: 'u2' },
+      ]);
+      await service.payReviewers('kyc-1');
+      const credits = prisma.ledgerEntry.create.mock.calls.map((c: any) =>
+        Number(c[0].data.amount),
+      );
+      expect(credits).toEqual([0.25, 0.25]);
     });
 
     /**

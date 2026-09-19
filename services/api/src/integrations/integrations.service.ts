@@ -593,6 +593,7 @@ export class IntegrationsService implements OnModuleInit {
       category: string;
       iconKey: string | null;
       feeTokenAmount: Prisma.Decimal;
+      consensusCount: number;
     },
     subscriptionStatus: IntegrationSubscriptionStatus | null,
     eligibility: IntegrationEligibility,
@@ -605,6 +606,16 @@ export class IntegrationsService implements OnModuleInit {
       category: integration.category,
       iconKey: integration.iconKey,
       feeTokenAmount: integration.feeTokenAmount.toString(),
+      /**
+       * What ONE fulfiller actually receives. On a consensus integration
+       * the requester's fee is split between the reviewers who decide, so
+       * the raw fee would overstate a reviewer's earnings by the consensus
+       * count. Computed here rather than in the UI so the marketplace card
+       * and the payout code cannot drift apart.
+       */
+      earningPerFulfilment: integration.feeTokenAmount
+        .div(Math.max(1, integration.consensusCount))
+        .toString(),
       /**
        * Kept meaning "has access", so every existing consumer of this flag
        * stays correct now that requesting and being granted are different

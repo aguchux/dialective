@@ -877,10 +877,31 @@ export class KycPeerReviewService {
       select: { reviewFeeTokenAmount: true, reviewFeeShortfall: true },
     });
     const funded = verification?.reviewFeeTokenAmount ?? new Prisma.Decimal(0);
-    const owed = fee.mul(unpaid.length);
+
+    /**
+     * The applicant pays the fee ONCE, and the reviewers who decided the
+     * document share it. Paying each of them the whole fee is what made
+     * every verification an issuance event: at a consensus of 2 it minted a
+     * second fee out of nothing, which is exactly what charging the
+     * applicant was introduced to stop.
+     *
+     * Divided by the CONSENSUS COUNT, not by how many reviews actually
+     * landed. Dividing by the latter would dock every reviewer's pay
+     * whenever a third peer was polled to break a tie -- reviewers would be
+     * paid less for the documents that took more work, and could not know
+     * their rate before agreeing to review. The consensus count is a
+     * published, admin-owned number, so a reviewer knows the rate up front.
+     *
+     * A tie-breaking third review therefore still mints one share. That is
+     * a deliberate, bounded cost of disagreement rather than the unbounded
+     * per-reviewer multiplication it replaces.
+     */
+    const consensus = await this.consensusCount();
+    const share = fee.div(consensus);
+    const owed = share.mul(unpaid.length);
     if (owed.greaterThan(funded)) {
       this.logger.log(
-        `KYC review payout exceeds applicant funding: verification=${verificationId} reviewers=${unpaid.length} owed=${owed.toString()} funded=${funded.toString()} minted=${owed.minus(funded).toString()}`,
+        `KYC review payout exceeds applicant funding: verification=${verificationId} reviewers=${unpaid.length} share=${share.toString()} owed=${owed.toString()} funded=${funded.toString()} minted=${owed.minus(funded).toString()}`,
       );
     }
 
@@ -903,13 +924,13 @@ export class KycPeerReviewService {
           });
           await tx.wallet.update({
             where: { id: wallet.id },
-            data: { balance: { increment: fee } },
+            data: { balance: { increment: share } },
           });
           await tx.ledgerEntry.create({
             data: {
               walletId: wallet.id,
               type: LedgerEntryType.VALIDATION_REWARD,
-              amount: fee,
+              amount: share,
               reference: review.id,
             },
           });

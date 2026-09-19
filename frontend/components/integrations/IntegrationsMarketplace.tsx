@@ -156,9 +156,12 @@ export function IntegrationsMarketplace() {
                 )}
               </div>
               <p className="text-sm text-muted">{integration.description}</p>
-              {Number(integration.feeTokenAmount) > 0 && (
+              {/* earningPerFulfilment, not feeTokenAmount: where several
+                  fulfillers share one requester's fee, the fee overstates
+                  what any one of them takes home. */}
+              {Number(integration.earningPerFulfilment) > 0 && (
                 <p className="text-sm font-extrabold">
-                  Earn {integration.feeTokenAmount} DL per fulfilled request
+                  Earn {integration.earningPerFulfilment} DL per fulfilled request
                 </p>
               )}
               {/* Requesting access and having it are different things now:
