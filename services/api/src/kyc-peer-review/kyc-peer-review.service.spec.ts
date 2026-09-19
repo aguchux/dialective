@@ -458,7 +458,7 @@ describe('KycPeerReviewService', () => {
       });
     });
 
-    it('leaves an ordinary peer verdict to the normal quorum', async () => {
+    it('does not decide on a single ordinary peer verdict', async () => {
       const { service, kyc } = claimed(false);
       const result = await service.submitReview('peer-1', 'kyc-1', {
         verdict: 'APPROVE',
@@ -526,6 +526,135 @@ describe('KycPeerReviewService', () => {
         _count: { peerReviews: 0 },
       });
       await expect(service.claim('staff-1', 'kyc-1')).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  /**
+   * Peer consensus applies the verdict itself. These cover the path that
+   * replaced the admin queue -- the one place where ordinary members move
+   * another member's KycStatus, so the conditions for it firing (and for it
+   * NOT firing) are worth pinning down precisely.
+   */
+  describe('consensus decides without an admin', () => {
+    /**
+     * A claimed verification where `existing` peer reviews are already on
+     * file, so the one being submitted is the Nth.
+     */
+    function atConsensus(existing: ('APPROVE' | 'DECLINE')[], consensusCount = 2) {
+      const s = setup();
+      s.integrations.isCertified.mockResolvedValue(false);
+      s.prisma.kycPeerReviewClaim.findFirst.mockResolvedValue({ id: 'claim-1' });
+      s.prisma.kycVerification.findUnique.mockResolvedValue({
+        id: 'kyc-1',
+        status: 'IN_REVIEW',
+        userId: 'other',
+        decisionEncryptedJson: null,
+        _count: { peerReviews: existing.length },
+      });
+      s.prisma.integration.findUnique.mockResolvedValue({ consensusCount });
+      // tally() re-reads every review, including the one just written.
+      s.prisma.kycPeerReview.findMany.mockResolvedValue(
+        existing.map((verdict) => ({ verdict, declineReason: null })),
+      );
+      return s;
+    }
+
+    it('approves the verification once enough peers agree', async () => {
+      const { service, kyc } = atConsensus(['APPROVE', 'APPROVE']);
+      await service.submitReview('peer-2', 'kyc-1', {
+        verdict: 'APPROVE',
+        documentNumber: 'AB123456',
+      });
+      expect(kyc.adminApproveSelfHosted).toHaveBeenCalledWith('kyc-1');
+    });
+
+    it('declines once enough peers agree, telling the member why', async () => {
+      const s = atConsensus(['DECLINE', 'DECLINE']);
+      s.prisma.kycPeerReview.findMany.mockResolvedValue([
+        { verdict: 'DECLINE', declineReason: 'No ID uploaded' },
+        { verdict: 'DECLINE', declineReason: 'No ID uploaded' },
+      ]);
+      await s.service.submitReview('peer-2', 'kyc-1', {
+        verdict: 'DECLINE',
+        declineReason: 'No ID uploaded',
+      });
+      // Deduplicated: agreeing peers usually pick the same reason, and the
+      // applicant should not be told the same thing twice.
+      expect(s.kyc.adminDeclineSelfHosted).toHaveBeenCalledWith('kyc-1', 'No ID uploaded');
+    });
+
+    it('does not decide while peers are still split', async () => {
+      const { service, kyc } = atConsensus(['APPROVE', 'DECLINE']);
+      await service.submitReview('peer-2', 'kyc-1', {
+        verdict: 'APPROVE',
+        documentNumber: 'AB123456',
+      });
+      expect(kyc.adminApproveSelfHosted).not.toHaveBeenCalled();
+      expect(kyc.adminDeclineSelfHosted).not.toHaveBeenCalled();
+    });
+
+    it('honours a raised consensus count -- two is no longer enough', async () => {
+      const { service, kyc } = atConsensus(['APPROVE', 'APPROVE'], 3);
+      await service.submitReview('peer-2', 'kyc-1', {
+        verdict: 'APPROVE',
+        documentNumber: 'AB123456',
+      });
+      expect(kyc.adminApproveSelfHosted).not.toHaveBeenCalled();
+    });
+
+    it('never decides on a consensus count below 1', async () => {
+      // A 0 would approve a document nobody agreed on. The DTO floors this
+      // at 1, but the service must not trust that on its own.
+      const { service, kyc } = atConsensus([], 0);
+      await service.submitReview('peer-1', 'kyc-1', {
+        verdict: 'APPROVE',
+        documentNumber: 'AB123456',
+      });
+      expect(kyc.adminApproveSelfHosted).not.toHaveBeenCalled();
+    });
+
+    it('pays the reviewers once the decision lands', async () => {
+      const { service, prisma } = atConsensus(['APPROVE', 'APPROVE']);
+      const paySpy = jest.spyOn(service, 'payReviewers').mockResolvedValue({ paid: 2 });
+      await service.submitReview('peer-2', 'kyc-1', {
+        verdict: 'APPROVE',
+        documentNumber: 'AB123456',
+      });
+      expect(paySpy).toHaveBeenCalledWith('kyc-1');
+      expect(prisma.kycPeerReview.create).toHaveBeenCalled();
+    });
+
+    it('leaves the document for an admin when applying the decision fails', async () => {
+      const { service, kyc } = atConsensus(['APPROVE', 'APPROVE']);
+      kyc.adminApproveSelfHosted.mockRejectedValue(new Error('boom'));
+      // The reviewer's own submission must still succeed: they did the work,
+      // and their review is already committed.
+      await expect(
+        service.submitReview('peer-2', 'kyc-1', {
+          verdict: 'APPROVE',
+          documentNumber: 'AB123456',
+        }),
+      ).resolves.toBeDefined();
+    });
+
+    it('does not re-decide a verification that already left IN_REVIEW', async () => {
+      const s = atConsensus(['APPROVE', 'APPROVE']);
+      // First read (the claim guard) sees IN_REVIEW; by the time the
+      // consensus check re-reads it, a concurrent submit has decided it.
+      s.prisma.kycVerification.findUnique
+        .mockResolvedValueOnce({
+          id: 'kyc-1',
+          status: 'IN_REVIEW',
+          userId: 'other',
+          decisionEncryptedJson: null,
+          _count: { peerReviews: 2 },
+        })
+        .mockResolvedValueOnce({ status: 'APPROVED' });
+      await s.service.submitReview('peer-2', 'kyc-1', {
+        verdict: 'APPROVE',
+        documentNumber: 'AB123456',
+      });
+      expect(s.kyc.adminApproveSelfHosted).not.toHaveBeenCalled();
     });
   });
 

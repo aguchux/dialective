@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -57,6 +58,20 @@ export class UpdateIntegrationDto {
   @IsInt()
   @Min(1)
   codeValidityMinutes?: number;
+
+  /**
+   * Agreeing verdicts that decide an item outright, with no admin step.
+   *
+   * Floored at 1 rather than 0: on ID Review this number moves a member's
+   * KycStatus unsupervised, and 0 would approve documents nobody looked at.
+   * Capped so a typo cannot park every applicant in permanent review.
+   */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  consensusCount?: number;
 
   @IsOptional()
   @Type(() => Number)

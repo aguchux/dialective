@@ -992,7 +992,14 @@ export interface PeerReviewTally {
   reviewCount: number;
   approvals: number;
   declines: number;
+  /** Agreeing verdicts needed to decide, from Integration.consensusCount. */
+  consensusCount: number;
   needsAnotherReviewer: boolean;
+  /**
+   * Enough peers agreed, so the verification has been DECIDED -- the
+   * applicant's KYC status is already moved. Named for the era when this
+   * meant "queued for an admin"; kept for wire compatibility.
+   */
   readyForAdmin: boolean;
   recommendation: 'APPROVE' | 'DECLINE' | null;
 }
@@ -1023,6 +1030,13 @@ export interface AdminPeerReviewItem {
   }[];
   approvals: number;
   declines: number;
+  /** Agreeing verdicts needed to decide, from Integration.consensusCount. */
+  consensusCount: number;
+  /**
+   * Consensus was reached but the verification is still IN_REVIEW, meaning
+   * auto-apply failed and a human has to finish it. Not a "recommendation"
+   * -- on the normal path a decided document never appears in this queue.
+   */
   readyForAdmin: boolean;
   recommendation: 'APPROVE' | 'DECLINE' | null;
 }
@@ -1044,6 +1058,10 @@ export interface AdminIntegration {
   // How long an issued verification code/request stays valid before
   // expiring, in minutes.
   codeValidityMinutes: number;
+  // Agreeing peer verdicts that decide an item outright, with no admin
+  // step -- on ID Review this applies the verdict to the applicant's KYC
+  // status directly.
+  consensusCount: number;
   // Who may REQUEST access. Enforced on subscribe and shown on the
   // marketplace card; all three off means open to anyone.
   requirePhoneVerified: boolean;
@@ -5000,6 +5018,7 @@ export const dialectivaApi = createApi({
         feeTokenAmount?: number;
         maxConcurrentClaims?: number;
         codeValidityMinutes?: number;
+        consensusCount?: number;
         sortOrder?: number;
         requirePhoneVerified?: boolean;
         requireKycApproved?: boolean;

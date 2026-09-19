@@ -79,6 +79,7 @@ export class IntegrationsService implements OnModuleInit {
           sortOrder: definition.defaultSortOrder,
           maxConcurrentClaims: definition.defaultMaxConcurrentClaims,
           codeValidityMinutes: definition.defaultCodeValidityMinutes,
+          consensusCount: definition.defaultConsensusCount,
           requirePhoneVerified: definition.defaultEligibility.requirePhoneVerified ?? false,
           requireKycApproved: definition.defaultEligibility.requireKycApproved ?? false,
           minCompletedTasks: definition.defaultEligibility.minTasks ?? 0,
@@ -383,6 +384,7 @@ export class IntegrationsService implements OnModuleInit {
         feeTokenAmount: dto.feeTokenAmount,
         maxConcurrentClaims: dto.maxConcurrentClaims,
         codeValidityMinutes: dto.codeValidityMinutes,
+        consensusCount: dto.consensusCount,
         sortOrder: dto.sortOrder,
         requirePhoneVerified: dto.requirePhoneVerified,
         requireKycApproved: dto.requireKycApproved,
@@ -399,6 +401,14 @@ export class IntegrationsService implements OnModuleInit {
     ) {
       this.logger.warn(
         `Integration eligibility changed: ${row.slug} phone=${row.requirePhoneVerified} kyc=${row.requireKycApproved} minTasks=${row.minCompletedTasks}`,
+      );
+    }
+    // The consensus count decides real outcomes with no human confirming
+    // them -- on ID Review it moves a member's KycStatus. Worth its own
+    // line so a later "who lowered the bar?" has an answer.
+    if (dto.consensusCount !== undefined && dto.consensusCount !== existing.consensusCount) {
+      this.logger.warn(
+        `Integration consensus count changed: ${row.slug} ${existing.consensusCount} -> ${row.consensusCount}`,
       );
     }
     return this.toAdminPublic(row);
@@ -623,6 +633,7 @@ export class IntegrationsService implements OnModuleInit {
     feeTokenAmount: Prisma.Decimal;
     maxConcurrentClaims: number;
     codeValidityMinutes: number;
+    consensusCount: number;
     requirePhoneVerified: boolean;
     requireKycApproved: boolean;
     minCompletedTasks: number;
@@ -641,6 +652,7 @@ export class IntegrationsService implements OnModuleInit {
       feeTokenAmount: row.feeTokenAmount.toString(),
       maxConcurrentClaims: row.maxConcurrentClaims,
       codeValidityMinutes: row.codeValidityMinutes,
+      consensusCount: row.consensusCount,
       requirePhoneVerified: row.requirePhoneVerified,
       requireKycApproved: row.requireKycApproved,
       minCompletedTasks: row.minCompletedTasks,

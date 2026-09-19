@@ -22,6 +22,8 @@ export interface IntegrationDefinition {
   defaultMaxConcurrentClaims: number;
   /** Default minutes an issued code/request stays valid before expiring, until an admin changes it via the gate. */
   defaultCodeValidityMinutes: number;
+  /** Default agreeing verdicts needed to decide an item outright, until an admin changes it via the gate. Only meaningful to consensus-based integrations. */
+  defaultConsensusCount: number;
   /**
    * SEED value for who may request access, applied only when this slug
    * first appears in the database. After that the admin owns it, editable
@@ -50,6 +52,8 @@ export const INTEGRATION_REGISTRY: IntegrationDefinition[] = [
     defaultSortOrder: 0,
     defaultMaxConcurrentClaims: 5,
     defaultCodeValidityMinutes: 60 * 24,
+    // Not a consensus integration -- one validator confirms a code outright.
+    defaultConsensusCount: 1,
     /**
      * A validator confirms someone else's phone number, so they must have
      * proven their own first -- and be an identified person, since the
@@ -73,6 +77,12 @@ export const INTEGRATION_REGISTRY: IntegrationDefinition[] = [
     // once is exactly what this feature should not encourage.
     defaultMaxConcurrentClaims: 2,
     defaultCodeValidityMinutes: 60 * 24,
+    /**
+     * Two agreeing reviewers decide a verification outright -- no admin
+     * confirms it. Raise this to make auto-decide stricter; the reviewer
+     * ceiling follows it up automatically so a split can still resolve.
+     */
+    defaultConsensusCount: 2,
     /**
      * A reviewer here reads other members' identity documents, so the bar
      * is deliberately high: they must have proven their own phone and

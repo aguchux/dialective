@@ -22,9 +22,13 @@ import { KycService } from '../kyc/kyc.service';
 export const INTEGRATION_SLUG = 'p2p-kyc-review';
 
 /**
- * Agreeing verdicts needed before a verification reaches an admin. Two
- * peers who agree is the normal path; where they disagree a third is
- * polled and the majority of three decides (see tally).
+ * Fallback for the agreeing verdicts needed to decide a verification.
+ *
+ * The real value is Integration.consensusCount, which the admin owns; this
+ * is only used if the integration row is missing or holds a nonsense value.
+ * Reaching the count DECIDES the verification outright -- it does not queue
+ * it for an admin -- so a bad number here would either auto-approve on a
+ * single opinion or stall every applicant forever.
  */
 export const KYC_PEER_REVIEW_QUORUM = 2;
 
@@ -39,13 +43,14 @@ const CLAIM_TTL_MINUTES = 20;
  * A subscribed, admin-approved member claims a verification sitting in
  * IN_REVIEW, reads the document through a magnifier over an already
  * redacted (grayscale, watermarked) copy, checks the name against the
- * account and types back the document number. Two agreeing verdicts send
- * it to an admin, who makes the real decision -- peers never move a
- * trainer's KycStatus themselves.
+ * account and types back the document number. Once enough peers agree
+ * (Integration.consensusCount), that verdict IS the decision: it moves the
+ * applicant's KycStatus through the same methods the admin panel uses, with
+ * no admin step. Admins keep the reset and reverse tools for correcting a
+ * consensus that got it wrong, but they are no longer in the happy path.
  *
- * Reviewers are paid by the PLATFORM when an admin approves, not by the
- * person being verified: KYC is something the platform requires, not a
- * service the trainer chose to buy.
+ * Reviewers are paid from the applicant's review fee once the decision
+ * lands, whoever it was made by.
  */
 @Injectable()
 export class KycPeerReviewService {
@@ -115,9 +120,11 @@ export class KycPeerReviewService {
     await this.expireStaleClaims(now);
 
     const where: Prisma.KycVerificationWhereInput = {
+      // Anything that reached consensus has already left IN_REVIEW, so this
+      // also filters out decided documents -- nobody is shown work whose
+      // outcome is settled.
       status: KycStatus.IN_REVIEW,
       userId: { not: userId },
-      // Already at quorum: waiting on the admin, not on more peers.
       peerReviews: { none: { reviewerId: userId } },
       captureEvidence: { some: {} },
       peerReviewClaims: { none: { reviewerId: { not: userId } } },
@@ -449,34 +456,153 @@ export class KycPeerReviewService {
       return { ...(await this.tally(verificationId)), decidedByCertifiedReviewer: true };
     }
 
+    // Peer consensus decides on its own. Reaching the count applies the
+    // verdict through the same KycService methods the admin panel calls, so
+    // the decision record, notification and audit trail are identical to an
+    // admin having pressed the button -- the admin is simply no longer in
+    // the path. They keep adminResetReviews and the reversal tools for a
+    // consensus that got it wrong.
+    const result = await this.tally(verificationId);
+    if (result.readyForAdmin && result.recommendation) {
+      await this.applyConsensusDecision(verificationId, result.recommendation);
+    }
     return { ...(await this.tally(verificationId)), decidedByCertifiedReviewer: false };
+  }
+
+  /**
+   * Apply a peer-consensus verdict to the applicant's KycStatus.
+   *
+   * Idempotent by way of the status re-read: getReviewableSelfHostedVerification
+   * inside KycService only accepts a verification still sitting in IN_REVIEW,
+   * so a concurrent submit that also sees consensus cannot decide it twice.
+   * The status check here just avoids the pointless throw in the common case.
+   *
+   * Deliberately swallows its own failure: the peer's review is already
+   * committed and they have done their work. A failure to apply leaves the
+   * verification IN_REVIEW at consensus, which the admin queue still shows,
+   * so the outcome degrades to the old admin-decides behaviour rather than
+   * losing the review or failing the reviewer's submission.
+   */
+  private async applyConsensusDecision(
+    verificationId: string,
+    recommendation: 'APPROVE' | 'DECLINE',
+  ): Promise<void> {
+    const current = await this.prisma.kycVerification.findUnique({
+      where: { id: verificationId },
+      select: { status: true },
+    });
+    if (current?.status !== KycStatus.IN_REVIEW) return;
+
+    try {
+      if (recommendation === 'APPROVE') {
+        await this.kyc.adminApproveSelfHosted(verificationId);
+      } else {
+        await this.kyc.adminDeclineSelfHosted(
+          verificationId,
+          await this.consensusDeclineReason(verificationId),
+        );
+      }
+      this.logger.log(
+        `Peer consensus ${recommendation} applied to KycVerification ${verificationId} with no admin action`,
+      );
+      // Reviewers are owed for the work whichever way it went.
+      await this.payReviewers(verificationId);
+    } catch (err) {
+      this.logger.error(
+        `Peer consensus ${recommendation} failed to apply for KycVerification ${verificationId}; left for an admin: ${String(err)}`,
+      );
+    }
+  }
+
+  /**
+   * What to tell a declined applicant.
+   *
+   * Reuses the reasons the declining peers actually picked rather than a
+   * generic string: they chose from a fixed list precisely so the applicant
+   * could be told something actionable. Deduplicated because agreeing peers
+   * usually pick the same reason.
+   */
+  private async consensusDeclineReason(verificationId: string): Promise<string> {
+    const declines = await this.prisma.kycPeerReview.findMany({
+      where: {
+        kycVerificationId: verificationId,
+        verdict: KycPeerReviewVerdict.DECLINE,
+      },
+      select: { declineReason: true },
+    });
+    const reasons = [
+      ...new Set(
+        declines
+          .map((r) => r.declineReason?.trim())
+          .filter((r): r is string => !!r),
+      ),
+    ];
+    return reasons.length > 0
+      ? reasons.join('; ')
+      : 'Document did not match the account';
+  }
+
+  /**
+   * How many agreeing verdicts decide a verification.
+   *
+   * Admin-owned via Integration.consensusCount. Guarded rather than trusted:
+   * this number now applies a decision with nobody checking it, so a 0 or a
+   * negative would approve on no reviews at all. Anything below 1 falls back
+   * to the constant.
+   */
+  private async consensusCount(): Promise<number> {
+    const integration = await this.prisma.integration.findUnique({
+      where: { slug: INTEGRATION_SLUG },
+      select: { consensusCount: true },
+    });
+    const configured = integration?.consensusCount;
+    return configured !== undefined && configured !== null && configured >= 1
+      ? configured
+      : KYC_PEER_REVIEW_QUORUM;
+  }
+
+  /**
+   * How many peers may be polled before the split is given up on.
+   *
+   * Has to sit above the consensus count, or a document could run out of
+   * reviewers while still short of a decision -- at consensus 3 a 2-1 split
+   * after three reviews needs a fourth opinion to resolve. Allowing one
+   * dissent beyond the count is what the original 2-of-3 shape expressed.
+   */
+  private maxReviews(consensus: number): number {
+    return Math.max(KYC_PEER_REVIEW_MAX_REVIEWS, consensus + 1);
   }
 
   /**
    * Where a verification stands.
    *
-   * Two agreeing verdicts is the quorum. If the first two disagree, a
-   * third is polled and the majority of three decides. Either way the
-   * outcome is only a RECOMMENDATION -- an admin still makes the decision
-   * that moves a trainer's KycStatus.
+   * Enough agreeing verdicts DECIDES it -- `decided` means the applicant's
+   * KycStatus has been (or is about to be) moved, not that an admin has
+   * work to do. Where peers disagree, more are polled until one side
+   * reaches the count or the reviewer ceiling is hit.
    */
   async tally(verificationId: string) {
-    const reviews = await this.prisma.kycPeerReview.findMany({
-      where: { kycVerificationId: verificationId },
-      select: { verdict: true },
-    });
+    const [reviews, consensus] = await Promise.all([
+      this.prisma.kycPeerReview.findMany({
+        where: { kycVerificationId: verificationId },
+        select: { verdict: true },
+      }),
+      this.consensusCount(),
+    ]);
     const approvals = reviews.filter((r) => r.verdict === KycPeerReviewVerdict.APPROVE).length;
     const declines = reviews.length - approvals;
 
-    const decided = approvals >= KYC_PEER_REVIEW_QUORUM || declines >= KYC_PEER_REVIEW_QUORUM;
+    const decided = approvals >= consensus || declines >= consensus;
     return {
       reviewCount: reviews.length,
       approvals,
       declines,
-      // Split after two: a third peer breaks the tie.
-      needsAnotherReviewer: !decided && reviews.length < KYC_PEER_REVIEW_MAX_REVIEWS,
+      consensusCount: consensus,
+      needsAnotherReviewer: !decided && reviews.length < this.maxReviews(consensus),
       readyForAdmin: decided,
-      recommendation: decided ? (approvals > declines ? 'APPROVE' : 'DECLINE') : null,
+      recommendation: decided
+        ? ((approvals > declines ? 'APPROVE' : 'DECLINE') as 'APPROVE' | 'DECLINE')
+        : null,
     };
   }
 
@@ -504,8 +630,17 @@ export class KycPeerReviewService {
 
   // --- Admin ---------------------------------------------------------------
 
-  /** Verifications that have reached quorum and are waiting on an admin. */
+  /**
+   * Verifications still in peer review, for admin oversight.
+   *
+   * Consensus now decides on its own, so this is a monitoring view rather
+   * than a work queue: most rows here are simply mid-review and will resolve
+   * without anyone. A row showing readyForAdmin means consensus was reached
+   * but applying it FAILED (see applyConsensusDecision) -- that one really
+   * does need a human, and is the reason this list still exists.
+   */
   async listForAdmin() {
+    const consensus = await this.consensusCount();
     const rows = await this.prisma.kycVerification.findMany({
       where: { status: KycStatus.IN_REVIEW, peerReviews: { some: {} } },
       select: {
@@ -532,7 +667,7 @@ export class KycPeerReviewService {
     return rows.map((row) => {
       const approvals = row.peerReviews.filter((r) => r.verdict === 'APPROVE').length;
       const declines = row.peerReviews.length - approvals;
-      const decided = approvals >= KYC_PEER_REVIEW_QUORUM || declines >= KYC_PEER_REVIEW_QUORUM;
+      const decided = approvals >= consensus || declines >= consensus;
       return {
         id: row.id,
         documentType: row.documentType,
@@ -541,6 +676,8 @@ export class KycPeerReviewService {
         reviews: row.peerReviews,
         approvals,
         declines,
+        consensusCount: consensus,
+        // Still IN_REVIEW despite consensus: auto-apply did not take.
         readyForAdmin: decided,
         recommendation: decided ? (approvals > declines ? 'APPROVE' : 'DECLINE') : null,
       };

@@ -12,6 +12,12 @@ import {
 } from '@/store/api';
 
 /**
+ * The only integration whose verdicts are settled by peer consensus. Other
+ * rows carry the column but ignore it, so the control is hidden for them.
+ */
+const CONSENSUS_INTEGRATION_SLUG = 'p2p-kyc-review';
+
+/**
  * Admin gate for the "P2P & Integrations" marketplace. Integrations are
  * NOT created here -- each one is a real implemented feature registered in
  * code (services/api/src/integrations/integration-registry.ts), synced
@@ -54,6 +60,15 @@ export default function AdminIntegrationsPage() {
     setError('');
     try {
       await updateIntegration({ id, codeValidityMinutes }).unwrap();
+    } catch (err) {
+      setError(normalizeErrorMessage(err, 'Unable to update this integration.'));
+    }
+  }
+
+  async function handleConsensusChange(id: string, consensusCount: number) {
+    setError('');
+    try {
+      await updateIntegration({ id, consensusCount }).unwrap();
     } catch (err) {
       setError(normalizeErrorMessage(err, 'Unable to update this integration.'));
     }
@@ -172,6 +187,43 @@ export default function AdminIntegrationsPage() {
           type="number"
         />
       ),
+    },
+    {
+      key: 'consensusCount',
+      header: 'Verdicts to decide',
+      searchable: false,
+      render: (row) =>
+        // Only ID Review decides by consensus. Showing the control on
+        // integrations that ignore it would imply a gate that isn't there.
+        row.slug === CONSENSUS_INTEGRATION_SLUG ? (
+          <div className="flex flex-col gap-1">
+            <input
+              className="min-h-9 w-20 rounded-lg border border-line bg-surface px-2 text-sm"
+              defaultValue={row.consensusCount}
+              key={row.id + row.consensusCount}
+              max="10"
+              min="1"
+              onBlur={(e) => {
+                const next = Number(e.target.value);
+                if (
+                  Number.isInteger(next) &&
+                  next >= 1 &&
+                  next <= 10 &&
+                  next !== row.consensusCount
+                ) {
+                  handleConsensusChange(row.id, next);
+                }
+              }}
+              step="1"
+              type="number"
+            />
+            <span className="text-xs text-muted">
+              Applies automatically — no admin step
+            </span>
+          </div>
+        ) : (
+          <span className="text-xs text-muted">—</span>
+        ),
     },
     {
       key: 'eligibility',

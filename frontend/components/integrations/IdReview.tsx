@@ -53,15 +53,17 @@ function composeDeclineReason(reason: string, detail: string): string {
  * history. Claiming one opens it under a magnifier; the reviewer confirms
  * the name matches the account and either approves -- typing the number
  * they can read, if the document has one -- or declines by picking a
- * reason. Two agreeing verdicts send it to an admin, who makes the actual
- * decision.
+ * reason. Once enough reviewers agree, that verdict IS the decision: it
+ * moves the applicant's KYC status with no admin step.
  *
  * A CERTIFIED reviewer is the platform's own trained staff: they see the
  * whole document at once rather than through the magnifier (the image is
- * the same redacted copy either way), and their single
- * verdict settles the verification with no second reviewer and no admin
- * step. The copy changes to say so, because someone whose click is final
- * should know that before they click.
+ * the same redacted copy either way), and their single verdict settles the
+ * verification on its own.
+ *
+ * The copy says plainly that peer verdicts decide, because someone whose
+ * click can approve a stranger's identity should know that before they
+ * click.
  */
 export function IdReview() {
   const pathname = usePathname();
@@ -109,9 +111,9 @@ export function IdReview() {
         <ScanFace className="size-7 text-accent" aria-hidden="true" /> ID Review
       </h1>
       <p className="mt-1 mb-5 text-sm text-muted">
-        Check that the name on a member&rsquo;s ID matches their account. Two reviewers who agree
-        send it to an admin, who makes the final decision. Certified reviewers decide on their
-        own.
+        Check that the name on a member&rsquo;s ID matches their account. When enough reviewers
+        agree, that verdict is applied straight away &mdash; it decides whether the member passes
+        KYC, with no admin step. Certified reviewers decide on their own.
       </p>
 
       <div className="mb-4 flex gap-2">
@@ -234,7 +236,9 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
             ? 'Approved. This member’s KYC is now verified.'
             : 'Declined. The member has been notified.'
           : tally.readyForAdmin
-            ? 'Thanks — this document now has enough reviews and is with an admin.'
+            ? tally.recommendation === 'APPROVE'
+              ? 'Thanks — enough reviewers agreed, so this member’s KYC is now approved.'
+              : 'Thanks — enough reviewers agreed, so this document was declined and the member has been notified.'
             : 'Thanks — another reviewer will look at this one too.',
       );
     } catch (err) {
@@ -490,7 +494,10 @@ function MyReviews() {
               review.paidAt ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
             }`}
           >
-            {review.paidAt ? 'Paid' : 'Awaiting admin'}
+            {/* Reviewers are paid once the document is decided, which now
+                happens as soon as enough peers agree -- an unpaid review is
+                one whose document is still waiting on other reviewers. */}
+            {review.paidAt ? 'Paid' : 'Awaiting decision'}
           </span>
         </div>
       ))}

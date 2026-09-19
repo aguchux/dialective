@@ -14,14 +14,18 @@ import {
 } from '@/store/api';
 
 /**
- * Verifications the community has reviewed, waiting on an admin.
+ * Verifications still in community review -- a monitoring view, not a
+ * queue of work.
  *
- * Peers never move a trainer's KycStatus -- what they produce is a
- * recommendation plus a record of who said what. The approve/decline
- * buttons live on the existing verification page, which is where the
- * decision has always been made; this queue is the way in, and adds the
- * one action peers create a need for: sending a document back for a fresh
- * run when the review itself looked wrong.
+ * Peer consensus now moves a trainer's KycStatus on its own, so a document
+ * that reaches the required number of agreeing verdicts is decided and
+ * leaves this list without anyone acting. What remains is either still
+ * mid-review, or flagged "needs an admin" because applying the consensus
+ * failed -- that second case is the only one that genuinely needs a human.
+ *
+ * The admin's standing power is correction, not approval: sending a
+ * document back for a fresh run when the review itself looked wrong, and
+ * the approve/decline and reversal controls on the verification page.
  */
 export default function AdminPeerReviewsPage() {
   const { data: rows = [], isLoading } = useGetAdminPeerReviewQueueQuery();
@@ -103,23 +107,21 @@ export default function AdminPeerReviewsPage() {
     },
     {
       key: 'recommendation',
-      header: 'Recommendation',
-      sortValue: (row) => row.recommendation ?? '',
+      header: 'Status',
+      sortValue: (row) => (row.readyForAdmin ? '0' : '1'),
       render: (row) =>
+        // Consensus reached but the document is STILL here: auto-apply did
+        // not take, so this one is stuck and needs a human. Flagged red
+        // regardless of which way the peers leaned -- the verdict is not
+        // the problem, the fact that it never landed is.
         row.readyForAdmin ? (
-          <span
-            className={`rounded-full px-2.5 py-1 text-xs font-black ${
-              row.recommendation === 'APPROVE'
-                ? 'bg-emerald-100 text-emerald-800'
-                : 'bg-red-100 text-red-800'
-            }`}
-          >
-            {row.recommendation === 'APPROVE' ? 'Approve' : 'Decline'} ({row.approvals}-
-            {row.declines})
+          <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-black text-red-800">
+            needs an admin — {row.recommendation === 'APPROVE' ? 'approve' : 'decline'} (
+            {row.approvals}-{row.declines}) did not apply
           </span>
         ) : (
           <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-800">
-            waiting on peers ({row.approvals}-{row.declines})
+            in review ({row.approvals}-{row.declines} of {row.consensusCount})
           </span>
         ),
     },
@@ -149,7 +151,7 @@ export default function AdminPeerReviewsPage() {
     },
   ];
 
-  const ready = rows.filter((row) => row.readyForAdmin).length;
+  const stuck = rows.filter((row) => row.readyForAdmin).length;
 
   return (
     <AdminShell>
@@ -157,12 +159,13 @@ export default function AdminPeerReviewsPage() {
         <div>
           <h1 className="text-2xl font-black">Peer-reviewed IDs</h1>
           <p className="mt-1 text-sm text-muted">
-            {ready > 0
-              ? `${ready} document${ready === 1 ? '' : 's'} ready for your decision. `
-              : 'Nothing ready for a decision yet. '}
-            Community reviewers check the name on a document against the account; you still make
-            the call. &ldquo;Send back&rdquo; clears their verdicts and returns it to the pool for
-            a fresh run.
+            {stuck > 0
+              ? `${stuck} document${stuck === 1 ? '' : 's'} reached consensus but could not be applied — those need you. `
+              : 'Nothing needs you right now. '}
+            Community reviewers check the name on a document against the account, and once enough
+            of them agree the verdict is applied automatically. Documents below are still in
+            review. &ldquo;Send back&rdquo; clears their verdicts and returns one to the pool for a
+            fresh run.
           </p>
         </div>
 
