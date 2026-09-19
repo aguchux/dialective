@@ -97,13 +97,17 @@ export class KycPeerReviewController {
       certified ? 'CERTIFIED' : 'PEER',
     );
     const raw = await this.storage.getObjectBuffer(evidence.bucket, evidence.key);
-    // A certified reviewer sees the document as captured. They are trained
-    // staff making the actual decision, and the grayscale watermark that
-    // de-identifies a document for a community reviewer also obscures the
-    // detail that decision depends on. The trade is deliberate, and the
-    // view is logged either way.
-    const body = certified ? raw : await this.redaction.toReviewCopy(raw);
-    res.setHeader('Content-Type', certified ? 'image/jpeg' : 'image/jpeg');
+    // Everyone gets the redacted copy, certified reviewers included. The
+    // raw colour original never leaves the bucket.
+    //
+    // What differs by role is presentation, not the bytes: a certified
+    // reviewer sees the whole redacted image at once, a community
+    // reviewer reads it through the magnifier lens. Grayscale and the
+    // tiled watermark leave a name and a document number perfectly
+    // legible, so the decision loses nothing -- while a screenshot of
+    // someone's ID stays marked and traceable whoever took it.
+    const body = await this.redaction.toReviewCopy(raw);
+    res.setHeader('Content-Type', 'image/jpeg');
     res.setHeader('Cache-Control', 'no-store');
     res.send(body);
   }

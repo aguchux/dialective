@@ -85,13 +85,32 @@ function stampWatermark(
   ctx.fillStyle = '#ffffff';
   ctx.fillText(WATERMARK_TEXT, padding, height - padding);
 
-  ctx.globalAlpha = 0.18;
+  // Tiled diagonally across the whole frame rather than stamped once in
+  // the middle: a single centre mark is removed by cropping to the half
+  // of the card that carries the name and number, which is exactly the
+  // part worth stealing. Tiling means no crop large enough to read a
+  // field is also free of a mark.
+  ctx.globalAlpha = 0.16;
   ctx.fillStyle = '#ffffff';
-  ctx.translate(width / 2, height / 2);
-  ctx.rotate(-Math.PI / 6);
-  const diagonalFontSize = Math.max(18, Math.round(width / 14));
+  const diagonalFontSize = Math.max(18, Math.round(width / 16));
   ctx.font = `bold ${diagonalFontSize}px sans-serif`;
   ctx.textAlign = 'center';
-  ctx.fillText(WATERMARK_TEXT, 0, 0);
+  ctx.textBaseline = 'middle';
+  ctx.translate(width / 2, height / 2);
+  ctx.rotate(-Math.PI / 6);
+
+  // Cover the rotated bounding box, which is larger than the image.
+  const diagonal = Math.ceil(Math.sqrt(width * width + height * height));
+  const stampWidth = ctx.measureText(WATERMARK_TEXT).width;
+  const stepX = stampWidth + diagonalFontSize * 1.6;
+  const stepY = diagonalFontSize * 3;
+  for (let y = -diagonal; y <= diagonal; y += stepY) {
+    // Offset alternate rows so the marks do not line up into columns a
+    // crop could slip between.
+    const rowOffset = (Math.round(y / stepY) % 2) * (stepX / 2);
+    for (let x = -diagonal; x <= diagonal; x += stepX) {
+      ctx.fillText(WATERMARK_TEXT, x + rowOffset, y);
+    }
+  }
   ctx.restore();
 }

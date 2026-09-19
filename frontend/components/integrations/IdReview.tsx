@@ -19,6 +19,34 @@ import {
 } from '@/store/api';
 
 /**
+ * What a reviewer is actually asked to check: does the name on the card
+ * match the account, and is the document itself readable and intact.
+ *
+ * Deliberately shorter than the admin's list. An admin declining a
+ * verification can weigh liveness, duplicate identity and the full
+ * decision payload; a reviewer sees one document image and the account
+ * name, so offering them reasons they cannot assess would invite
+ * guesses. "Something else" keeps the long tail without pretending the
+ * list is exhaustive.
+ */
+const PEER_DECLINE_REASONS = [
+  'Name on the document does not match the account',
+  'Document number is unreadable',
+  'Document is blurry or cut off',
+  'Document appears altered or tampered with',
+  'Document has expired',
+  'Not an acceptable ID document',
+  'Something else (explain below)',
+] as const;
+
+/** Reason plus optional detail, as one string for the member to read. */
+function composeDeclineReason(reason: string, detail: string): string {
+  const trimmed = detail.trim();
+  if (!reason) return trimmed;
+  return trimmed ? `${reason} -- ${trimmed}` : reason;
+}
+
+/**
  * ID Review -- the reviewer's side of the p2p-kyc-review integration.
  *
  * Two tabs: documents waiting to be checked, and this reviewer's own
@@ -28,7 +56,8 @@ import {
  * makes the actual decision.
  *
  * A CERTIFIED reviewer is the platform's own trained staff: they see the
- * document plainly rather than through the magnifier, and their single
+ * whole document at once rather than through the magnifier (the image is
+ * the same redacted copy either way), and their single
  * verdict settles the verification with no second reviewer and no admin
  * step. The copy changes to say so, because someone whose click is final
  * should know that before they click.
@@ -153,6 +182,7 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
   const [evidenceIndex, setEvidenceIndex] = useState(0);
   const [documentNumber, setDocumentNumber] = useState('');
   const [declineReason, setDeclineReason] = useState('');
+  const [declineDetail, setDeclineDetail] = useState('');
   const [declining, setDeclining] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState<string | null>(null);
@@ -181,8 +211,8 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
     // Optional: some accepted documents carry no number. Sending nothing
     // records that there was nothing to compare, which is better evidence
     // than a reviewer inventing a value to get past a required field.
-    if (verdict === 'DECLINE' && !declineReason.trim()) {
-      setError('Say why you are declining.');
+    if (verdict === 'DECLINE' && !declineReason) {
+      setError('Pick a reason for declining.');
       return;
     }
     try {
@@ -190,7 +220,10 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
         id: subject.id,
         verdict,
         documentNumber: documentNumber.trim() || undefined,
-        declineReason: verdict === 'DECLINE' ? declineReason.trim() : undefined,
+        declineReason:
+          verdict === 'DECLINE'
+            ? composeDeclineReason(declineReason, declineDetail)
+            : undefined,
       }).unwrap();
       setDone(
         tally.decidedByCertifiedReviewer
@@ -269,16 +302,28 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
           </div>
         ) : imageUrl ? (
           subject.certifiedReviewer ? (
-            /* Certified reviewers are trained staff making the actual
-               decision, so they see the document as captured. The blur
-               that de-identifies it for a community reviewer would hide
-               the detail that decision depends on. */
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              alt="Identity document under review"
-              className="w-full rounded-lg border border-line"
-              src={imageUrl}
-            />
+            /* Certified reviewers see the whole document at once rather
+               than through the magnifier lens -- they make the actual
+               decision and need to take the card in as a whole. The
+               image itself is the same grayscale, watermarked copy a
+               community reviewer gets: a name and a number stay legible
+               through redaction, so nothing the decision needs is lost.
+               Copy/drag/right-click are blocked here exactly as the
+               magnifier blocks them. */
+            <div
+              className="w-full select-none overflow-hidden rounded-lg border border-line"
+              onContextMenu={(e) => e.preventDefault()}
+              onCopy={(e) => e.preventDefault()}
+              onDragStart={(e) => e.preventDefault()}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                alt="Identity document under review"
+                className="pointer-events-none w-full"
+                draggable={false}
+                src={imageUrl}
+              />
+            </div>
           ) : (
             <DocumentMagnifier alt="Identity document under review" src={imageUrl} />
           )
@@ -304,7 +349,9 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
             className="min-h-11 rounded-lg border border-line bg-bg px-3 font-mono"
             maxLength={64}
             onChange={(e) => setDocumentNumber(e.target.value)}
-            placeholder="Read it under the magnifier"
+            placeholder={
+              subject.certifiedReviewer ? 'As printed on the card' : 'Read it under the magnifier'
+            }
             value={documentNumber}
           />
           {/* Said plainly, so a reviewer holding a numberless document
@@ -315,16 +362,47 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
         </label>
 
         {declining && (
-          <label className="grid gap-1.5 text-sm font-bold">
-            What is wrong with it?
-            <textarea
-              autoFocus
-              className="min-h-20 rounded-lg border border-line bg-bg p-2 text-sm"
-              maxLength={500}
-              onChange={(e) => setDeclineReason(e.target.value)}
-              value={declineReason}
-            />
-          </label>
+          <div className="grid gap-2">
+            <p className="text-sm font-bold">Why are you declining? (shown to the member)</p>
+            {/* A fixed list, not free text: it makes declines consistent
+                and comparable between reviewers, and it keeps the options
+                to what this job actually is -- checking the name and the
+                number on the card against the account. Liveness, duplicate
+                identity and the rest are admin judgements made with
+                evidence a reviewer never sees. */}
+            <div className="grid gap-1.5">
+              {PEER_DECLINE_REASONS.map((option) => {
+                const optionId = `peer-decline-${option}`;
+                return (
+                  <label
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-line bg-bg px-3 py-2 text-sm has-checked:border-accent has-checked:bg-accent/5"
+                    htmlFor={optionId}
+                    key={option}
+                  >
+                    <input
+                      checked={declineReason === option}
+                      className="size-4 accent-accent"
+                      id={optionId}
+                      name="peer-decline-reason"
+                      onChange={() => setDeclineReason(option)}
+                      type="radio"
+                      value={option}
+                    />
+                    {option}
+                  </label>
+                );
+              })}
+            </div>
+            <label className="grid gap-1.5 text-xs font-bold text-muted">
+              Additional details (optional)
+              <textarea
+                className="min-h-16 rounded-lg border border-line bg-bg p-2 text-sm font-normal text-ink"
+                maxLength={500}
+                onChange={(e) => setDeclineDetail(e.target.value)}
+                value={declineDetail}
+              />
+            </label>
+          </div>
         )}
 
         {error && (
@@ -347,6 +425,7 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
           )}
           <ActionButton
             className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-red-200 px-5 font-extrabold text-red-700 hover:bg-red-50 disabled:opacity-50"
+            disabled={declining && !declineReason}
             onClick={() => (declining ? void send('DECLINE') : setDeclining(true))}
             pending={submitting && declining}
             pendingLabel="Submitting"
@@ -361,6 +440,7 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
               onClick={() => {
                 setDeclining(false);
                 setDeclineReason('');
+                setDeclineDetail('');
                 setError('');
               }}
               type="button"
