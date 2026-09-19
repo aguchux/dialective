@@ -359,7 +359,7 @@ export class KycPeerReviewService {
   async submitReview(
     userId: string,
     verificationId: string,
-    dto: { verdict: 'APPROVE' | 'DECLINE'; documentNumber: string; declineReason?: string },
+    dto: { verdict: 'APPROVE' | 'DECLINE'; documentNumber?: string; declineReason?: string },
   ) {
     await this.requireReviewer(userId);
     const claim = await this.prisma.kycPeerReviewClaim.findFirst({
@@ -381,10 +381,18 @@ export class KycPeerReviewService {
       throw new UnprocessableEntityException('Say why you are declining this document');
     }
 
-    const typedHash = KycPeerReviewService.hashDocumentNumber(dto.documentNumber);
+    // Three genuinely different states, kept distinct for the admin who
+    // makes the final call: a number that matched, a number that did NOT
+    // match (a real red flag), and no number to compare because the
+    // document does not carry one. Collapsing the last into "did not
+    // match" would turn "nothing to check" into "failed the check".
+    const typed = dto.documentNumber?.trim();
+    const typedHash = typed ? KycPeerReviewService.hashDocumentNumber(typed) : null;
     const onFile = this.readDocumentNumber(verification.decisionEncryptedJson);
     const matched =
-      onFile !== null && KycPeerReviewService.hashDocumentNumber(onFile) === typedHash;
+      typedHash === null
+        ? null
+        : onFile !== null && KycPeerReviewService.hashDocumentNumber(onFile) === typedHash;
 
     await this.prisma.$transaction([
       this.prisma.kycPeerReview.create({

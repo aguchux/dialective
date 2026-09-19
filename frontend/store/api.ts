@@ -1000,7 +1000,8 @@ export interface PeerReviewTally {
 export interface MyPeerReview {
   id: string;
   verdict: 'APPROVE' | 'DECLINE';
-  documentNumberMatched: boolean;
+  /** null when the document carries no number to compare. */
+  documentNumberMatched: boolean | null;
   paidAt: string | null;
   createdAt: string;
   kycVerification: { id: string; status: string };
@@ -1014,7 +1015,8 @@ export interface AdminPeerReviewItem {
   reviews: {
     id: string;
     verdict: 'APPROVE' | 'DECLINE';
-    documentNumberMatched: boolean;
+    /** null when the document carries no number to compare. */
+    documentNumberMatched: boolean | null;
     declineReason: string | null;
     createdAt: string;
     reviewer: { id: string; email: string; firstName: string | null; lastName: string | null };
@@ -3275,7 +3277,7 @@ export const dialectivaApi = createApi({
     }),
     submitPeerReview: builder.mutation<
       PeerReviewTally,
-      { id: string; verdict: 'APPROVE' | 'DECLINE'; documentNumber: string; declineReason?: string }
+      { id: string; verdict: 'APPROVE' | 'DECLINE'; documentNumber?: string; declineReason?: string }
     >({
       query: ({ id, ...body }) => ({
         url: `/kyc-peer-review/${id}/review`,

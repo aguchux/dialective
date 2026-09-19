@@ -79,10 +79,18 @@ export default function AdminPeerReviewsPage() {
               </span>{' '}
               by {review.reviewer.firstName ?? review.reviewer.email}
               {/* A mismatch is a signal, not a disqualification -- OCR is
-                  imperfect, so the admin judges it rather than the system. */}
-              {!review.documentNumberMatched && (
+                  imperfect, so the admin judges it rather than the system.
+                  null is NOT a mismatch: it means the document carries no
+                  number, so there was nothing to compare. Showing that as
+                  "did not match" would turn an absence into an accusation. */}
+              {review.documentNumberMatched === false && (
                 <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 font-bold text-amber-900">
                   number did not match
+                </span>
+              )}
+              {review.documentNumberMatched === null && (
+                <span className="ml-1 rounded bg-surface-muted px-1.5 py-0.5 font-bold text-muted">
+                  no number on document
                 </span>
               )}
               {review.declineReason && (

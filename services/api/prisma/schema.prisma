@@ -1063,11 +1063,17 @@ model KycPeerReview {
   verdict            KycPeerReviewVerdict
   /// SHA-256 of the document number the reviewer typed, normalised
   /// (uppercased, non-alphanumerics stripped) before hashing.
-  documentNumberHash String
+  ///
+  /// Null when the document carries no number to read. Some accepted IDs
+  /// genuinely have none, and requiring one forced reviewers to invent a
+  /// value, which is worse than recording its absence honestly.
+  documentNumberHash String?
   /// Whether that hash matched the number on file. Recorded rather than
   /// enforced: a mismatch is a signal for the admin, not grounds to reject
-  /// the reviewer's verdict outright (OCR is imperfect).
-  documentNumberMatched Boolean
+  /// the reviewer's verdict outright (OCR is imperfect). Null when there
+  /// was no number to compare -- distinct from false, which means a
+  /// number was read and it did NOT match.
+  documentNumberMatched Boolean?
   declineReason      String?
   /// Set when this review's payout was credited -- at admin approval, and
   /// only once. Null means unpaid; see KycPeerReviewService.payReviewers.

@@ -240,6 +240,52 @@ describe('KycPeerReviewService', () => {
       expect(JSON.stringify(created)).not.toContain('AB123456');
     });
 
+    /**
+     * Some accepted documents carry no number. The three states are
+     * different evidence for the admin who decides: matched, did NOT
+     * match (a red flag), and nothing to compare. Collapsing the last
+     * into the second would turn an absence into an accusation.
+     */
+    describe('documents with no number', () => {
+      it('accepts a review with no document number at all', async () => {
+        const { service, prisma } = claimed();
+        await service.submitReview('user-1', 'kyc-1', { verdict: 'APPROVE' });
+        const created = prisma.kycPeerReview.create.mock.calls[0][0].data;
+        expect(created.documentNumberHash).toBeNull();
+        // null, NOT false -- there was nothing to check.
+        expect(created.documentNumberMatched).toBeNull();
+      });
+
+      it('treats an empty/whitespace number as no number', async () => {
+        const { service, prisma } = claimed();
+        await service.submitReview('user-1', 'kyc-1', {
+          verdict: 'APPROVE',
+          documentNumber: '   ',
+        });
+        const created = prisma.kycPeerReview.create.mock.calls[0][0].data;
+        expect(created.documentNumberHash).toBeNull();
+        expect(created.documentNumberMatched).toBeNull();
+      });
+
+      it('still records false when a number was read and did not match', async () => {
+        const { service, prisma } = claimed();
+        await service.submitReview('user-1', 'kyc-1', {
+          verdict: 'APPROVE',
+          documentNumber: 'WRONG-NUMBER',
+        });
+        const created = prisma.kycPeerReview.create.mock.calls[0][0].data;
+        expect(created.documentNumberHash).not.toBeNull();
+        expect(created.documentNumberMatched).toBe(false);
+      });
+
+      it('still requires a decline reason when there is no number', async () => {
+        const { service } = claimed();
+        await expect(
+          service.submitReview('user-1', 'kyc-1', { verdict: 'DECLINE' }),
+        ).rejects.toThrow('Say why you are declining this document');
+      });
+    });
+
     it('releases the claim once a verdict is in', async () => {
       const { service, prisma } = claimed();
       await service.submitReview('user-1', 'kyc-1', {

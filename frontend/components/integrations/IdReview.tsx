@@ -178,10 +178,9 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
 
   async function send(verdict: 'APPROVE' | 'DECLINE') {
     setError('');
-    if (!documentNumber.trim()) {
-      setError('Type the document number you can read on the card.');
-      return;
-    }
+    // Optional: some accepted documents carry no number. Sending nothing
+    // records that there was nothing to compare, which is better evidence
+    // than a reviewer inventing a value to get past a required field.
     if (verdict === 'DECLINE' && !declineReason.trim()) {
       setError('Say why you are declining.');
       return;
@@ -190,7 +189,7 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
       const tally = await submit({
         id: subject.id,
         verdict,
-        documentNumber: documentNumber.trim(),
+        documentNumber: documentNumber.trim() || undefined,
         declineReason: verdict === 'DECLINE' ? declineReason.trim() : undefined,
       }).unwrap();
       setDone(
@@ -308,6 +307,11 @@ function ReviewOne({ subject, onDone }: { subject: PeerReviewSubject; onDone: ()
             placeholder="Read it under the magnifier"
             value={documentNumber}
           />
+          {/* Said plainly, so a reviewer holding a numberless document
+              leaves it empty rather than inventing something to submit. */}
+          <span className="text-xs font-bold text-muted">
+            Leave empty if this document has no number printed on it.
+          </span>
         </label>
 
         {declining && (
