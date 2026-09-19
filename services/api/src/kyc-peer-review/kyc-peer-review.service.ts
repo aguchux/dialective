@@ -470,6 +470,34 @@ export class KycPeerReviewService {
   }
 
   /**
+   * Settle a verification that reached consensus without anything applying
+   * it -- documents that hit the count under the old admin-decides flow, or
+   * one whose auto-apply failed and is sitting in the admin queue.
+   *
+   * Auto-decide fires on review SUBMISSION, so a document that already had
+   * enough reviews never triggers it. This is the same decision by the same
+   * code, just reachable without a new verdict. Returns what it did so a
+   * caller can report it.
+   */
+  async applyPendingConsensus(
+    verificationId: string,
+  ): Promise<{ applied: boolean; recommendation: 'APPROVE' | 'DECLINE' | null }> {
+    const result = await this.tally(verificationId);
+    if (!result.readyForAdmin || !result.recommendation) {
+      return { applied: false, recommendation: null };
+    }
+    await this.applyConsensusDecision(verificationId, result.recommendation);
+    const after = await this.prisma.kycVerification.findUnique({
+      where: { id: verificationId },
+      select: { status: true },
+    });
+    return {
+      applied: after?.status !== KycStatus.IN_REVIEW,
+      recommendation: result.recommendation,
+    };
+  }
+
+  /**
    * Apply a peer-consensus verdict to the applicant's KycStatus.
    *
    * Idempotent by way of the status re-read: getReviewableSelfHostedVerification
