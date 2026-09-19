@@ -342,6 +342,27 @@ export class MailService {
     );
   }
 
+  /**
+   * Sent when a sell offer is withdrawn because its owner no longer meets
+   * the selling gate. Optional: the DL is already back in their balance
+   * whether or not this sends, and a mail failure must not stop the
+   * withdrawal it is describing.
+   */
+  async sendP2PSellOfferWithdrawnEmail(
+    email: string,
+    tokenAmount: string,
+    missing: string,
+  ): Promise<void> {
+    const marketUrl = `${frontendUrl()}/dashboard/market`;
+    await this.send(
+      email,
+      'Your P2P sell offer was withdrawn -- your DL is back in your balance',
+      p2pSellOfferWithdrawnHtml(tokenAmount, missing, marketUrl),
+      p2pSellOfferWithdrawnText(tokenAmount, missing, marketUrl),
+      { kind: 'sendP2PSellOfferWithdrawnEmail', optional: true },
+    );
+  }
+
   /** Fired from P2PChatService.sendMessage the first time an admin posts in a disputed trade's thread -- both the buyer and seller get this, not just the party who raised the dispute, since either side may need to respond. */
   async sendP2PAdminJoinedDisputeEmail(email: string, tradeId: string): Promise<void> {
     const tradeUrl = `${frontendUrl()}/dashboard/market-activity`;
@@ -854,6 +875,28 @@ function phoneVerifiedText(phoneNumber: string, dashboardUrl: string): string {
   return `Your phone number ${phoneNumber} has been verified.
 You can now request withdrawals and trade on the P2P market.
 Go to your dashboard: ${dashboardUrl}`;
+}
+
+function p2pSellOfferWithdrawnHtml(
+  tokenAmount: string,
+  missing: string,
+  marketUrl: string,
+): string {
+  return `<p>We have taken your P2P sell offer for <strong>${escapeHtml(tokenAmount)} DL</strong> off the market, and returned the DL to your available balance. Nothing has been lost -- you can spend it or list it again.</p>
+<p>Selling on the P2P market now needs a verified mobile number, approved identity verification (KYC), and a completed-task history. Your account is missing: <strong>${escapeHtml(missing)}</strong>.</p>
+<p>Once that is sorted you can post a new sell offer straight away.</p>
+<p><a href="${marketUrl}">Go to the P2P market</a></p>`;
+}
+
+function p2pSellOfferWithdrawnText(
+  tokenAmount: string,
+  missing: string,
+  marketUrl: string,
+): string {
+  return `We have taken your P2P sell offer for ${tokenAmount} DL off the market, and returned the DL to your available balance. Nothing has been lost -- you can spend it or list it again.
+Selling on the P2P market now needs a verified mobile number, approved identity verification (KYC), and a completed-task history. Your account is missing: ${missing}.
+Once that is sorted you can post a new sell offer straight away.
+Go to the P2P market: ${marketUrl}`;
 }
 
 function p2pAdminJoinedDisputeHtml(tradeUrl: string): string {
