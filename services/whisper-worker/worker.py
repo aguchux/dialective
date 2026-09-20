@@ -63,13 +63,23 @@ _registry = load_registry()
 # eviction comment for why this is bounded rather than a plain dict.
 _pipeline_cache: "OrderedDict[str, pipeline]" = OrderedDict()
 
-# How many loaded models one worker may hold at once. 2, not more: the pod
-# limit is 3584Mi and a whisper-medium is ~3GB resident, so even two
-# mediums do not fit -- this bounds the common case (smalls, ~1GB each)
-# while letting a medium evict whatever preceded it instead of being
-# stacked on top of it. Raising this without raising the memory limit
-# reintroduces the OOMKill.
-_MAX_CACHED_PIPELINES = 2
+# How many loaded models one worker may hold at once.
+#
+# 1, not 2. A cap of 2 cut the OOMKills from 15 to 1 but did not stop them:
+# the pod limit is 3584Mi and a whisper-medium is ~3GB resident, so any two
+# models that are not both whisper-smalls still overflow. Since the cap
+# cannot distinguish sizes, the only value that holds for every pairing in
+# the registry is one.
+#
+# The cost is a reload whenever a worker's dialect changes between jobs.
+# That is a read from the /models PVC, not a re-download, and it buys a
+# worker that cannot OOM on model size however the registry grows --
+# worth it, because an OOMKill takes out whatever job was in flight and
+# every dialect the pod serves, not just the one that overflowed.
+#
+# Raise this only alongside the pod memory limit, and only after checking
+# the largest two checkpoints in the registry fit together.
+_MAX_CACHED_PIPELINES = 1
 
 # Maps Whisper's d_model (encoder/decoder hidden size) to the matching
 # openai/whisper-<size> checkpoint. Fine-tuning changes weights, not
