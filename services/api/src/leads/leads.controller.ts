@@ -18,8 +18,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { randomUUID } from 'crypto';
 import { Role } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
+import { generateOpaqueToken, hashToken } from '../auth/token.util';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { AuthenticatedRequest } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -32,7 +35,40 @@ import { InviteDataAccessLeadDto } from './dto/invite-data-access-lead.dto';
 import { CreateSupportRequestDto } from './dto/create-support-request.dto';
 import { CreateConnectRegistrationDto } from './dto/create-connect-registration.dto';
 import { LookupConnectMemberDto } from './dto/lookup-connect-member.dto';
+import { DecideConnectSpeakerDto } from './dto/decide-connect-speaker.dto';
+import { SendConnectRemindersDto } from './dto/send-connect-reminders.dto';
+import {
+  CompleteConnectPhotoUploadDto,
+  CreateConnectPhotoUploadDto,
+} from './dto/connect-photo-upload.dto';
 import { UpdateSupportRequestResolutionDto } from './dto/update-support-request-resolution.dto';
+
+/** 48 hours, as promised in the approval email. */
+const CONNECT_PHOTO_TOKEN_TTL_MS = 48 * 60 * 60 * 1000;
+
+/** Content types a speaker headshot may be, mapped to their extension. */
+const CONNECT_PHOTO_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+};
+
+/**
+ * Speaker photos live in the marketing bucket -- they are public event
+ * assets, shown on the Connect page, not private user data.
+ */
+function connectPhotoBucket(): string {
+  return process.env.SPACES_MARKETING_BUCKET ?? 'dialectiva-marketing';
+}
+
+/**
+ * Where the 48-hour link points. The upload page lives on the Connect
+ * site, so the link matches the event the speaker applied to.
+ */
+function connectPhotoUploadUrl(token: string): string {
+  const base = process.env.CONNECT_FRONTEND_URL ?? 'https://connect.dialectlibrary.com';
+  return `${base.replace(/\/$/, '')}/photo?token=${token}`;
+}
 
 /**
  * "Adaeze" -> "A•••". Enough for the owner to recognise, not enough for a
@@ -70,6 +106,7 @@ export class LeadsController {
     private readonly prisma: PrismaService,
     private readonly subscriberAuth: SubscriberAuthService,
     private readonly mail: MailService,
+    private readonly storage: StorageService,
   ) {}
 
   @Get('connect-2026/stats')
@@ -249,6 +286,287 @@ export class LeadsController {
       speaking,
       memberLinked: !!userId,
     };
+  }
+
+  // --- Connect 2026 admin ---------------------------------------------
+
+  /**
+   * The admin Connect view: counts, the speaker queue, and the attendee
+   * list. One call rather than three, because the page shows all of it at
+   * once and the volumes are small (a webinar interest list, not a table
+   * that needs paging yet).
+   */
+  @Get('admin/connect-2026')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async getAdminConnectOverview() {
+    const eventKey = 'connect-2026';
+    const [registrations, countryGroups] = await Promise.all([
+      this.prisma.connectRegistration.findMany({
+        where: { eventKey },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: { select: { id: true, email: true, phoneNumber: true, phoneVerifiedAt: true } },
+          speakerDecidedBy: { select: { email: true, firstName: true, lastName: true } },
+        },
+      }),
+      this.prisma.connectRegistration.groupBy({ by: ['countryCode'], where: { eventKey } }),
+    ]);
+
+    const speakers = registrations.filter((row) => row.speaking);
+    return {
+      stats: {
+        interested: registrations.length,
+        countries: countryGroups.length,
+        speakerApplicants: speakers.length,
+        speakersPending: speakers.filter((row) => row.speakerStatus === 'PENDING').length,
+        speakersApproved: speakers.filter((row) => row.speakerStatus === 'APPROVED').length,
+        speakersDeclined: speakers.filter((row) => row.speakerStatus === 'DECLINED').length,
+        // Who a reminder can actually reach by SMS: a linked member with a
+        // verified number. Everyone else is email-only.
+        smsReachable: registrations.filter((row) => row.user?.phoneVerifiedAt).length,
+        withPhoto: speakers.filter((row) => row.photoUrl).length,
+      },
+      speakers,
+      attendees: registrations.filter((row) => !row.speaking),
+    };
+  }
+
+  /**
+   * Approve or decline a speaker application.
+   *
+   * Approving mints a fresh 48-hour photo-upload token and emails it with
+   * the good news; declining sends a short note. Both emails are
+   * best-effort -- the decision is already recorded, and a mail failure
+   * must not make an admin think the decision did not stick.
+   */
+  @Post('admin/connect-2026/speakers/:id/decision')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async decideConnectSpeaker(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: DecideConnectSpeakerDto,
+  ) {
+    const registration = await this.prisma.connectRegistration.findUnique({ where: { id } });
+    if (!registration) throw new NotFoundException('Registration not found');
+    if (!registration.speaking) {
+      throw new BadRequestException('This registration is not a speaker application');
+    }
+
+    const approved = dto.decision === 'APPROVE';
+    const photo = approved ? this.mintPhotoToken() : null;
+
+    const updated = await this.prisma.connectRegistration.update({
+      where: { id },
+      data: {
+        speakerStatus: approved ? 'APPROVED' : 'DECLINED',
+        speakerDecidedAt: new Date(),
+        speakerDecidedById: req.user.sub,
+        ...(photo
+          ? { photoTokenHash: photo.hash, photoTokenExpiresAt: photo.expiresAt }
+          : // A declined speaker should not keep a live upload link.
+            { photoTokenHash: null, photoTokenExpiresAt: null }),
+      },
+    });
+
+    try {
+      if (approved && photo) {
+        await this.mail.sendConnectSpeakerApprovedEmail({
+          email: registration.email,
+          name: registration.name,
+          topic: registration.speakerTopic ?? '',
+          photoUrl: connectPhotoUploadUrl(photo.token),
+          expiresAt: photo.expiresAt,
+        });
+      } else {
+        await this.mail.sendConnectSpeakerDeclinedEmail({
+          email: registration.email,
+          name: registration.name,
+        });
+      }
+    } catch {
+      // Best-effort -- see above.
+    }
+
+    return { id: updated.id, speakerStatus: updated.speakerStatus };
+  }
+
+  /**
+   * Re-send the photo-upload link to an already-approved speaker, for when
+   * the first one expired or never arrived. Mints a new token, which
+   * invalidates the previous one.
+   */
+  @Post('admin/connect-2026/speakers/:id/photo-link')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async resendConnectPhotoLink(@Param('id') id: string) {
+    const registration = await this.prisma.connectRegistration.findUnique({ where: { id } });
+    if (!registration) throw new NotFoundException('Registration not found');
+    if (registration.speakerStatus !== 'APPROVED') {
+      throw new BadRequestException('Only an approved speaker can be sent a photo link');
+    }
+
+    const photo = this.mintPhotoToken();
+    await this.prisma.connectRegistration.update({
+      where: { id },
+      data: { photoTokenHash: photo.hash, photoTokenExpiresAt: photo.expiresAt },
+    });
+
+    await this.mail.sendConnectPhotoLinkEmail({
+      email: registration.email,
+      name: registration.name,
+      topic: registration.speakerTopic ?? '',
+      photoUrl: connectPhotoUploadUrl(photo.token),
+      expiresAt: photo.expiresAt,
+    });
+
+    return { sent: true, expiresAt: photo.expiresAt };
+  }
+
+  /**
+   * Reminder blast. `audience: 'speakers'` writes each speaker's own topic
+   * into their email; `'all'` goes to every registration.
+   *
+   * Sent one at a time and counted rather than fired in parallel: the
+   * volumes are small, and one bad address should not take down the rest
+   * of the run. The response reports what actually went out.
+   */
+  @Post('admin/connect-2026/reminders')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async sendConnectReminders(@Body() dto: SendConnectRemindersDto) {
+    const eventKey = 'connect-2026';
+    const speakersOnly = dto.audience === 'speakers';
+    const recipients = await this.prisma.connectRegistration.findMany({
+      where: {
+        eventKey,
+        ...(speakersOnly
+          ? // Only approved speakers -- reminding a declined or undecided
+            // applicant about "your talk" would be wrong.
+            { speaking: true, speakerStatus: 'APPROVED' }
+          : {}),
+      },
+      select: { email: true, name: true, speakerTopic: true },
+    });
+
+    let sent = 0;
+    const failed: string[] = [];
+    for (const recipient of recipients) {
+      try {
+        await this.mail.sendConnectReminderEmail({
+          email: recipient.email,
+          name: recipient.name,
+          message: dto.message?.trim() || null,
+          topic: speakersOnly ? (recipient.speakerTopic ?? null) : null,
+        });
+        sent += 1;
+      } catch {
+        failed.push(recipient.email);
+      }
+    }
+
+    return { audience: dto.audience, total: recipients.length, sent, failed };
+  }
+
+  // --- Connect 2026 speaker photo upload (public, token-gated) ---------
+
+  /**
+   * A 48-hour opaque token, stored hashed. Mirrors the password-reset and
+   * magic-link pattern: the raw value exists only in the email, so a
+   * database read cannot be turned into an upload.
+   */
+  private mintPhotoToken() {
+    const { token, hash } = generateOpaqueToken();
+    return {
+      token,
+      hash,
+      expiresAt: new Date(Date.now() + CONNECT_PHOTO_TOKEN_TTL_MS),
+    };
+  }
+
+  private async speakerForPhotoToken(token: string) {
+    const registration = await this.prisma.connectRegistration.findUnique({
+      where: { photoTokenHash: hashToken(token) },
+    });
+    if (
+      !registration ||
+      !registration.photoTokenExpiresAt ||
+      registration.photoTokenExpiresAt < new Date()
+    ) {
+      // One message for "wrong token" and "expired token" alike -- the
+      // difference is not useful to the speaker and is useful to someone
+      // guessing.
+      throw new NotFoundException('This photo link is no longer valid. Ask us for a new one.');
+    }
+    return registration;
+  }
+
+  /** What the upload page shows before the speaker picks a file. */
+  @Get('connect-2026/photo/:token')
+  @Throttle({ default: { limit: 20, ttl: 60 * 1000 } })
+  async getConnectPhotoTarget(@Param('token') token: string) {
+    const registration = await this.speakerForPhotoToken(token);
+    return {
+      name: registration.name,
+      topic: registration.speakerTopic,
+      expiresAt: registration.photoTokenExpiresAt,
+      currentPhotoUrl: registration.photoUrl,
+    };
+  }
+
+  /**
+   * Exchanges the long-lived link token for a short presigned PUT. The
+   * 48-hour window is the link's, not the upload URL's -- a presigned URL
+   * valid for two days would be a far weaker credential than one valid for
+   * fifteen minutes.
+   */
+  @Post('connect-2026/photo/:token')
+  @Throttle({ default: { limit: 10, ttl: 60 * 1000 } })
+  async createConnectPhotoUpload(
+    @Param('token') token: string,
+    @Body() dto: CreateConnectPhotoUploadDto,
+  ) {
+    const registration = await this.speakerForPhotoToken(token);
+    const extension = CONNECT_PHOTO_TYPES[dto.contentType];
+    if (!extension) throw new BadRequestException('Upload a JPEG, PNG or WebP image');
+
+    const bucket = connectPhotoBucket();
+    const key = `connect-2026/speakers/${registration.id}/${randomUUID()}.${extension}`;
+    const upload = await this.storage.createPresignedUploadUrl(bucket, key, dto.contentType, true);
+
+    return { uploadUrl: upload.url, key, expiresInSeconds: upload.expiresInSeconds };
+  }
+
+  /**
+   * Called once the browser's PUT succeeded. Consumes the token: a photo
+   * link is for one upload, and leaving it live afterwards would let
+   * anyone with the email replace the picture later.
+   */
+  @Post('connect-2026/photo/:token/complete')
+  @Throttle({ default: { limit: 10, ttl: 60 * 1000 } })
+  async completeConnectPhotoUpload(
+    @Param('token') token: string,
+    @Body() dto: CompleteConnectPhotoUploadDto,
+  ) {
+    const registration = await this.speakerForPhotoToken(token);
+    if (!dto.key.startsWith(`connect-2026/speakers/${registration.id}/`)) {
+      throw new BadRequestException('That upload does not belong to this link');
+    }
+
+    const bucket = connectPhotoBucket();
+    await this.prisma.connectRegistration.update({
+      where: { id: registration.id },
+      data: {
+        photoKey: dto.key,
+        photoUrl: this.storage.getPublicObjectUrl(bucket, dto.key),
+        photoUploadedAt: new Date(),
+        photoTokenHash: null,
+        photoTokenExpiresAt: null,
+      },
+    });
+
+    return { uploaded: true };
   }
 
   @Post('data-access')

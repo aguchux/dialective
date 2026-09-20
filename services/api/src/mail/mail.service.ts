@@ -358,6 +358,77 @@ export class MailService {
     );
   }
 
+  /**
+   * Speaker accepted. Carries the 48-hour photo-upload link, so the one
+   * email both delivers the good news and asks for the thing we need next.
+   */
+  async sendConnectSpeakerApprovedEmail(payload: {
+    email: string;
+    name: string;
+    topic: string;
+    photoUrl: string;
+    expiresAt: Date;
+  }): Promise<void> {
+    await this.send(
+      payload.email,
+      "You're speaking at Dialect Library Connect 2026",
+      connectSpeakerApprovedHtml(payload.name, payload.topic, payload.photoUrl, payload.expiresAt),
+      connectSpeakerApprovedText(payload.name, payload.topic, payload.photoUrl, payload.expiresAt),
+      { kind: 'sendConnectSpeakerApprovedEmail', optional: true },
+    );
+  }
+
+  async sendConnectSpeakerDeclinedEmail(payload: {
+    email: string;
+    name: string;
+  }): Promise<void> {
+    await this.send(
+      payload.email,
+      'About your Connect 2026 speaker application',
+      connectSpeakerDeclinedHtml(payload.name),
+      connectSpeakerDeclinedText(payload.name),
+      { kind: 'sendConnectSpeakerDeclinedEmail', optional: true },
+    );
+  }
+
+  /** A fresh photo link for an approved speaker whose first one lapsed. */
+  async sendConnectPhotoLinkEmail(payload: {
+    email: string;
+    name: string;
+    topic: string;
+    photoUrl: string;
+    expiresAt: Date;
+  }): Promise<void> {
+    await this.send(
+      payload.email,
+      'Your Connect 2026 speaker photo link',
+      connectPhotoLinkHtml(payload.name, payload.topic, payload.photoUrl, payload.expiresAt),
+      connectPhotoLinkText(payload.name, payload.topic, payload.photoUrl, payload.expiresAt),
+      { kind: 'sendConnectPhotoLinkEmail', optional: true },
+    );
+  }
+
+  /**
+   * Event reminder. `topic` is set only for the speaker audience, so an
+   * approved speaker sees their own talk named back to them.
+   */
+  async sendConnectReminderEmail(payload: {
+    email: string;
+    name: string;
+    message: string | null;
+    topic: string | null;
+  }): Promise<void> {
+    await this.send(
+      payload.email,
+      payload.topic
+        ? 'Your talk at Dialect Library Connect 2026'
+        : 'Dialect Library Connect 2026 — a reminder',
+      connectReminderHtml(payload.name, payload.message, payload.topic),
+      connectReminderText(payload.name, payload.message, payload.topic),
+      { kind: 'sendConnectReminderEmail', optional: true },
+    );
+  }
+
   async sendPhoneVerifiedEmail(email: string, phoneNumber: string): Promise<void> {
     const dashboardUrl = `${frontendUrl()}/dashboard`;
     await this.send(
@@ -923,6 +994,117 @@ function connectRegistrationText(
   return `${opening}
 ${speakerLine}
 The event is planned for October 2026 and will be held online. We will email the exact date, time and joining link as soon as they are confirmed.
+
+See you there.`;
+}
+
+/** "22 September 2026 at 14:30 UTC" -- unambiguous across time zones. */
+function formatDeadline(expiresAt: Date): string {
+  return `${expiresAt.toUTCString().replace(' GMT', '')} UTC`;
+}
+
+function connectSpeakerApprovedHtml(
+  name: string,
+  topic: string,
+  photoUrl: string,
+  expiresAt: Date,
+): string {
+  const topicLine = topic
+    ? `<p>Your talk: <strong>${escapeHtml(topic)}</strong></p>`
+    : '';
+  return `<p>Hi ${escapeHtml(name)}, we are delighted to confirm you as a speaker at <strong>Dialect Library Connect 2026</strong>.</p>
+${topicLine}
+<p>One thing we need from you: a photo for the event page.</p>
+<p><a href="${photoUrl}">Upload your speaker photo</a></p>
+<p>This link works until <strong>${escapeHtml(formatDeadline(expiresAt))}</strong>. If it expires before you get to it, just reply and we will send a new one.</p>
+<p>We will follow up with the running order and joining details closer to the event.</p>`;
+}
+
+function connectSpeakerApprovedText(
+  name: string,
+  topic: string,
+  photoUrl: string,
+  expiresAt: Date,
+): string {
+  const topicLine = topic ? `\nYour talk: ${topic}\n` : '';
+  return `Hi ${name}, we are delighted to confirm you as a speaker at Dialect Library Connect 2026.
+${topicLine}
+One thing we need from you: a photo for the event page.
+
+Upload your speaker photo: ${photoUrl}
+
+This link works until ${formatDeadline(expiresAt)}. If it expires before you get to it, just reply and we will send a new one.
+
+We will follow up with the running order and joining details closer to the event.`;
+}
+
+function connectSpeakerDeclinedHtml(name: string): string {
+  return `<p>Hi ${escapeHtml(name)}, thank you for offering to speak at Dialect Library Connect 2026.</p>
+<p>We had more proposals than slots this time, and we are not able to include your talk in the programme. That is a reflection of the number of submissions, not of your work.</p>
+<p>Your place as an attendee is still reserved, and we would be glad to see you there. We would also welcome a proposal from you at the next Connect.</p>`;
+}
+
+function connectSpeakerDeclinedText(name: string): string {
+  return `Hi ${name}, thank you for offering to speak at Dialect Library Connect 2026.
+
+We had more proposals than slots this time, and we are not able to include your talk in the programme. That is a reflection of the number of submissions, not of your work.
+
+Your place as an attendee is still reserved, and we would be glad to see you there. We would also welcome a proposal from you at the next Connect.`;
+}
+
+function connectPhotoLinkHtml(
+  name: string,
+  topic: string,
+  photoUrl: string,
+  expiresAt: Date,
+): string {
+  const topicLine = topic ? `<p>Your talk: <strong>${escapeHtml(topic)}</strong></p>` : '';
+  return `<p>Hi ${escapeHtml(name)}, here is a fresh link to add your speaker photo for <strong>Connect 2026</strong>.</p>
+${topicLine}
+<p><a href="${photoUrl}">Upload your speaker photo</a></p>
+<p>This link works until <strong>${escapeHtml(formatDeadline(expiresAt))}</strong>.</p>`;
+}
+
+function connectPhotoLinkText(
+  name: string,
+  topic: string,
+  photoUrl: string,
+  expiresAt: Date,
+): string {
+  const topicLine = topic ? `\nYour talk: ${topic}\n` : '';
+  return `Hi ${name}, here is a fresh link to add your speaker photo for Connect 2026.
+${topicLine}
+Upload your speaker photo: ${photoUrl}
+
+This link works until ${formatDeadline(expiresAt)}.`;
+}
+
+function connectReminderHtml(
+  name: string,
+  message: string | null,
+  topic: string | null,
+): string {
+  const note = message ? `<p>${escapeHtml(message).replace(/\n/g, '<br />')}</p>` : '';
+  const topicLine = topic
+    ? `<p>You are speaking on: <strong>${escapeHtml(topic)}</strong></p>`
+    : '';
+  return `<p>Hi ${escapeHtml(name)}, a reminder about <strong>Dialect Library Connect 2026</strong>.</p>
+${topicLine}
+${note}
+<p>The event takes place in <strong>October 2026</strong>, online. We will send the joining link before the day.</p>
+<p>See you there.</p>`;
+}
+
+function connectReminderText(
+  name: string,
+  message: string | null,
+  topic: string | null,
+): string {
+  const note = message ? `\n${message}\n` : '';
+  const topicLine = topic ? `\nYou are speaking on: ${topic}\n` : '';
+  return `Hi ${name}, a reminder about Dialect Library Connect 2026.
+${topicLine}${note}
+The event takes place in October 2026, online. We will send the joining link before the day.
 
 See you there.`;
 }

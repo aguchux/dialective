@@ -5,6 +5,7 @@ import { CreateConnectRegistrationDto } from './dto/create-connect-registration.
 import { PrismaService } from '../prisma/prisma.service';
 import { SubscriberAuthService } from '../voice-stream/subscriber-auth/subscriber-auth.service';
 import { MailService } from '../mail/mail.service';
+import { StorageService } from '../storage/storage.service';
 
 describe('Connect 2026 registration', () => {
   const prisma = {
@@ -14,14 +15,24 @@ describe('Connect 2026 registration', () => {
       groupBy: jest.fn(),
       upsert: jest.fn(),
       findUnique: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn(),
     },
     user: { findUnique: jest.fn() },
   };
-  const mail = { sendConnectRegistrationEmail: jest.fn() };
+  const mail = {
+    sendConnectRegistrationEmail: jest.fn(),
+    sendConnectSpeakerApprovedEmail: jest.fn(),
+    sendConnectSpeakerDeclinedEmail: jest.fn(),
+    sendConnectPhotoLinkEmail: jest.fn(),
+    sendConnectReminderEmail: jest.fn(),
+  };
+  const storage = { createPresignedUploadUrl: jest.fn(), getPublicObjectUrl: jest.fn() };
   const controller = new LeadsController(
     prisma as unknown as PrismaService,
     {} as SubscriberAuthService,
     mail as unknown as MailService,
+    storage as unknown as StorageService,
   );
 
   beforeEach(() => {
@@ -31,6 +42,12 @@ describe('Connect 2026 registration', () => {
     prisma.user.findUnique.mockResolvedValue(null);
     prisma.connectRegistration.findUnique.mockResolvedValue(null);
     mail.sendConnectRegistrationEmail.mockResolvedValue(undefined);
+    mail.sendConnectSpeakerApprovedEmail.mockResolvedValue(undefined);
+    mail.sendConnectSpeakerDeclinedEmail.mockResolvedValue(undefined);
+    mail.sendConnectPhotoLinkEmail.mockResolvedValue(undefined);
+    mail.sendConnectReminderEmail.mockResolvedValue(undefined);
+    prisma.connectRegistration.update.mockResolvedValue({ id: 'r1', speakerStatus: 'APPROVED' });
+    prisma.connectRegistration.findMany.mockResolvedValue([]);
   });
 
   const attendee: CreateConnectRegistrationDto = {
@@ -123,6 +140,12 @@ describe('Connect 2026 registration', () => {
       prisma.user.findUnique.mockResolvedValue(null);
     prisma.connectRegistration.findUnique.mockResolvedValue(null);
     mail.sendConnectRegistrationEmail.mockResolvedValue(undefined);
+    mail.sendConnectSpeakerApprovedEmail.mockResolvedValue(undefined);
+    mail.sendConnectSpeakerDeclinedEmail.mockResolvedValue(undefined);
+    mail.sendConnectPhotoLinkEmail.mockResolvedValue(undefined);
+    mail.sendConnectReminderEmail.mockResolvedValue(undefined);
+    prisma.connectRegistration.update.mockResolvedValue({ id: 'r1', speakerStatus: 'APPROVED' });
+    prisma.connectRegistration.findMany.mockResolvedValue([]);
       await expect(controller.lookupConnectMember({ email: 'nobody@example.com' })).resolves.toEqual({
         found: false,
       });
@@ -176,6 +199,12 @@ describe('Connect 2026 registration', () => {
       prisma.user.findUnique.mockResolvedValue(null);
     prisma.connectRegistration.findUnique.mockResolvedValue(null);
     mail.sendConnectRegistrationEmail.mockResolvedValue(undefined);
+    mail.sendConnectSpeakerApprovedEmail.mockResolvedValue(undefined);
+    mail.sendConnectSpeakerDeclinedEmail.mockResolvedValue(undefined);
+    mail.sendConnectPhotoLinkEmail.mockResolvedValue(undefined);
+    mail.sendConnectReminderEmail.mockResolvedValue(undefined);
+    prisma.connectRegistration.update.mockResolvedValue({ id: 'r1', speakerStatus: 'APPROVED' });
+    prisma.connectRegistration.findMany.mockResolvedValue([]);
 
       await controller.registerForConnect({ ...attendee, confirmedMember: false });
 
@@ -245,6 +274,123 @@ describe('Connect 2026 registration', () => {
     it('does not email a honeypot submission', async () => {
       await controller.registerForConnect({ ...attendee, website: 'http://spam.example' });
       expect(mail.sendConnectRegistrationEmail).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('speaker decisions', () => {
+    const speaker = {
+      id: 'r1',
+      email: 'speaker@example.com',
+      name: 'Ada Speaker',
+      speaking: true,
+      speakerTopic: 'Why dialects matter',
+      speakerStatus: 'PENDING',
+    };
+    const req = { user: { sub: 'admin-1' } } as never;
+
+    it('approves, mints a photo token, and emails the link', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue(speaker);
+
+      await controller.decideConnectSpeaker(req, 'r1', { decision: 'APPROVE' });
+
+      const update = prisma.connectRegistration.update.mock.calls[0][0];
+      expect(update.data.speakerStatus).toBe('APPROVED');
+      // Only the hash is persisted -- the raw token lives in the email.
+      expect(update.data.photoTokenHash).toEqual(expect.any(String));
+      expect(update.data.photoTokenExpiresAt).toBeInstanceOf(Date);
+
+      const emailed = mail.sendConnectSpeakerApprovedEmail.mock.calls[0][0];
+      expect(emailed.topic).toBe('Why dialects matter');
+      expect(emailed.photoUrl).toContain('/photo?token=');
+      // The link, not the stored hash.
+      expect(emailed.photoUrl).not.toContain(update.data.photoTokenHash);
+    });
+
+    it('sets the 48-hour expiry the approval email promises', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue(speaker);
+      const before = Date.now();
+
+      await controller.decideConnectSpeaker(req, 'r1', { decision: 'APPROVE' });
+
+      const expiresAt: Date = prisma.connectRegistration.update.mock.calls[0][0].data
+        .photoTokenExpiresAt;
+      const hours = (expiresAt.getTime() - before) / (60 * 60 * 1000);
+      expect(hours).toBeGreaterThan(47.9);
+      expect(hours).toBeLessThan(48.1);
+    });
+
+    /** A declined speaker must not keep a live upload link. */
+    it('clears any photo token when declining', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue(speaker);
+
+      await controller.decideConnectSpeaker(req, 'r1', { decision: 'DECLINE' });
+
+      const update = prisma.connectRegistration.update.mock.calls[0][0];
+      expect(update.data.speakerStatus).toBe('DECLINED');
+      expect(update.data.photoTokenHash).toBeNull();
+      expect(mail.sendConnectSpeakerDeclinedEmail).toHaveBeenCalled();
+      expect(mail.sendConnectSpeakerApprovedEmail).not.toHaveBeenCalled();
+    });
+
+    it('refuses to decide on an attendee-only registration', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue({ ...speaker, speaking: false });
+      await expect(
+        controller.decideConnectSpeaker(req, 'r1', { decision: 'APPROVE' }),
+      ).rejects.toThrow(/not a speaker application/);
+    });
+
+    it('only re-sends a photo link to an approved speaker', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue(speaker);
+      await expect(controller.resendConnectPhotoLink('r1')).rejects.toThrow(/approved speaker/);
+    });
+  });
+
+  describe('reminders', () => {
+    it('writes each speaker their own topic, and only to approved speakers', async () => {
+      prisma.connectRegistration.findMany.mockResolvedValue([
+        { email: 'a@example.com', name: 'A', speakerTopic: 'Topic A' },
+        { email: 'b@example.com', name: 'B', speakerTopic: 'Topic B' },
+      ]);
+
+      const result = await controller.sendConnectReminders({ audience: 'speakers' });
+
+      expect(prisma.connectRegistration.findMany.mock.calls[0][0].where).toMatchObject({
+        speaking: true,
+        speakerStatus: 'APPROVED',
+      });
+      expect(mail.sendConnectReminderEmail).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ email: 'a@example.com', topic: 'Topic A' }),
+      );
+      expect(result).toMatchObject({ total: 2, sent: 2, failed: [] });
+    });
+
+    /** An attendee has no talk, so no topic line. */
+    it('sends no topic to the all-registrations audience', async () => {
+      prisma.connectRegistration.findMany.mockResolvedValue([
+        { email: 'a@example.com', name: 'A', speakerTopic: 'Leaked topic' },
+      ]);
+
+      await controller.sendConnectReminders({ audience: 'all' });
+
+      expect(mail.sendConnectReminderEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ topic: null }),
+      );
+    });
+
+    /** One bad address must not stop the rest of the run. */
+    it('keeps going past a failed send and reports it', async () => {
+      prisma.connectRegistration.findMany.mockResolvedValue([
+        { email: 'bad@example.com', name: 'A', speakerTopic: null },
+        { email: 'good@example.com', name: 'B', speakerTopic: null },
+      ]);
+      mail.sendConnectReminderEmail
+        .mockRejectedValueOnce(new Error('bounced'))
+        .mockResolvedValueOnce(undefined);
+
+      const result = await controller.sendConnectReminders({ audience: 'all' });
+
+      expect(result).toMatchObject({ total: 2, sent: 1, failed: ['bad@example.com'] });
     });
   });
 });

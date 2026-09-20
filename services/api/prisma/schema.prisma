@@ -228,6 +228,7 @@ model User {
   dataAccessLeadsContacted          DataAccessLead[]                 @relation("DataAccessLeadContactedBy")
   supportRequestsResolved           SupportRequest[]                 @relation("SupportRequestResolvedBy")
   connectRegistrations              ConnectRegistration[]
+  connectSpeakersDecided            ConnectRegistration[]            @relation("ConnectSpeakerDecidedBy")
   p2pOffers                         P2PTokenOffer[]
   p2pOfferViews                     P2POfferView[]
   emailSendLogs                     EmailSendLog[]
@@ -3381,13 +3382,37 @@ model ConnectRegistration {
   userId          String?
   user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   linkedAt        DateTime?
+  /// Admin decision on a speaker application. Meaningful only when
+  /// `speaking` is true; an attendee-only row stays PENDING and is never
+  /// shown in the speaker queue.
+  speakerStatus   ConnectSpeakerStatus @default(PENDING)
+  speakerDecidedAt DateTime?
+  speakerDecidedById String?
+  speakerDecidedBy User?   @relation("ConnectSpeakerDecidedBy", fields: [speakerDecidedById], references: [id], onDelete: SetNull)
+  /// Public URL of the speaker's headshot, once they use the upload link.
+  photoUrl        String?
+  photoKey        String?
+  photoUploadedAt DateTime?
+  /// SHA-256 of the current photo-upload token. Only the hash is stored,
+  /// same as password-reset/magic-link tokens -- the raw token exists only
+  /// in the email. Re-sending the link replaces this, invalidating the old
+  /// one.
+  photoTokenHash  String?  @unique
+  photoTokenExpiresAt DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@unique([eventKey, email])
   @@index([eventKey, countryCode])
+  @@index([eventKey, speaking, speakerStatus])
   @@index([userId])
   @@map("connect_registrations")
+}
+
+enum ConnectSpeakerStatus {
+  PENDING
+  APPROVED
+  DECLINED
 }
 
 /// Editor.js-backed editorial content. `excerpt` is derived by BlogService

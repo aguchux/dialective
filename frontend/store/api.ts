@@ -2574,6 +2574,54 @@ export interface AdminRecordingSummary {
  * The two can disagree -- a mapped dialect whose checkpoint fails to load
  * reads as mapped but transcribes nothing.
  */
+export type ConnectSpeakerStatus = 'PENDING' | 'APPROVED' | 'DECLINED';
+
+export interface ConnectRegistrationRow {
+  id: string;
+  name: string;
+  email: string;
+  countryCode: string;
+  speaking: boolean;
+  speakerTopic: string | null;
+  speakerSummary: string | null;
+  speakerStatus: ConnectSpeakerStatus;
+  speakerDecidedAt: string | null;
+  photoUrl: string | null;
+  photoTokenExpiresAt: string | null;
+  createdAt: string;
+  userId: string | null;
+  user: {
+    id: string;
+    email: string;
+    phoneNumber: string | null;
+    phoneVerifiedAt: string | null;
+  } | null;
+  speakerDecidedBy: { email: string; firstName: string | null; lastName: string | null } | null;
+}
+
+export interface ConnectAdminOverview {
+  stats: {
+    interested: number;
+    countries: number;
+    speakerApplicants: number;
+    speakersPending: number;
+    speakersApproved: number;
+    speakersDeclined: number;
+    /** Registrations reachable by SMS: a linked member with a verified number. */
+    smsReachable: number;
+    withPhoto: number;
+  };
+  speakers: ConnectRegistrationRow[];
+  attendees: ConnectRegistrationRow[];
+}
+
+export interface ConnectReminderResult {
+  audience: 'all' | 'speakers';
+  total: number;
+  sent: number;
+  failed: string[];
+}
+
 export interface AsrCoverageRow {
   dialectTag: string;
   name: string | null;
@@ -3130,6 +3178,7 @@ export const dialectivaApi = createApi({
   reducerPath: 'dialectivaApi',
   baseQuery: baseQueryWithMaintenanceSignal,
   tagTypes: [
+    'ConnectAdmin',
     'Auth',
     'Wallet',
     'ReferralSettings',
@@ -4762,6 +4811,34 @@ export const dialectivaApi = createApi({
         body,
       }),
     }),
+    getConnectAdminOverview: builder.query<ConnectAdminOverview, void>({
+      query: () => ({ url: '/leads/admin/connect-2026' }),
+      providesTags: ['ConnectAdmin'],
+    }),
+    decideConnectSpeaker: builder.mutation<
+      { id: string; speakerStatus: ConnectSpeakerStatus },
+      { id: string; decision: 'APPROVE' | 'DECLINE' }
+    >({
+      query: ({ id, decision }) => ({
+        url: `/leads/admin/connect-2026/speakers/${id}/decision`,
+        method: 'POST',
+        body: { decision },
+      }),
+      invalidatesTags: ['ConnectAdmin'],
+    }),
+    resendConnectPhotoLink: builder.mutation<{ sent: boolean; expiresAt: string }, { id: string }>({
+      query: ({ id }) => ({
+        url: `/leads/admin/connect-2026/speakers/${id}/photo-link`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['ConnectAdmin'],
+    }),
+    sendConnectReminders: builder.mutation<
+      ConnectReminderResult,
+      { audience: 'all' | 'speakers'; message?: string }
+    >({
+      query: (body) => ({ url: '/leads/admin/connect-2026/reminders', method: 'POST', body }),
+    }),
     getAdminDataAccessLeads: builder.query<
       DataAccessLeadsPage,
       { page?: number; pageSize?: number } | void
@@ -6366,6 +6443,10 @@ export const {
   useCreateAdminWalletAdjustmentMutation,
   useGetAdminTrainerRecordingsQuery,
   useGetAdminAllRecordingsQuery,
+  useGetConnectAdminOverviewQuery,
+  useDecideConnectSpeakerMutation,
+  useResendConnectPhotoLinkMutation,
+  useSendConnectRemindersMutation,
   useGetAsrCoverageQuery,
   useSetAsrBackfillMutation,
   useGetUnsettledQuery,

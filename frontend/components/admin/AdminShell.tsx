@@ -75,6 +75,7 @@ const navGroups: NavGroup[] = [
       { href: '/admin/support', label: 'Support Requests', icon: SupportIcon },
       { href: '/admin/testimonials', label: 'Testimonials', icon: TestimonialsIcon },
       { href: '/admin/marketing', label: 'Marketing', icon: MarketingIcon },
+      { href: '/admin/connect', label: 'Connect 2026', icon: MarketingIcon },
       { href: '/admin/blog', label: 'Blog', icon: BlogIcon },
       { href: '/admin/courses', label: 'Courses', icon: CoursesIcon },
       { href: '/admin/updates', label: 'Updates', icon: BellIcon },
