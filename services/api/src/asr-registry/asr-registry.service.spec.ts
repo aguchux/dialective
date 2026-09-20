@@ -41,7 +41,7 @@ describe('AsrRegistryService', () => {
       // Each of these had thousands of recordings and no entry. Listing
       // them explicitly means removing one fails here rather than quietly
       // turning transcription off for that language again.
-      for (const tag of ['yo', 'ha', 'ig', 'pcm', 'zu', 'xh']) {
+      for (const tag of ['yo', 'ha', 'ig', 'pcm', 'sn', 'zu', 'xh', 'am', 'st-za', 'ak', 'sw-ke', 'arz', 'tn', 'ary']) {
         expect(service.resolve(tag)).toBeDefined();
       }
     });

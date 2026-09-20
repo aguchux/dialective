@@ -66,9 +66,26 @@ rw:
 # WhisperForConditionalGeneration only. The most-downloaded pidgin model,
 # asr-nigerian-pidgin/pidgin-wav2vec2-xlsr53, is Wav2Vec2ForCTC.
 #
-# Still unmapped and needing a decision: ibb (11k recordings -- no public
-# Ibibio ASR model exists at all), sn (14k -- no candidate loads yet), am,
-# ak, sw-ke, fr-bj, arz, af-za, en-za, nd, ny, st-za.
+# Still unmapped, with why (checked 2026-09-20):
+#   ibb   11,361  no public Ibibio ASR model exists in any format
+#   af-za    272  both Afrikaans candidates fail to load (no tokenizer)
+#   en-za    210  no SA-English model; en-us is the nearest fallback but
+#                 accent mismatch would make asrMatchScore misleading
+#   nd       162  no Ndebele model
+#   ny       101  only candidate fails to load (no tokenizer)
+#   ee        94  no Ewe model
+#   ti-et     81  both Tigrinya candidates fail to load
+#   luo       59  searches return a LAO model, not Luo -- do not map it
+#   ff-cm     41  no Fulfulde model
+#   yo-bj     30  Beninese Yoruba; could share yo's NCAIR1 checkpoint, but
+#                 that is a judgement call on dialect distance, not a fact
+#   fon       24  no Fon model
+#   om        11  no Oromo model
+#   fr-bj    296  French; no Beninese model, and metropolitan French ASR on
+#                 Beninese speech is the same accent-mismatch problem as en-za
+#
+# Everything above is a genuine model-availability gap, not an oversight.
+# Roughly 12.8k of the 13k uncovered recordings are Ibibio alone.
 
 # 44k recordings, the single largest gap. Processor verified to load on
 # whisper-worker-0.
@@ -88,3 +105,70 @@ xh:
   engine: whisper
   stream: asr-jobs-whisper
   checkpoint: TheirStory/whisper-small-xhosa
+
+# 13.7k recordings -- the largest remaining gap. Three better-known Shona
+# checkpoints fail to load (Code-Dev and noirlab lack tokenizer/processor
+# files, badrex is w2v-bert not Whisper); this one loads.
+sn:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: realtime-speech/shona-finetune
+
+# 1.4k recordings.
+am:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: chappM/whisper-amharic-small-v2
+
+# 957 recordings. st-za and st are both Sesotho and share a checkpoint --
+# the tags differ by region, the language does not.
+st-za:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: Toadoum/whisper-small-sesotho
+
+st:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: Toadoum/whisper-small-sesotho
+
+# 843 recordings.
+ak:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: prince4332/whisper-akan-twi-small-best-model
+
+# 395 recordings. sw-tz (8) shares it -- same language, different country.
+sw-ke:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: cdli/whisper-small-Swahili_finetuned_small_CV20
+
+sw-tz:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: cdli/whisper-small-Swahili_finetuned_small_CV20
+
+# 279 recordings.
+arz:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: MAdel121/whisper-small-egyptian-arabic
+
+# 109 recordings.
+tn:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: misterkissi/whisper-small-setswana
+
+# 48 recordings. Moroccan Darija; ar-dz (Algerian, 6 recordings) is close
+# enough in practice to share it rather than stay unmapped.
+ary:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: ychafiqui/whisper-medium-darija
+
+ar-dz:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: ychafiqui/whisper-medium-darija
