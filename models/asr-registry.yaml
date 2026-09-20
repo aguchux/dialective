@@ -48,24 +48,43 @@ rw:
 #
 # Deliberately NOT all 17 at once. These are community fine-tunes with
 # three-figure download counts, not the NCAIR1 checkpoints above, so each
-# needs its output judged on real audio before the next is added. Every one
-# below was checked to be ungated and WhisperForConditionalGeneration (the
-# only architecture worker.py's transformers pipeline can load -- the most
-# downloaded pidgin model, asr-nigerian-pidgin/pidgin-wav2vec2-xlsr53, is
-# Wav2Vec2ForCTC and would fail at load).
+# needs its output judged on real audio before the next is added.
 #
-# Still unmapped and needing a decision: ibb (11k recordings, no public
-# ASR model exists at all), am, ak, sw-ke, fr-bj, arz, af-za, en-za, nd,
-# ny, st-za, zu, xh.
+# Every checkpoint here was loaded on a real whisper-worker pod before
+# being added, NOT just checked on the HuggingFace API. That distinction
+# matters: HF metadata reported the two most promising candidates
+# (Mansa-Labs/obum-whisper-medium-nigerian-pidgin for pcm,
+# Code-Dev/whisper-small-shona-v3-a for sn) as ungated
+# WhisperForConditionalGeneration, and BOTH fail at load with "does not
+# appear to have a file named preprocessor_config.json". A checkpoint that
+# fails to load does not fail loudly here -- get_pipeline raises, the job
+# is left unacknowledged, and that dialect just keeps producing no
+# transcripts, i.e. the exact silent failure this whole change exists to
+# end. Probe before mapping.
+#
+# Architecture matters too: worker.py's transformers pipeline loads
+# WhisperForConditionalGeneration only. The most-downloaded pidgin model,
+# asr-nigerian-pidgin/pidgin-wav2vec2-xlsr53, is Wav2Vec2ForCTC.
+#
+# Still unmapped and needing a decision: ibb (11k recordings -- no public
+# Ibibio ASR model exists at all), sn (14k -- no candidate loads yet), am,
+# ak, sw-ke, fr-bj, arz, af-za, en-za, nd, ny, st-za.
 
-# 44k recordings, the single largest gap.
+# 44k recordings, the single largest gap. Processor verified to load on
+# whisper-worker-0.
 pcm:
   engine: whisper
   stream: asr-jobs-whisper
-  checkpoint: Mansa-Labs/obum-whisper-medium-nigerian-pidgin
+  checkpoint: ocansey/whisper-small-nigerian-pidgin
 
-# 14k recordings.
-sn:
+# 7k recordings. Verified to load on whisper-worker-0.
+zu:
   engine: whisper
   stream: asr-jobs-whisper
-  checkpoint: Code-Dev/whisper-small-shona-v3-a
+  checkpoint: TheirStory/whisper-medium-zulu
+
+# 1.4k recordings. Verified to load on whisper-worker-0.
+xh:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: TheirStory/whisper-small-xhosa
