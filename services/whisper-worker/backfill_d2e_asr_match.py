@@ -29,8 +29,8 @@ Run from services/whisper-worker (needs DATABASE_URL):
 import os
 import sys
 
-import psycopg
-from psycopg.rows import dict_row
+import psycopg2
+import psycopg2.extras
 
 from db import char_similarity, compute_asr_match_score, normalize_for_match  # noqa: F401
 
@@ -60,8 +60,8 @@ def main() -> None:
     if not dsn:
         raise SystemExit("DATABASE_URL is not set")
 
-    with psycopg.connect(dsn, row_factory=dict_row) as conn:
-        with conn.cursor() as cur:
+    with psycopg2.connect(dsn) as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(SELECT_SQL)
             rows = cur.fetchall()
 
