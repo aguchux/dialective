@@ -101,6 +101,13 @@ async function bootstrap() {
         audioKey: { not: null },
         audioBucket: { not: null },
         audioDeletedAt: null,
+        // asrMatchScore is char-similarity against the trainer's typed
+        // text, so a blank one would score a flat 0 -- which reads as
+        // "ASR got it wrong" rather than "there was nothing to compare
+        // against". The column is non-nullable and no blank row exists in
+        // the dialects being backfilled first, but excluding them keeps
+        // that true for any dialect ticked later.
+        translationText: { not: '' },
       };
 
       const batch = await prisma.wordRecording.findMany({
@@ -127,7 +134,7 @@ async function bootstrap() {
           // on the row itself, so unlike the live path this needs no
           // assignment/direction lookup -- a DIALECT_TO_ENGLISH row's
           // translationText is already its dialect text.
-          expected_text: recording.translationText ?? '',
+          expected_text: recording.translationText,
           bucket: recording.audioBucket!,
           audio_key: recording.audioKey!,
         });

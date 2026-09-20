@@ -85,6 +85,10 @@ export class AdminRecordingsService {
         audioKey: { not: null },
         audioBucket: { not: null },
         audioDeletedAt: null,
+        // Must match asr-backfill.ts's own filter exactly. If this counted
+        // rows the job skips, a ticked dialect would never reach zero and
+        // so would never untick itself.
+        translationText: { not: '' },
       },
       _count: { _all: true },
     });
@@ -145,6 +149,7 @@ export class AdminRecordingsService {
           audioKey: { not: null },
           audioBucket: { not: null },
           audioDeletedAt: null,
+          translationText: { not: '' },
         },
       });
       if (backfillable === 0) {
