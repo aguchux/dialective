@@ -65,9 +65,9 @@ export default function AdminConnectPage() {
         ...(message.trim() ? { message: message.trim() } : {}),
       }).unwrap();
       setNotice(
-        `Sent ${result.sent} of ${result.total}.${
-          result.failed.length > 0 ? ` Failed: ${result.failed.join(', ')}` : ''
-        }`,
+        `Emailed ${result.sent} of ${result.total}` +
+          `${result.smsSent > 0 ? `, and texted ${result.smsSent}` : ''}.` +
+          `${result.failed.length > 0 ? ` Failed: ${result.failed.join(', ')}` : ''}`,
       );
       return result;
     }, 'Reminder sent.');
@@ -275,8 +275,9 @@ export default function AdminConnectPage() {
         <div className="rounded-xl border border-line bg-surface p-4">
           <h2 className="font-black">Send a reminder</h2>
           <p className="mt-1 text-sm text-muted">
-            Goes out by email. {stats?.smsReachable ?? 0} of {stats?.interested ?? 0} registrations
-            are linked members with a verified phone, so only those could also be reached by SMS.
+            Everyone gets an email. {stats?.smsReachable ?? 0} of {stats?.interested ?? 0}{' '}
+            registrations are linked members with a verified phone, so those also get a text
+            &mdash; unless they have switched SMS notifications off.
           </p>
           <textarea
             className="mt-3 w-full rounded-lg border border-line bg-bg p-3 text-sm"

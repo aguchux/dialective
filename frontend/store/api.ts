@@ -2619,6 +2619,8 @@ export interface ConnectReminderResult {
   audience: 'all' | 'speakers';
   total: number;
   sent: number;
+  /** Texts delivered alongside the emails, to verified-phone members only. */
+  smsSent: number;
   failed: string[];
 }
 

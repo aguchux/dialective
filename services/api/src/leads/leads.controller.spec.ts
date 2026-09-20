@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SubscriberAuthService } from '../voice-stream/subscriber-auth/subscriber-auth.service';
 import { MailService } from '../mail/mail.service';
 import { StorageService } from '../storage/storage.service';
+import { SmsService } from '../sms/sms.service';
 
 describe('Connect 2026 registration', () => {
   const prisma = {
@@ -28,11 +29,13 @@ describe('Connect 2026 registration', () => {
     sendConnectReminderEmail: jest.fn(),
   };
   const storage = { createPresignedUploadUrl: jest.fn(), getPublicObjectUrl: jest.fn() };
+  const sms = { sendTransactional: jest.fn() };
   const controller = new LeadsController(
     prisma as unknown as PrismaService,
     {} as SubscriberAuthService,
     mail as unknown as MailService,
     storage as unknown as StorageService,
+    sms as unknown as SmsService,
   );
 
   beforeEach(() => {
@@ -48,6 +51,7 @@ describe('Connect 2026 registration', () => {
     mail.sendConnectReminderEmail.mockResolvedValue(undefined);
     prisma.connectRegistration.update.mockResolvedValue({ id: 'r1', speakerStatus: 'APPROVED' });
     prisma.connectRegistration.findMany.mockResolvedValue([]);
+    sms.sendTransactional.mockResolvedValue({ provider: 'termii' });
   });
 
   const attendee: CreateConnectRegistrationDto = {
@@ -146,6 +150,7 @@ describe('Connect 2026 registration', () => {
     mail.sendConnectReminderEmail.mockResolvedValue(undefined);
     prisma.connectRegistration.update.mockResolvedValue({ id: 'r1', speakerStatus: 'APPROVED' });
     prisma.connectRegistration.findMany.mockResolvedValue([]);
+    sms.sendTransactional.mockResolvedValue({ provider: 'termii' });
       await expect(controller.lookupConnectMember({ email: 'nobody@example.com' })).resolves.toEqual({
         found: false,
       });
@@ -205,6 +210,7 @@ describe('Connect 2026 registration', () => {
     mail.sendConnectReminderEmail.mockResolvedValue(undefined);
     prisma.connectRegistration.update.mockResolvedValue({ id: 'r1', speakerStatus: 'APPROVED' });
     prisma.connectRegistration.findMany.mockResolvedValue([]);
+    sms.sendTransactional.mockResolvedValue({ provider: 'termii' });
 
       await controller.registerForConnect({ ...attendee, confirmedMember: false });
 
@@ -391,6 +397,98 @@ describe('Connect 2026 registration', () => {
       const result = await controller.sendConnectReminders({ audience: 'all' });
 
       expect(result).toMatchObject({ total: 2, sent: 1, failed: ['bad@example.com'] });
+    });
+  });
+
+  describe('reminder SMS', () => {
+    const verifiedMember = {
+      phoneNumber: '+2348012345678',
+      phoneVerifiedAt: new Date(),
+      smsNotificationsEnabled: true,
+    };
+
+    it('texts a linked member with a verified number, alongside the email', async () => {
+      prisma.connectRegistration.findMany.mockResolvedValue([
+        { email: 'a@example.com', name: 'Ada Example', speakerTopic: null, user: verifiedMember },
+      ]);
+
+      const result = await controller.sendConnectReminders({ audience: 'all' });
+
+      expect(mail.sendConnectReminderEmail).toHaveBeenCalledTimes(1);
+      expect(sms.sendTransactional).toHaveBeenCalledWith(
+        '+2348012345678',
+        expect.stringContaining('Connect 2026'),
+      );
+      // First name only -- an SMS is charged per segment.
+      expect(sms.sendTransactional.mock.calls[0][1]).toContain('Hi Ada,');
+      expect(result).toMatchObject({ sent: 1, smsSent: 1 });
+    });
+
+    it('puts the speaker topic in the text for the speaker audience', async () => {
+      prisma.connectRegistration.findMany.mockResolvedValue([
+        { email: 'a@example.com', name: 'Ada', speakerTopic: 'Why dialects matter', user: verifiedMember },
+      ]);
+
+      await controller.sendConnectReminders({ audience: 'speakers' });
+
+      expect(sms.sendTransactional.mock.calls[0][1]).toContain('Why dialects matter');
+    });
+
+    it('does not text an unlinked registration', async () => {
+      prisma.connectRegistration.findMany.mockResolvedValue([
+        { email: 'guest@example.com', name: 'Guest', speakerTopic: null, user: null },
+      ]);
+
+      const result = await controller.sendConnectReminders({ audience: 'all' });
+
+      expect(sms.sendTransactional).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ sent: 1, smsSent: 0 });
+    });
+
+    /** An unverified number is not a number we may text. */
+    it('does not text a member whose number is unverified', async () => {
+      prisma.connectRegistration.findMany.mockResolvedValue([
+        {
+          email: 'a@example.com',
+          name: 'Ada',
+          speakerTopic: null,
+          user: { ...verifiedMember, phoneVerifiedAt: null },
+        },
+      ]);
+
+      await controller.sendConnectReminders({ audience: 'all' });
+
+      expect(sms.sendTransactional).not.toHaveBeenCalled();
+    });
+
+    it("respects the member's own SMS notifications toggle", async () => {
+      prisma.connectRegistration.findMany.mockResolvedValue([
+        {
+          email: 'a@example.com',
+          name: 'Ada',
+          speakerTopic: null,
+          user: { ...verifiedMember, smsNotificationsEnabled: false },
+        },
+      ]);
+
+      await controller.sendConnectReminders({ audience: 'all' });
+
+      expect(sms.sendTransactional).not.toHaveBeenCalled();
+    });
+
+    /**
+     * The email is the channel that matters. A failed text must not be
+     * reported as a failed reminder, or an admin will re-send to everyone.
+     */
+    it('still counts the email as sent when the text fails', async () => {
+      prisma.connectRegistration.findMany.mockResolvedValue([
+        { email: 'a@example.com', name: 'Ada', speakerTopic: null, user: verifiedMember },
+      ]);
+      sms.sendTransactional.mockRejectedValue(new Error('carrier down'));
+
+      const result = await controller.sendConnectReminders({ audience: 'all' });
+
+      expect(result).toMatchObject({ sent: 1, smsSent: 0, failed: [] });
     });
   });
 });

@@ -29,6 +29,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SubscriberAuthService } from '../voice-stream/subscriber-auth/subscriber-auth.service';
 import { MailService } from '../mail/mail.service';
+import { SmsService } from '../sms/sms.service';
 import { CreateDataAccessLeadDto } from './dto/create-data-access-lead.dto';
 import { UpdateDataAccessLeadContactDto } from './dto/update-data-access-lead-contact.dto';
 import { InviteDataAccessLeadDto } from './dto/invite-data-access-lead.dto';
@@ -107,6 +108,7 @@ export class LeadsController {
     private readonly subscriberAuth: SubscriberAuthService,
     private readonly mail: MailService,
     private readonly storage: StorageService,
+    private readonly sms: SmsService,
   ) {}
 
   @Get('connect-2026/stats')
@@ -447,26 +449,84 @@ export class LeadsController {
             { speaking: true, speakerStatus: 'APPROVED' }
           : {}),
       },
-      select: { email: true, name: true, speakerTopic: true },
+      select: {
+        email: true,
+        name: true,
+        speakerTopic: true,
+        // Only a linked member can be texted: an anonymous registration has
+        // no verified number, and the typed email is not one.
+        user: {
+          select: {
+            phoneNumber: true,
+            phoneVerifiedAt: true,
+            smsNotificationsEnabled: true,
+          },
+        },
+      },
     });
 
     let sent = 0;
+    let smsSent = 0;
     const failed: string[] = [];
     for (const recipient of recipients) {
+      const topic = speakersOnly ? (recipient.speakerTopic ?? null) : null;
       try {
         await this.mail.sendConnectReminderEmail({
           email: recipient.email,
           name: recipient.name,
           message: dto.message?.trim() || null,
-          topic: speakersOnly ? (recipient.speakerTopic ?? null) : null,
+          topic,
         });
         sent += 1;
       } catch {
         failed.push(recipient.email);
       }
+
+      // SMS rides alongside the email rather than replacing it: it reaches
+      // only linked members with a verified number who have not turned
+      // notifications off, so it can never be the sole channel. Failures
+      // are swallowed and simply not counted -- a text that does not send
+      // must not make an admin think the email did not either.
+      if (await this.sendConnectReminderSms(recipient.user, recipient.name, topic)) {
+        smsSent += 1;
+      }
     }
 
-    return { audience: dto.audience, total: recipients.length, sent, failed };
+    return { audience: dto.audience, total: recipients.length, sent, smsSent, failed };
+  }
+
+  /**
+   * Same three gates every other SMS in this codebase respects (see
+   * P2PService.notify): a phone number, a verified one, and the user's own
+   * smsNotificationsEnabled toggle. Returns whether a text actually went.
+   */
+  private async sendConnectReminderSms(
+    user: {
+      phoneNumber: string | null;
+      phoneVerifiedAt: Date | null;
+      smsNotificationsEnabled: boolean;
+    } | null,
+    name: string,
+    topic: string | null,
+  ): Promise<boolean> {
+    if (!user?.phoneNumber || !user.phoneVerifiedAt || !user.smsNotificationsEnabled) {
+      return false;
+    }
+    // Deliberately short. An SMS is charged per segment and read on a lock
+    // screen, so it carries the reminder and points at the email for the
+    // detail rather than repeating it.
+    const firstName = name.trim().split(/\s+/)[0] ?? name;
+    const body = topic
+      ? `Hi ${firstName}, a reminder: you are speaking at Dialect Library Connect 2026 on "${topic}". October 2026, online. Details are in your email.`
+      : `Hi ${firstName}, a reminder about Dialect Library Connect 2026 -- October 2026, online. Details are in your email.`;
+    try {
+      await this.sms.sendTransactional(user.phoneNumber, body);
+      return true;
+    } catch {
+      // Already logged inside SmsFallbackChain. The email is the channel
+      // that matters; a failed text is not worth failing the run over.
+      return false;
+    }
   }
 
   // --- Connect 2026 speaker photo upload (public, token-gated) ---------
