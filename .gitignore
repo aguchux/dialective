@@ -28,3 +28,6 @@ services/api/prisma/seed.js
 services/api/prisma/seed.js.map
 __pycache__/
 *.pyc
+
+# Vercel CLI link (root is the deploy dir for the `dialective` project)
+.vercel

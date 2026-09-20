@@ -212,6 +212,14 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: stream_frontend_url
+            # Where Connect speaker photo-upload links point. Optional --
+            # LeadsController falls back to connect.dialectlibrary.com.
+            - name: CONNECT_FRONTEND_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: connect_frontend_url
+                  optional: true
             - name: KYC_APP_URL
               valueFrom:
                 configMapKeyRef:
