@@ -721,6 +721,57 @@ describe('WordsService', () => {
       });
     });
 
+    /**
+     * The trainer hears a dialect clip, types the ENGLISH meaning, then
+     * records their own DIALECT pronunciation ("not the English you typed
+     * above" -- WordTrainingDialog.tsx). Comparing an ASR transcript of
+     * that dialect audio against the typed English scored correct work at
+     * near zero: 21,852 rows averaged 13.7 where ENGLISH_TO_DIALECT
+     * averaged 55.4.
+     */
+    it('compares the D2E recording against the spoken dialect, not the typed English', async () => {
+      await service.createRecording(trainer.id, {
+        assignmentId: assignment.id,
+        responseText: 'welcome',
+        bucket: assignment.uploadBucket,
+        audioKey: assignment.uploadKey,
+        durationMs: 1200,
+        noiseRating: 'QUIET',
+      } as any);
+
+      expect(streams.publish).toHaveBeenCalledWith(
+        'quality-gate-jobs',
+        expect.objectContaining({
+          word_recording_id: 'recording-validation',
+          // 'nnabata', the source's dialect text -- NOT 'welcome'.
+          expected_text: sourceRecording.translationText,
+        }),
+      );
+    });
+
+    it('falls back to the typed answer when the source recording has gone', async () => {
+      // A missing source must not drop the ASR pass entirely -- a slightly
+      // wrong annotation beats no annotation.
+      prisma.wordRecording.findUnique.mockResolvedValue(null);
+
+      await service.createRecording(trainer.id, {
+        assignmentId: assignment.id,
+        responseText: 'welcome',
+        bucket: assignment.uploadBucket,
+        audioKey: assignment.uploadKey,
+        durationMs: 1200,
+        noiseRating: 'QUIET',
+      } as any);
+
+      expect(streams.publish).toHaveBeenCalledWith(
+        'quality-gate-jobs',
+        expect.objectContaining({
+          word_recording_id: 'recording-validation',
+          expected_text: 'welcome',
+        }),
+      );
+    });
+
     it('publishes a quality-gate-jobs message for the new redo recording', async () => {
       await service.createRecording(trainer.id, {
         assignmentId: assignment.id,

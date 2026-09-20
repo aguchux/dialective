@@ -582,7 +582,7 @@ export class WordsService {
       bucket: body.bucket,
       audio_key: body.audioKey,
       dialect_tag: assignment.session.user.dialect!.tag,
-      expected_text: body.responseText?.trim() || promptText,
+      expected_text: await this.asrExpectedText(assignment, body.responseText, promptText),
       ...(asrRoute ? { asr_stream: asrRoute.stream } : {}),
     });
 
@@ -1093,6 +1093,44 @@ export class WordsService {
    * audit trail back to the recording this attempt validated-and-replaced;
    * it never affects scoring.
    */
+  /**
+   * What an ASR transcript of this recording should be compared against.
+   *
+   * Must be the text the audio actually CONTAINS, which is not the same as
+   * the text the trainer typed. On a DIALECT_TO_ENGLISH assignment the
+   * trainer listens to a dialect clip, types the ENGLISH meaning, and then
+   * records themselves saying the word in their own DIALECT ("Say it in
+   * {sourceLanguage}... your own pronunciation of this word -- not the
+   * English you typed above", WordTrainingDialog.tsx). Sending the typed
+   * English compared a dialect transcript against English text, so a
+   * perfectly good recording scored near zero: 21,852 rows averaged 13.7
+   * against ENGLISH_TO_DIALECT's 55.4, and 7,961 of them scored exactly 0.
+   * That never moved anyone's payout only because
+   * PlatformSettings.qualityWeightAsrMatch defaults to 0 -- it would have
+   * the moment that weight was raised.
+   *
+   * The dialect text lives on the assignment's SOURCE recording, read the
+   * same way insertRedoRecording reads it (sourceRecordingId is a bare
+   * column, not a Prisma relation). Falls back to the previous behaviour if
+   * the source has gone, since a slightly wrong annotation beats dropping
+   * the ASR pass entirely.
+   */
+  private async asrExpectedText(
+    assignment: NonNullable<Awaited<ReturnType<WordsService['getOwnedAssignment']>>>,
+    responseText: string | undefined,
+    promptText: string,
+  ): Promise<string> {
+    const typedFallback = responseText?.trim() || promptText;
+    if (assignment.direction !== 'DIALECT_TO_ENGLISH' || !assignment.sourceRecordingId) {
+      return typedFallback;
+    }
+    const source = await this.prisma.wordRecording.findUnique({
+      where: { id: assignment.sourceRecordingId },
+      select: { translationText: true },
+    });
+    return source?.translationText?.trim() || typedFallback;
+  }
+
   private async insertRedoRecording(
     userId: string,
     assignment: NonNullable<Awaited<ReturnType<WordsService['getOwnedAssignment']>>>,
