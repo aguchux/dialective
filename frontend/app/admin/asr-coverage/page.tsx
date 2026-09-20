@@ -131,11 +131,14 @@ export default function AdminAsrCoveragePage() {
           return <span className="text-xs text-muted">&mdash;</span>;
         }
         return (
-          <label className="flex cursor-pointer items-center gap-2">
+          <label
+            className={`flex items-center gap-2 ${row.backfillBlocked ? '' : 'cursor-pointer'}`}
+            title={row.backfillBlocked ?? undefined}
+          >
             <input
               checked={row.backfillEnabled}
-              className="size-4 cursor-pointer accent-emerald-600"
-              disabled={pendingTag === row.dialectTag}
+              className="size-4 cursor-pointer accent-emerald-600 disabled:cursor-not-allowed"
+              disabled={pendingTag === row.dialectTag || !!row.backfillBlocked}
               onChange={() => void toggleBackfill(row)}
               type="checkbox"
             />
@@ -143,7 +146,7 @@ export default function AdminAsrCoveragePage() {
               <span className="font-mono font-bold tabular-nums">
                 {row.backfillable.toLocaleString()}
               </span>{' '}
-              <span className="text-muted">queued</span>
+              <span className="text-muted">recoverable</span>
               {row.backfillEnabled ? (
                 <span className="ml-1 font-black text-emerald-700">&middot; running</span>
               ) : null}
@@ -172,10 +175,11 @@ export default function AdminAsrCoveragePage() {
             <span className="font-mono text-xs">models/asr-registry.yaml</span>.
           </p>
           <p className="mt-2 text-sm text-muted">
-            Mapping a dialect only transcribes recordings made <em>after</em> it was mapped. Tick{' '}
-            <strong>Backfill</strong> to also re-send what was already recorded &mdash; it feeds the
-            queue gradually so live recording is unaffected, and unticks itself when the dialect is
-            done.
+            Mapping a dialect only transcribes recordings made <em>after</em> it was mapped, so
+            anything recorded before that stays blank. <strong>Backfill</strong> re-sends that
+            history &mdash; but it is currently unavailable on every dialect: running it OOMKilled
+            the ASR workers and stopped live transcription. It needs more worker memory before it
+            can be turned back on.
           </p>
         </div>
 

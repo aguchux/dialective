@@ -117,6 +117,10 @@ export class AdminRecordingsService {
           checkpoint: route?.checkpoint ?? null,
           backfillable: backfillableByTag.get(row.dialectTag) ?? 0,
           backfillEnabled: backfillEnabledByTag.get(row.dialectTag) ?? false,
+          // Non-null means the checkbox is disabled and this is why. Sent
+          // rather than duplicated in the frontend so the page and the API
+          // can never disagree about what is tickable.
+          backfillBlocked: BACKFILL_BLOCKED[row.dialectTag] ?? null,
         };
       })
       .sort((a, b) => b.recordings - a.recordings);
@@ -146,7 +150,7 @@ export class AdminRecordingsService {
       const blocked = BACKFILL_BLOCKED[dialectTag];
       if (blocked) {
         throw new UnprocessableEntityException(
-          `Backfilling "${dialectTag}" would take live transcription down: ${blocked}. It needs more worker memory first.`,
+          `Cannot backfill "${dialectTag}": ${blocked}.`,
         );
       }
 

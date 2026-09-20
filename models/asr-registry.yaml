@@ -10,6 +10,19 @@
 #
 # If a dialect_tag has no entry here, the submission must be rejected as
 # unsupported_dialect before ever reaching a worker -- never guess an engine.
+#
+# BACKFILL WARNING (2026-09-20): backfilling ANY dialect OOMKills the
+# whisper-worker fleet on its current 3584Mi pod limit. Measured twice
+# against live traffic: zu (a whisper-MEDIUM, ~3GB) killed all five pods with
+# 19 jobs dead-lettered and zero transcripts; xh (a ~1GB SMALL) did write
+# transcripts but still killed four of five. So it is not the size of any
+# one checkpoint -- there is headroom for whatever mix live traffic brings
+# and not for that plus a sustained second dialect, and capping
+# _pipeline_cache at 1 does not help because the cost is eviction/reload
+# churn between two dialects. Recovery both times: XGROUP SETID to the
+# stream tail, then delete the pods. Backfill is blocked for every mapped
+# dialect in BACKFILL_BLOCKED (see services/api/src/admin-recordings/)
+# until the fleet grows -- the same capacity wall that blocks sn.
 
 en-us:
   engine: vosk
@@ -113,18 +126,6 @@ pcm:
   checkpoint: ocansey/whisper-small-nigerian-pidgin
 
 # 7k recordings. Verified to load on whisper-worker-0.
-#
-# BACKFILL WARNING (2026-09-20): this is a whisper-MEDIUM (~3GB resident)
-# against a 3584Mi pod limit. It loads fine for the occasional live
-# recording, but feeding it a sustained backlog alongside live pcm/yo/ig
-# traffic OOMKilled all five whisper-worker pods within minutes and
-# stopped live transcription entirely -- the cache cap of 1 does not help,
-# because the medium model alone plus a second dialect's arrival is enough
-# to cross the limit. ~260 backfill jobs were sent; 19 dead-lettered with
-# max_delivery_attempts_exceeded, none produced a transcript. Recovery was
-# XGROUP SETID to the stream tail plus a pod restart. Do not backfill this
-# dialect (or any medium: ary, ar-dz) until the fleet has more memory
-# headroom -- the same capacity wall that blocks sn.
 zu:
   engine: whisper
   stream: asr-jobs-whisper

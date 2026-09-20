@@ -2591,6 +2591,8 @@ export interface AsrCoverageRow {
    */
   backfillable: number;
   backfillEnabled: boolean;
+  /** Non-null means backfill is unavailable for this dialect, and why. */
+  backfillBlocked: string | null;
 }
 
 export interface AdminRecordingsPage {
