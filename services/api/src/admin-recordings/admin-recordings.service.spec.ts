@@ -11,6 +11,7 @@ describe('AdminRecordingsService', () => {
   let storage: any;
   let otp: any;
   let settings: any;
+  let asrRegistry: any;
   let service: AdminRecordingsService;
 
   beforeEach(() => {
@@ -38,7 +39,86 @@ describe('AdminRecordingsService', () => {
       verify: jest.fn().mockResolvedValue(undefined),
     };
     settings = { isAdminPayoutOtpEnabled: jest.fn().mockResolvedValue(false) };
-    service = new AdminRecordingsService(prisma, storage, otp, settings);
+    asrRegistry = {
+      resolve: jest.fn((tag: string) =>
+        tag === 'yo'
+          ? { engine: 'whisper', stream: 'asr-jobs-whisper', checkpoint: 'NCAIR1/Yoruba-ASR' }
+          : undefined,
+      ),
+    };
+    service = new AdminRecordingsService(prisma, storage, otp, settings, asrRegistry);
+  });
+
+  /**
+   * An unmapped dialect fails silently -- no asr_stream, no worker, no
+   * transcript, no error. This view is the thing that makes that visible,
+   * so it has to be right about which dialects are actually covered.
+   */
+  describe('asrCoverage', () => {
+    function withDialects(
+      totals: { dialectTag: string; n: number }[],
+      transcribed: { dialectTag: string; n: number }[],
+    ) {
+      prisma.wordRecording.groupBy = jest
+        .fn()
+        .mockResolvedValueOnce(totals.map((t) => ({ dialectTag: t.dialectTag, _count: { _all: t.n } })))
+        .mockResolvedValueOnce(
+          transcribed.map((t) => ({ dialectTag: t.dialectTag, _count: { _all: t.n } })),
+        );
+      prisma.dialect = {
+        findMany: jest.fn().mockResolvedValue([
+          { tag: 'yo', name: 'Yoruba' },
+          { tag: 'ibb', name: 'Ibibio' },
+        ]),
+      };
+    }
+
+    it('flags a dialect with recordings but no registry entry', async () => {
+      withDialects([{ dialectTag: 'ibb', n: 11412 }], []);
+      const [row] = await service.asrCoverage();
+      expect(row).toMatchObject({
+        dialectTag: 'ibb',
+        name: 'Ibibio',
+        recordings: 11412,
+        transcribed: 0,
+        coveragePercent: 0,
+        mapped: false,
+        checkpoint: null,
+      });
+    });
+
+    it('reports the checkpoint for a mapped dialect', async () => {
+      withDialects([{ dialectTag: 'yo', n: 100 }], [{ dialectTag: 'yo', n: 94 }]);
+      const [row] = await service.asrCoverage();
+      expect(row).toMatchObject({
+        dialectTag: 'yo',
+        mapped: true,
+        engine: 'whisper',
+        checkpoint: 'NCAIR1/Yoruba-ASR',
+        coveragePercent: 94,
+      });
+    });
+
+    it('sorts by volume so the biggest hole is first', async () => {
+      withDialects(
+        [
+          { dialectTag: 'yo', n: 100 },
+          { dialectTag: 'ibb', n: 11412 },
+        ],
+        [{ dialectTag: 'yo', n: 94 }],
+      );
+      const rows = await service.asrCoverage();
+      expect(rows.map((r: { dialectTag: string }) => r.dialectTag)).toEqual(['ibb', 'yo']);
+    });
+
+    it('counts real transcripts, not just a registry entry', async () => {
+      // A mapped dialect whose checkpoint fails to load looks identical to
+      // an unmapped one from the trainer's side -- this view must show it.
+      withDialects([{ dialectTag: 'yo', n: 500 }], []);
+      const [row] = await service.asrCoverage();
+      expect(row.mapped).toBe(true);
+      expect(row.coveragePercent).toBe(0);
+    });
   });
 
   describe('listForTrainer', () => {

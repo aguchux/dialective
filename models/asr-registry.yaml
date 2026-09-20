@@ -75,10 +75,16 @@ rw:
 # probe -- the probe does not compete with an already-loaded model.
 #
 # Still unmapped, with why (checked 2026-09-20):
-#   sn    13,715  realtime-speech/shona-finetune loads, but it is a
-#                 large-v3 (~6.2GB) and OOMKills the pod. Mapped briefly
-#                 on 2026-09-20 and reverted for that reason. Needs either
-#                 a small/medium Shona checkpoint or a bigger worker.
+#   sn    13,749  BLOCKED ON CLUSTER MEMORY, not on the model. Its 6.17GB
+#                 on HuggingFace is the same weights stored twice
+#                 (.safetensors AND .bin); transformers loads one, so it is
+#                 ~3.09GB resident -- the same size as zu's checkpoint,
+#                 which runs fine. But a probe pod OOMKilled at a 6Gi limit
+#                 and could not even schedule at a 3Gi request ("0/5 nodes
+#                 available: Insufficient memory"). The five DO nodes are
+#                 66-96% memory-requested. Needs a node added before this
+#                 can be mapped; the checkpoint itself is fine. Fastest-
+#                 growing gap: 99% of those recordings arrived in 7 days.
 #   ibb   11,361  no public Ibibio ASR model exists in any format
 #   af-za    272  both Afrikaans candidates fail to load (no tokenizer)
 #   en-za    210  no SA-English model; en-us is the nearest fallback but

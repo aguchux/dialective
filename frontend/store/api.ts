@@ -2568,6 +2568,23 @@ export interface AdminRecordingSummary {
   settledAt: string | null;
 }
 
+/**
+ * One dialect's ASR status. `mapped` is whether models/asr-registry.yaml
+ * routes it anywhere; `coveragePercent` is what actually got transcribed.
+ * The two can disagree -- a mapped dialect whose checkpoint fails to load
+ * reads as mapped but transcribes nothing.
+ */
+export interface AsrCoverageRow {
+  dialectTag: string;
+  name: string | null;
+  recordings: number;
+  transcribed: number;
+  coveragePercent: number;
+  mapped: boolean;
+  engine: string | null;
+  checkpoint: string | null;
+}
+
 export interface AdminRecordingsPage {
   items: AdminRecordingSummary[];
   page: number;
@@ -5366,6 +5383,10 @@ export const dialectivaApi = createApi({
       query: (params) => ({ url: '/admin-recordings', params }),
       providesTags: ['AdminRecordings'],
     }),
+    getAsrCoverage: builder.query<AsrCoverageRow[], void>({
+      query: () => ({ url: '/admin-recordings/asr-coverage' }),
+      providesTags: ['AdminRecordings'],
+    }),
     getUnsettled: builder.query<UnsettledPage, { page: number; pageSize: number; userId?: string }>(
       {
         query: (params) => ({ url: '/admin-settlement/unsettled', params }),
@@ -6324,6 +6345,7 @@ export const {
   useCreateAdminWalletAdjustmentMutation,
   useGetAdminTrainerRecordingsQuery,
   useGetAdminAllRecordingsQuery,
+  useGetAsrCoverageQuery,
   useGetUnsettledQuery,
   useSettleOneMutation,
   useSettleAllMutation,

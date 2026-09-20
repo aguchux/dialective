@@ -19,6 +19,15 @@ export class AdminRecordingsController {
     return this.recordings.listAll(query);
   }
 
+  /**
+   * Per-dialect ASR coverage. Deliberately sits above the :trainerId route
+   * so "asr-coverage" is never read as a trainer id.
+   */
+  @Get('asr-coverage')
+  asrCoverage() {
+    return this.recordings.asrCoverage();
+  }
+
   @Get('trainers/:trainerId')
   listForTrainer(@Param('trainerId') trainerId: string, @Query() query: ListTrainerRecordingsDto) {
     return this.recordings.listForTrainer(trainerId, query);

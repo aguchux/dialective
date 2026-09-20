@@ -10,6 +10,7 @@ import { StorageService } from '../storage/storage.service';
 import { OtpService } from '../otp/otp.service';
 import { resolveOtpDestination } from '../otp/otp.util';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
+import { AsrRegistryService } from '../asr-registry/asr-registry.service';
 import { adminActionContextHash } from '../wallet/otp-context.util';
 import { ListTrainerRecordingsDto } from './dto/list-trainer-recordings.dto';
 import { ListAllRecordingsDto } from './dto/list-all-recordings.dto';
@@ -42,7 +43,58 @@ export class AdminRecordingsService {
     private readonly storage: StorageService,
     private readonly otp: OtpService,
     private readonly settings: PlatformSettingsService,
+    private readonly asrRegistry: AsrRegistryService,
   ) {}
+
+  /**
+   * Per-dialect ASR coverage: which dialects recordings are arriving in,
+   * and whether anything is actually transcribing them.
+   *
+   * Exists because an unmapped dialect fails SILENTLY -- api omits
+   * asr_stream, no worker sees the recording, and it ends up with no
+   * transcript while nothing errors. 17 dialects and 82k recordings sat
+   * that way for a month before anyone noticed, and the only reason it
+   * surfaced was someone asking why one language looked wrong.
+   *
+   * Ordered by volume so the biggest hole is the first row. `transcribed`
+   * counts real transcripts rather than trusting the registry: a mapped
+   * dialect whose checkpoint fails to load looks identical to an unmapped
+   * one from the trainer's side, and this view should show that.
+   */
+  async asrCoverage() {
+    const rows = await this.prisma.wordRecording.groupBy({
+      by: ['dialectTag'],
+      _count: { _all: true },
+    });
+
+    const transcribed = await this.prisma.wordRecording.groupBy({
+      by: ['dialectTag'],
+      where: { transcript: { not: null } },
+      _count: { _all: true },
+    });
+    const transcribedByTag = new Map(transcribed.map((r) => [r.dialectTag, r._count._all]));
+
+    const dialects = await this.prisma.dialect.findMany({ select: { tag: true, name: true } });
+    const nameByTag = new Map(dialects.map((d) => [d.tag, d.name]));
+
+    return rows
+      .map((row) => {
+        const route = this.asrRegistry.resolve(row.dialectTag);
+        const total = row._count._all;
+        const withTranscript = transcribedByTag.get(row.dialectTag) ?? 0;
+        return {
+          dialectTag: row.dialectTag,
+          name: nameByTag.get(row.dialectTag) ?? null,
+          recordings: total,
+          transcribed: withTranscript,
+          coveragePercent: total > 0 ? Math.round((withTranscript / total) * 1000) / 10 : 0,
+          mapped: !!route,
+          engine: route?.engine ?? null,
+          checkpoint: route?.checkpoint ?? null,
+        };
+      })
+      .sort((a, b) => b.recordings - a.recordings);
+  }
 
   async listForTrainer(trainerId: string, query: ListTrainerRecordingsDto) {
     const skip = (query.page - 1) * query.pageSize;
