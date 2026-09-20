@@ -7,16 +7,22 @@ spec:
     name: whisper-worker
     kind: StatefulSet
   minReplicaCount: 0
-  # NOTE (2026-09-20): 5 is a CAPACITY ceiling, not a tuning choice. At 5
-  # workers the group clears ~300 clips/hour against 200-340 arriving, so
-  # the scaler sits pinned here with a multi-thousand-job lag that never
-  # drains -- yo/ha/ig recordings stay PENDING for a day while vosk
-  # dialects are unaffected, which reads as "Yoruba is not transcribing".
+  # NOTE (2026-09-20): do NOT read this group's `lag` as a backlog. Redis
+  # reports a stale/unreconcilable lag here (it sat at exactly 5,851 across
+  # hours while entries kept being read), and it was misdiagnosed as an ASR
+  # capacity problem. The honest signals are `last-delivered-id` vs the
+  # stream tail (XREVRANGE ... COUNT 1) and XPENDING -- both showed the
+  # group fully caught up, with 1 in-flight entry.
   #
-  # Raising this alone does NOT help: each pod requests 2560Mi and the five
-  # nodes are already 72-96% memory-requested, so a 6th pod sits Pending
-  # with "Insufficient memory". Fixing the backlog needs more nodes (or a
-  # smaller per-pod footprint), not a higher ceiling.
+  # If yo/ha/ig recordings are sitting PENDING, check whether they already
+  # have a transcript before touching this. They almost certainly do: the
+  # PENDING -> SCORED step is driven by peer VALIDATION (word_validations),
+  # not by ASR and not by any scorer service, so a validation shortfall
+  # looks exactly like a transcription failure from outside.
+  #
+  # Scaling past 5 also needs nodes: each pod requests 2560Mi and the five
+  # DO nodes are 72-96% memory-requested, so a 6th pod sits Pending with
+  # "Insufficient memory".
   maxReplicaCount: 5
   cooldownPeriod: 120
   pollingInterval: 15
