@@ -524,6 +524,7 @@ model Dialect {
   tasksPaused          Boolean                      @default(false) // stops new word-training task assignment for this dialect WITHOUT touching onboarding/active or resetting trainers already assigned to it -- see WordsService.getTrainer(); a lighter-weight gate than `active` for temporarily pausing tasks (e.g. content backlog, quality issue) while keeping trainers assigned
   llmGenerationEnabled Boolean                      @default(false) // per-dialect override within an enabled country -- lets admin exclude one dialect without disabling the whole country
   keyboardLayout       String? // space-separated dialect-specific characters/diacritics for the inline virtual keyboard on the word-training spelling input; admin-edited, optionally AI-drafted via POST /geo/admin/dialects/:id/generate-keyboard-layout
+  asrBackfillEnabled   Boolean                      @default(false) // admin ticks this on the ASR Transcription page to re-publish this dialect's already-recorded audio to ASR; a dialect mapped in asr-registry.yaml only ever transcribes recordings submitted AFTER it was mapped, so without this its history stays permanently blank. asr-backfill-job publishes a capped batch per run and unticks this itself once nothing is left -- see services/api/src/asr-backfill.ts
   country              Country                      @relation(fields: [countryId], references: [id])
   users                User[]
   variants             DialectVariant[]

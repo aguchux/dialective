@@ -2583,6 +2583,14 @@ export interface AsrCoverageRow {
   mapped: boolean;
   engine: string | null;
   checkpoint: string | null;
+  /**
+   * Untranscribed recordings whose audio still exists, i.e. what a
+   * backfill could actually recover. Not the same as
+   * recordings - transcribed, which also counts rows whose audio the
+   * retention job has already purged and which can never be transcribed.
+   */
+  backfillable: number;
+  backfillEnabled: boolean;
 }
 
 export interface AdminRecordingsPage {
@@ -5387,6 +5395,17 @@ export const dialectivaApi = createApi({
       query: () => ({ url: '/admin-recordings/asr-coverage' }),
       providesTags: ['AdminRecordings'],
     }),
+    setAsrBackfill: builder.mutation<
+      { dialectTag: string; backfillEnabled: boolean },
+      { dialectTag: string; enabled: boolean }
+    >({
+      query: ({ dialectTag, enabled }) => ({
+        url: `/admin-recordings/asr-coverage/${dialectTag}/backfill`,
+        method: 'POST',
+        body: { enabled },
+      }),
+      invalidatesTags: ['AdminRecordings'],
+    }),
     getUnsettled: builder.query<UnsettledPage, { page: number; pageSize: number; userId?: string }>(
       {
         query: (params) => ({ url: '/admin-settlement/unsettled', params }),
@@ -6346,6 +6365,7 @@ export const {
   useGetAdminTrainerRecordingsQuery,
   useGetAdminAllRecordingsQuery,
   useGetAsrCoverageQuery,
+  useSetAsrBackfillMutation,
   useGetUnsettledQuery,
   useSettleOneMutation,
   useSettleAllMutation,

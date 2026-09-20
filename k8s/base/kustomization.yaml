@@ -46,4 +46,5 @@ resources:
   - audio-retention-cronjob.yaml
   - tokenomics-valuation-cronjob.yaml
   - weekly-trainer-report-cronjob.yaml
+  - asr-backfill-cronjob.yaml
   - reserve-balance-poll-cronjob.yaml

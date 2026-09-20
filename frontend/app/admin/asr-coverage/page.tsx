@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
-import { AsrCoverageRow, useGetAsrCoverageQuery } from '@/store/api';
+import { AsrCoverageRow, useGetAsrCoverageQuery, useSetAsrBackfillMutation } from '@/store/api';
 
 /**
  * Which dialects are actually being transcribed.
@@ -19,8 +20,33 @@ import { AsrCoverageRow, useGetAsrCoverageQuery } from '@/store/api';
  * instead of looking fine.
  */
 export default function AdminAsrCoveragePage() {
-  const { data: rows = [], isLoading } = useGetAsrCoverageQuery();
+  const { data: rows = [], isLoading } = useGetAsrCoverageQuery(undefined, {
+    // The backfill job ticks a dialect off when it finishes, so the page
+    // has to notice that on its own -- otherwise a finished dialect keeps
+    // showing as still running until someone reloads.
+    pollingInterval: 30_000,
+  });
+  const [setBackfill] = useSetAsrBackfillMutation();
+  const [pendingTag, setPendingTag] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
+  const toggleBackfill = async (row: AsrCoverageRow) => {
+    setPendingTag(row.dialectTag);
+    setError(null);
+    try {
+      await setBackfill({ dialectTag: row.dialectTag, enabled: !row.backfillEnabled }).unwrap();
+    } catch (err) {
+      const message =
+        typeof err === 'object' && err && 'data' in err
+          ? ((err as { data?: { message?: string } }).data?.message ?? null)
+          : null;
+      setError(message ?? `Could not change the backfill setting for ${row.dialectTag}.`);
+    } finally {
+      setPendingTag(null);
+    }
+  };
+
+  const backfilling = rows.filter((row) => row.backfillEnabled);
   const unmapped = rows.filter((row) => !row.mapped);
   const unmappedRecordings = unmapped.reduce((sum, row) => sum + row.recordings, 0);
   const totalRecordings = rows.reduce((sum, row) => sum + row.recordings, 0);
@@ -91,6 +117,41 @@ export default function AdminAsrCoveragePage() {
           </span>
         ),
     },
+    {
+      key: 'backfill',
+      header: 'Backfill',
+      searchable: false,
+      sortValue: (row) => row.backfillable,
+      render: (row) => {
+        // Nothing recoverable: either everything already has a transcript,
+        // or the retention job has purged the audio of whatever doesn't.
+        // Showing a dead checkbox here would imply an action that cannot
+        // do anything.
+        if (row.backfillable === 0) {
+          return <span className="text-xs text-muted">&mdash;</span>;
+        }
+        return (
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              checked={row.backfillEnabled}
+              className="size-4 cursor-pointer accent-emerald-600"
+              disabled={pendingTag === row.dialectTag}
+              onChange={() => void toggleBackfill(row)}
+              type="checkbox"
+            />
+            <span className="text-xs">
+              <span className="font-mono font-bold tabular-nums">
+                {row.backfillable.toLocaleString()}
+              </span>{' '}
+              <span className="text-muted">queued</span>
+              {row.backfillEnabled ? (
+                <span className="ml-1 font-black text-emerald-700">&middot; running</span>
+              ) : null}
+            </span>
+          </label>
+        );
+      },
+    },
   ];
 
   return (
@@ -110,7 +171,27 @@ export default function AdminAsrCoveragePage() {
             worker and never get a transcript, without anything failing. Add one in{' '}
             <span className="font-mono text-xs">models/asr-registry.yaml</span>.
           </p>
+          <p className="mt-2 text-sm text-muted">
+            Mapping a dialect only transcribes recordings made <em>after</em> it was mapped. Tick{' '}
+            <strong>Backfill</strong> to also re-send what was already recorded &mdash; it feeds the
+            queue gradually so live recording is unaffected, and unticks itself when the dialect is
+            done.
+          </p>
         </div>
+
+        {error ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-800">
+            {error}
+          </div>
+        ) : null}
+
+        {backfilling.length > 0 ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+            <span className="font-black">Backfilling now:</span>{' '}
+            {backfilling.map((row) => `${row.name ?? row.dialectTag} (${row.backfillable.toLocaleString()} left)`).join(', ')}
+            . Each dialect unticks itself once nothing is left to send.
+          </div>
+        ) : null}
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-line bg-surface p-4">

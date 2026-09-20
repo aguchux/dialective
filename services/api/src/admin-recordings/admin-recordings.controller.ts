@@ -7,6 +7,7 @@ import { AdminRecordingsService } from './admin-recordings.service';
 import { ListTrainerRecordingsDto } from './dto/list-trainer-recordings.dto';
 import { ListAllRecordingsDto } from './dto/list-all-recordings.dto';
 import { AuditRecordingDto } from './dto/audit-recording.dto';
+import { SetAsrBackfillDto } from './dto/set-asr-backfill.dto';
 
 @Controller('admin-recordings')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -26,6 +27,15 @@ export class AdminRecordingsController {
   @Get('asr-coverage')
   asrCoverage() {
     return this.recordings.asrCoverage();
+  }
+
+  /**
+   * Tick/untick a dialect for ASR backfill. Above :trainerId for the same
+   * reason as asr-coverage above it.
+   */
+  @Post('asr-coverage/:dialectTag/backfill')
+  setAsrBackfill(@Param('dialectTag') dialectTag: string, @Body() dto: SetAsrBackfillDto) {
+    return this.recordings.setAsrBackfill(dialectTag, dto.enabled);
   }
 
   @Get('trainers/:trainerId')

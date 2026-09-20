@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: asr-backfill
+spec:
+  # Every 5 minutes. Each run publishes at most BATCH_PER_DIALECT (500)
+  # jobs per ticked dialect, so this is a throttle, not a drain: a ticked
+  # dialect trickles onto asr-jobs-<engine> at a rate the 5-replica
+  # whisper-worker ceiling can absorb without live submissions queueing
+  # behind the backlog. Nothing happens at all unless an admin has ticked
+  # a dialect on the admin ASR Transcription page.
+  # See services/api/src/asr-backfill.ts.
+  schedule: '*/5 * * * *'
+  # A second run overlapping the first would re-publish the same oldest-N
+  # rows (they are only marked transcribed once a worker finishes), so
+  # concurrency here means duplicate ASR work, not faster backfill.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: asr-backfill
+              image: golojan/dialect-api:latest
+              command: ['node', 'dist/asr-backfill.js']
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-creds
+                      key: connection_string
+                - name: REDIS_HOST
+                  valueFrom:
+                    configMapKeyRef:
+                      name: api-config
+                      key: redis_host
+                - name: REDIS_PORT
+                  valueFrom:
+                    configMapKeyRef:
+                      name: api-config
+                      key: redis_port
+                - name: REDIS_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: redis-auth
+                      key: password
+
+              # Explicit sizing so this is Burstable, not BestEffort -- an unsized
+              # container is the first thing the kernel OOM-kills under node memory
+              # pressure, and this node pool is shared with the unrelated `bitocard`
+              # namespace. See api-deployment.yaml for the incident this came from.
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  memory: 512Mi

@@ -74,8 +74,27 @@ export class AdminRecordingsService {
     });
     const transcribedByTag = new Map(transcribed.map((r) => [r.dialectTag, r._count._all]));
 
-    const dialects = await this.prisma.dialect.findMany({ select: { tag: true, name: true } });
+    // Untranscribed rows whose audio still exists -- what a backfill could
+    // actually recover. Distinct from (recordings - transcribed), which
+    // also counts rows whose audio audio-retention-job has already purged
+    // and which therefore can never get a transcript by any means.
+    const backfillable = await this.prisma.wordRecording.groupBy({
+      by: ['dialectTag'],
+      where: {
+        transcript: null,
+        audioKey: { not: null },
+        audioBucket: { not: null },
+        audioDeletedAt: null,
+      },
+      _count: { _all: true },
+    });
+    const backfillableByTag = new Map(backfillable.map((r) => [r.dialectTag, r._count._all]));
+
+    const dialects = await this.prisma.dialect.findMany({
+      select: { tag: true, name: true, asrBackfillEnabled: true },
+    });
     const nameByTag = new Map(dialects.map((d) => [d.tag, d.name]));
+    const backfillEnabledByTag = new Map(dialects.map((d) => [d.tag, d.asrBackfillEnabled]));
 
     return rows
       .map((row) => {
@@ -91,9 +110,56 @@ export class AdminRecordingsService {
           mapped: !!route,
           engine: route?.engine ?? null,
           checkpoint: route?.checkpoint ?? null,
+          backfillable: backfillableByTag.get(row.dialectTag) ?? 0,
+          backfillEnabled: backfillEnabledByTag.get(row.dialectTag) ?? false,
         };
       })
       .sort((a, b) => b.recordings - a.recordings);
+  }
+
+  /**
+   * Ticks/unticks a dialect for ASR backfill. The actual re-publishing is
+   * done by the asr-backfill CronJob (services/api/src/asr-backfill.ts),
+   * which publishes a capped batch per run and unticks the dialect itself
+   * once nothing is left -- so this only ever sets a flag, and a tick is
+   * safe to leave on.
+   */
+  async setAsrBackfill(dialectTag: string, enabled: boolean) {
+    const dialect = await this.prisma.dialect.findUnique({
+      where: { tag: dialectTag },
+      select: { id: true, tag: true },
+    });
+    if (!dialect) {
+      throw new NotFoundException(`No dialect with tag "${dialectTag}"`);
+    }
+
+    // Refusing to tick an unmapped dialect would be the wrong call -- the
+    // job skips it harmlessly and reports why, and an admin may well want
+    // it queued before a checkpoint lands. But there is no point letting
+    // one be ticked when there is nothing to recover.
+    if (enabled) {
+      const backfillable = await this.prisma.wordRecording.count({
+        where: {
+          dialectTag,
+          transcript: null,
+          audioKey: { not: null },
+          audioBucket: { not: null },
+          audioDeletedAt: null,
+        },
+      });
+      if (backfillable === 0) {
+        throw new UnprocessableEntityException(
+          `Nothing to backfill for "${dialectTag}" -- every recording either has a transcript already or has had its audio purged by the retention job.`,
+        );
+      }
+    }
+
+    await this.prisma.dialect.update({
+      where: { id: dialect.id },
+      data: { asrBackfillEnabled: enabled },
+    });
+
+    return { dialectTag, backfillEnabled: enabled };
   }
 
   async listForTrainer(trainerId: string, query: ListTrainerRecordingsDto) {

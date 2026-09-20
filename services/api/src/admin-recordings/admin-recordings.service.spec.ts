@@ -58,17 +58,21 @@ describe('AdminRecordingsService', () => {
     function withDialects(
       totals: { dialectTag: string; n: number }[],
       transcribed: { dialectTag: string; n: number }[],
+      backfillable: { dialectTag: string; n: number }[] = [],
     ) {
       prisma.wordRecording.groupBy = jest
         .fn()
         .mockResolvedValueOnce(totals.map((t) => ({ dialectTag: t.dialectTag, _count: { _all: t.n } })))
         .mockResolvedValueOnce(
           transcribed.map((t) => ({ dialectTag: t.dialectTag, _count: { _all: t.n } })),
+        )
+        .mockResolvedValueOnce(
+          backfillable.map((t) => ({ dialectTag: t.dialectTag, _count: { _all: t.n } })),
         );
       prisma.dialect = {
         findMany: jest.fn().mockResolvedValue([
-          { tag: 'yo', name: 'Yoruba' },
-          { tag: 'ibb', name: 'Ibibio' },
+          { tag: 'yo', name: 'Yoruba', asrBackfillEnabled: false },
+          { tag: 'ibb', name: 'Ibibio', asrBackfillEnabled: false },
         ]),
       };
     }
@@ -118,6 +122,79 @@ describe('AdminRecordingsService', () => {
       const [row] = await service.asrCoverage();
       expect(row.mapped).toBe(true);
       expect(row.coveragePercent).toBe(0);
+    });
+
+    /**
+     * The distinction that decides whether the checkbox can do anything:
+     * a recording whose audio the retention job purged is untranscribed
+     * forever, and counting it as backfillable would promise a recovery
+     * that can never happen.
+     */
+    it('counts only untranscribed recordings whose audio still exists', async () => {
+      withDialects(
+        [{ dialectTag: 'yo', n: 1000 }],
+        [{ dialectTag: 'yo', n: 100 }],
+        [{ dialectTag: 'yo', n: 850 }],
+      );
+      const [row] = await service.asrCoverage();
+      // 900 lack a transcript, but only 850 still have audio.
+      expect(row.backfillable).toBe(850);
+    });
+  });
+
+  describe('setAsrBackfill', () => {
+    it('ticks a dialect that has recoverable recordings', async () => {
+      prisma.dialect = {
+        findUnique: jest.fn().mockResolvedValue({ id: 'd1', tag: 'zu' }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      prisma.wordRecording.count = jest.fn().mockResolvedValue(7033);
+
+      await expect(service.setAsrBackfill('zu', true)).resolves.toEqual({
+        dialectTag: 'zu',
+        backfillEnabled: true,
+      });
+      expect(prisma.dialect.update).toHaveBeenCalledWith({
+        where: { id: 'd1' },
+        data: { asrBackfillEnabled: true },
+      });
+    });
+
+    /**
+     * Ticking a dialect with nothing to recover would leave a checkbox on
+     * that silently never does anything -- the same class of silent no-op
+     * this whole page exists to expose.
+     */
+    it('refuses to tick a dialect with nothing recoverable', async () => {
+      prisma.dialect = {
+        findUnique: jest.fn().mockResolvedValue({ id: 'd1', tag: 'yo' }),
+        update: jest.fn(),
+      };
+      prisma.wordRecording.count = jest.fn().mockResolvedValue(0);
+
+      await expect(service.setAsrBackfill('yo', true)).rejects.toThrow(/Nothing to backfill/);
+      expect(prisma.dialect.update).not.toHaveBeenCalled();
+    });
+
+    it('allows unticking without checking what is left', async () => {
+      prisma.dialect = {
+        findUnique: jest.fn().mockResolvedValue({ id: 'd1', tag: 'zu' }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      prisma.wordRecording.count = jest.fn();
+
+      await expect(service.setAsrBackfill('zu', false)).resolves.toEqual({
+        dialectTag: 'zu',
+        backfillEnabled: false,
+      });
+      // An admin must always be able to stop a running backfill, whatever
+      // its remaining count says.
+      expect(prisma.wordRecording.count).not.toHaveBeenCalled();
+    });
+
+    it('404s on an unknown dialect tag', async () => {
+      prisma.dialect = { findUnique: jest.fn().mockResolvedValue(null), update: jest.fn() };
+      await expect(service.setAsrBackfill('nope', true)).rejects.toThrow(/No dialect with tag/);
     });
   });
 
