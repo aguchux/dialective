@@ -1,8 +1,8 @@
 import 'reflect-metadata';
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
-import { PrismaService } from './prisma/prisma.service';
-import { RedisStreamsService } from './redis-streams/redis-streams.service';
+import Redis from 'ioredis';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from '@dialectiva/db';
+import { buildRedisConnectionOptions } from './common/redis-connection.util';
 import { AsrRegistryService } from './asr-registry/asr-registry.service';
 
 /**
@@ -37,6 +37,17 @@ import { AsrRegistryService } from './asr-registry/asr-registry.service';
  * only and never touches status or score (see whisper-worker/db.py's
  * UPDATE_WORD_RECORDING_ASR_SQL), so no payout can move as a result of
  * this job.
+ *
+ * Deliberately does NOT boot AppModule, unlike the other standalone
+ * scripts in this directory. AppModule calls ScheduleModule.forRoot(), so
+ * every @Cron in the API (KycService's recheck sweeps, and others) starts
+ * running in-process the moment the context is created -- which was
+ * observed firing real KYC recheck sweeps from inside a backfill pod, and
+ * kept the process alive indefinitely so the job never completed. That is
+ * tolerable-ish for an hourly script; at this job's 5-minute cadence it
+ * would mean duplicate scheduled work against production all day. This
+ * needs Prisma, Redis and a YAML file, so it constructs those three
+ * directly and nothing else.
  */
 
 /**
@@ -49,10 +60,16 @@ import { AsrRegistryService } from './asr-registry/asr-registry.service';
 const BATCH_PER_DIALECT = 500;
 
 async function bootstrap() {
-  const app = await NestFactory.createApplicationContext(AppModule);
-  const prisma = app.get(PrismaService);
-  const streams = app.get(RedisStreamsService);
-  const asrRegistry = app.get(AsrRegistryService);
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+  });
+  const redis = new Redis(buildRedisConnectionOptions());
+  const asrRegistry = new AsrRegistryService();
+
+  const shutdown = async () => {
+    await prisma.$disconnect().catch(() => undefined);
+    redis.disconnect();
+  };
 
   try {
     const enabled = await prisma.dialect.findMany({
@@ -63,7 +80,7 @@ async function bootstrap() {
     if (enabled.length === 0) {
       // eslint-disable-next-line no-console
       console.log('asr backfill: no dialects ticked, nothing to do');
-      await app.close();
+      await shutdown();
       process.exit(0);
     }
 
@@ -126,7 +143,7 @@ async function bootstrap() {
       });
 
       for (const recording of batch) {
-        await streams.publish(route.stream, {
+        await redis.xadd(route.stream, '*', ...Object.entries({
           word_recording_id: recording.id,
           dialect_tag: dialect.tag,
           // The dialect text the trainer typed for this recording, which
@@ -137,7 +154,7 @@ async function bootstrap() {
           expected_text: recording.translationText,
           bucket: recording.audioBucket!,
           audio_key: recording.audioKey!,
-        });
+        }).flat());
       }
 
       const remaining = await prisma.wordRecording.count({ where: pending });
@@ -158,12 +175,13 @@ async function bootstrap() {
 
     // eslint-disable-next-line no-console
     console.log('asr backfill complete', JSON.stringify(summary));
-    await app.close();
-    // createApplicationContext keeps the Redis/Prisma handles open, so the
-    // process never exits on its own -- the CronJob would hang forever.
+    await shutdown();
+    // The Redis/Prisma handles keep the event loop alive even after
+    // disconnect in some paths, so exit explicitly rather than relying on
+    // it draining -- the CronJob would otherwise hang.
     process.exit(0);
   } catch (err) {
-    await app.close();
+    await shutdown();
     // eslint-disable-next-line no-console
     console.error('asr backfill failed', err);
     process.exit(1);
