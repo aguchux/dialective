@@ -66,7 +66,19 @@ rw:
 # WhisperForConditionalGeneration only. The most-downloaded pidgin model,
 # asr-nigerian-pidgin/pidgin-wav2vec2-xlsr53, is Wav2Vec2ForCTC.
 #
+# SIZE IS A CONSTRAINT, not just availability. A worker holds each model
+# it loads in RAM against a 3584Mi pod limit, so a checkpoint's size
+# decides whether it can run at all: whisper-small is ~1GB resident and
+# fine, whisper-medium is ~3GB and only one fits at a time, and a
+# large-v3 at ~6GB cannot load however the cache is tuned. Check the
+# checkpoint's weight files before adding it, not only that it loads on a
+# probe -- the probe does not compete with an already-loaded model.
+#
 # Still unmapped, with why (checked 2026-09-20):
+#   sn    13,715  realtime-speech/shona-finetune loads, but it is a
+#                 large-v3 (~6.2GB) and OOMKills the pod. Mapped briefly
+#                 on 2026-09-20 and reverted for that reason. Needs either
+#                 a small/medium Shona checkpoint or a bigger worker.
 #   ibb   11,361  no public Ibibio ASR model exists in any format
 #   af-za    272  both Afrikaans candidates fail to load (no tokenizer)
 #   en-za    210  no SA-English model; en-us is the nearest fallback but
@@ -105,14 +117,6 @@ xh:
   engine: whisper
   stream: asr-jobs-whisper
   checkpoint: TheirStory/whisper-small-xhosa
-
-# 13.7k recordings -- the largest remaining gap. Three better-known Shona
-# checkpoints fail to load (Code-Dev and noirlab lack tokenizer/processor
-# files, badrex is w2v-bert not Whisper); this one loads.
-sn:
-  engine: whisper
-  stream: asr-jobs-whisper
-  checkpoint: realtime-speech/shona-finetune
 
 # 1.4k recordings.
 am:

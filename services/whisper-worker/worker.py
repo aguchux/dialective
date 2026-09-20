@@ -1,7 +1,9 @@
+import gc
 import json
 import logging
 import os
 import subprocess
+from collections import OrderedDict
 
 import redis
 from transformers import pipeline
@@ -57,7 +59,17 @@ _DEVICE = "cpu"
 _MODEL_CACHE_DIR = "/models"
 
 _registry = load_registry()
-_pipeline_cache: dict[str, "pipeline"] = {}
+# OrderedDict so the oldest entry can be popped -- see get_pipeline's
+# eviction comment for why this is bounded rather than a plain dict.
+_pipeline_cache: "OrderedDict[str, pipeline]" = OrderedDict()
+
+# How many loaded models one worker may hold at once. 2, not more: the pod
+# limit is 3584Mi and a whisper-medium is ~3GB resident, so even two
+# mediums do not fit -- this bounds the common case (smalls, ~1GB each)
+# while letting a medium evict whatever preceded it instead of being
+# stacked on top of it. Raising this without raising the memory limit
+# reintroduces the OOMKill.
+_MAX_CACHED_PIPELINES = 2
 
 # Maps Whisper's d_model (encoder/decoder hidden size) to the matching
 # openai/whisper-<size> checkpoint. Fine-tuning changes weights, not
@@ -130,6 +142,29 @@ def get_pipeline(dialect_tag: str, db_conn):
 
                     base_gen_config = GenerationConfig.from_pretrained(base_checkpoint)
                     gen_config.alignment_heads = base_gen_config.alignment_heads
+            # Evict before inserting, so the cache never holds more than
+            # _MAX_CACHED_PIPELINES models at once. This cache was
+            # unbounded and keyed by dialect, which was survivable while
+            # every registered checkpoint was a ~1GB whisper-small: three
+            # dialects fitted inside the pod's 3584Mi limit. Registering
+            # medium-sized checkpoints (zu, ary at ~3GB resident each)
+            # broke that assumption and the pods started OOMKilling
+            # mid-inference -- taking down yo/ha/ig, which had worked for
+            # months, along with the new dialects.
+            #
+            # FIFO rather than LRU: the eviction only has to bound the
+            # total, and a worker pulls jobs in whatever order the stream
+            # delivers them, so there is no reuse pattern worth tracking.
+            # A re-load costs a disk read from /models, not a re-download.
+            while len(_pipeline_cache) >= _MAX_CACHED_PIPELINES:
+                evicted, _ = _pipeline_cache.popitem(last=False)
+                logger.info(
+                    "Evicting cached ASR pipeline for dialect=%s to stay under "
+                    "the %d-model cache limit",
+                    evicted,
+                    _MAX_CACHED_PIPELINES,
+                )
+            gc.collect()
             _pipeline_cache[dialect_tag] = asr_pipeline
         except Exception as exc:
             # A gated/private HF repo with a missing-or-unauthorized token
