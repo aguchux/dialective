@@ -227,6 +227,7 @@ model User {
   wordSkips                         WordSkip[]
   dataAccessLeadsContacted          DataAccessLead[]                 @relation("DataAccessLeadContactedBy")
   supportRequestsResolved           SupportRequest[]                 @relation("SupportRequestResolvedBy")
+  connectRegistrations              ConnectRegistration[]
   p2pOffers                         P2PTokenOffer[]
   p2pOfferViews                     P2POfferView[]
   emailSendLogs                     EmailSendLog[]
@@ -3372,11 +3373,20 @@ model ConnectRegistration {
   speakerTopic    String?
   speakerSummary  String?
   consentedAt     DateTime
+  /// Set only when the registrant confirmed "yes, that's me" against the
+  /// matched account -- never inferred from the email alone. That makes it
+  /// a claim the person actually made, which is what lets event mail/SMS
+  /// go to their verified contact details rather than to an address that
+  /// merely happens to collide with a member's.
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  linkedAt        DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@unique([eventKey, email])
   @@index([eventKey, countryCode])
+  @@index([userId])
   @@map("connect_registrations")
 }
 

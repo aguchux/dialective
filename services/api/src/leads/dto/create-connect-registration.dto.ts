@@ -43,6 +43,16 @@ export class CreateConnectRegistrationDto {
   @IsBoolean()
   consent!: boolean;
 
+  /**
+   * True only when the registrant was shown the matched account and
+   * answered "yes, that's me". The server still re-checks the email
+   * against an active account before linking -- this flag grants
+   * permission, it never asserts the match.
+   */
+  @IsOptional()
+  @IsBoolean()
+  confirmedMember?: boolean;
+
   @IsOptional()
   @IsString()
   @MaxLength(0)

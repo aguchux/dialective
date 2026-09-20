@@ -10,6 +10,7 @@ describe('Connect 2026 registration', () => {
   const prisma = {
     country: { findUnique: jest.fn() },
     connectRegistration: { count: jest.fn(), groupBy: jest.fn(), upsert: jest.fn() },
+    user: { findUnique: jest.fn() },
   };
   const controller = new LeadsController(
     prisma as unknown as PrismaService,
@@ -21,6 +22,7 @@ describe('Connect 2026 registration', () => {
     jest.clearAllMocks();
     prisma.country.findUnique.mockResolvedValue({ id: 'ng' });
     prisma.connectRegistration.upsert.mockResolvedValue({ id: 'registration' });
+    prisma.user.findUnique.mockResolvedValue(null);
   });
 
   const attendee: CreateConnectRegistrationDto = {
@@ -83,6 +85,88 @@ describe('Connect 2026 registration', () => {
       interested: 23,
       speakerApplicants: 4,
       countries: 2,
+    });
+  });
+
+  describe('member lookup', () => {
+    it('masks the matched member rather than returning their real details', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        firstName: 'Adaeze',
+        lastName: 'Okafor',
+        email: 'adaeze.okafor@gmail.com',
+        status: 'ACTIVE',
+        country: { name: 'Nigeria' },
+        dialect: { name: 'Igbo' },
+      });
+
+      const result = await controller.lookupConnectMember({ email: 'Adaeze.Okafor@Gmail.com ' });
+
+      expect(result.found).toBe(true);
+      // Recognisable to the owner, useless to someone probing the address.
+      expect(result).toMatchObject({ firstName: 'A•••••', lastName: 'O•••••' });
+      expect(result.email).toBe('a••••••••@gmail.com');
+      expect(JSON.stringify(result)).not.toContain('Adaeze');
+      expect(JSON.stringify(result)).not.toContain('Okafor');
+    });
+
+    it('reports no match for an email with no account', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      await expect(controller.lookupConnectMember({ email: 'nobody@example.com' })).resolves.toEqual({
+        found: false,
+      });
+    });
+
+    /**
+     * A deactivated account should not be offered back as "your record" --
+     * the person may have left deliberately.
+     */
+    it('does not surface a non-active account', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        firstName: 'Gone',
+        lastName: 'Away',
+        email: 'gone@example.com',
+        status: 'DEACTIVATED',
+        country: null,
+        dialect: null,
+      });
+      await expect(controller.lookupConnectMember({ email: 'gone@example.com' })).resolves.toEqual({
+        found: false,
+      });
+    });
+  });
+
+  describe('member linking', () => {
+    it('links the registration when the person confirmed the match', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: 'user-1', status: 'ACTIVE' });
+
+      await controller.registerForConnect({ ...attendee, confirmedMember: true });
+
+      const call = prisma.connectRegistration.upsert.mock.calls[0][0];
+      expect(call.create.userId).toBe('user-1');
+      expect(call.create.linkedAt).toBeInstanceOf(Date);
+    });
+
+    /**
+     * "Not me" has to mean anonymous. Linking on the email alone would
+     * attach a member's account to whoever typed their address.
+     */
+    it('does not link when the person did not confirm', async () => {
+      prisma.user.findUnique.mockResolvedValue({ id: 'user-1', status: 'ACTIVE' });
+
+      await controller.registerForConnect({ ...attendee, confirmedMember: false });
+
+      const call = prisma.connectRegistration.upsert.mock.calls[0][0];
+      expect(call.create.userId).toBeNull();
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('never clears an existing link on re-registration', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await controller.registerForConnect({ ...attendee, confirmedMember: false });
+
+      const call = prisma.connectRegistration.upsert.mock.calls[0][0];
+      expect(call.update).not.toHaveProperty('userId');
     });
   });
 });

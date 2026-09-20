@@ -16,6 +16,30 @@ export async function GET() {
   }
 }
 
+/**
+ * "Is this email already a Dialect Library member?" -- proxied like the
+ * rest so the browser never talks to the API directly and no new CORS
+ * origin is needed. The upstream route is rate-limited and returns only
+ * masked details; this adds nothing and hides nothing.
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const response = await fetch(`${apiBase}/leads/connect-2026/lookup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      cache: 'no-store',
+    });
+    if (!response.ok) return NextResponse.json({ found: false }, { status: 200 });
+    return NextResponse.json(await response.json());
+  } catch {
+    // A lookup failure must never block registration -- fall through as
+    // "no match" and let the visitor register normally.
+    return NextResponse.json({ found: false }, { status: 200 });
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

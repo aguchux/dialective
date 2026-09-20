@@ -17,6 +17,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Role } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
@@ -30,7 +31,31 @@ import { UpdateDataAccessLeadContactDto } from './dto/update-data-access-lead-co
 import { InviteDataAccessLeadDto } from './dto/invite-data-access-lead.dto';
 import { CreateSupportRequestDto } from './dto/create-support-request.dto';
 import { CreateConnectRegistrationDto } from './dto/create-connect-registration.dto';
+import { LookupConnectMemberDto } from './dto/lookup-connect-member.dto';
 import { UpdateSupportRequestResolutionDto } from './dto/update-support-request-resolution.dto';
+
+/**
+ * "Adaeze" -> "A•••". Enough for the owner to recognise, not enough for a
+ * stranger probing an address to learn who holds it.
+ */
+function maskName(value: string | null): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return `${trimmed[0].toUpperCase()}${'•'.repeat(Math.min(Math.max(trimmed.length - 1, 1), 6))}`;
+}
+
+/**
+ * "adaeze.okafor@gmail.com" -> "a•••••••@gmail.com". The domain stays
+ * readable because the caller already typed the whole address -- they
+ * learn nothing new from it -- while the local part does not confirm the
+ * spelling of an address someone is guessing at.
+ */
+function maskEmail(value: string): string {
+  const [local, domain] = value.split('@');
+  if (!domain) return '•••';
+  const head = local[0] ?? '•';
+  return `${head}${'•'.repeat(Math.min(Math.max(local.length - 1, 1), 8))}@${domain}`;
+}
 
 /**
  * Interest capture for the "Subscribe to voice data" landing-page CTA --
@@ -61,6 +86,55 @@ export class LeadsController {
     return { interested, speakerApplicants, countries: countryGroups.length };
   }
 
+  /**
+   * "Are you already a Dialect Library member?" for the Connect signup
+   * form, so a member can confirm their own account and have event
+   * reminders reach the email/phone they already verified with us.
+   *
+   * Deliberately masked. Everywhere else in this codebase an unauthenticated
+   * caller cannot learn whether an email has an account -- see
+   * AuthService.requestPasswordReset's "Don't reveal whether the email
+   * exists". This route has to reveal existence for the feature to work at
+   * all, so it gives up the minimum that still lets the real owner
+   * recognise themselves: first initials and a masked address, never the
+   * full name, never the phone number. Someone probing an address they do
+   * not own learns that it is registered and nothing they could use.
+   *
+   * Rate-limited well below the global 60/min for the same reason -- the
+   * masking limits what one lookup yields, the throttle limits how many a
+   * scraper can make.
+   */
+  @Post('connect-2026/lookup')
+  @Throttle({ default: { limit: 10, ttl: 60 * 1000 } })
+  @HttpCode(HttpStatus.OK)
+  async lookupConnectMember(@Body() dto: LookupConnectMemberDto) {
+    const email = dto.email.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      select: {
+        firstName: true,
+        lastName: true,
+        email: true,
+        status: true,
+        country: { select: { name: true } },
+        dialect: { select: { name: true } },
+      },
+    });
+
+    // A deactivated account should not be offered as "your record" -- the
+    // person may have left deliberately.
+    if (!user || user.status !== 'ACTIVE') return { found: false as const };
+
+    return {
+      found: true as const,
+      firstName: maskName(user.firstName),
+      lastName: maskName(user.lastName),
+      email: maskEmail(user.email),
+      country: user.country?.name ?? null,
+      dialect: user.dialect?.name ?? null,
+    };
+  }
+
   @Post('connect-2026')
   @HttpCode(HttpStatus.CREATED)
   async registerForConnect(@Body() dto: CreateConnectRegistrationDto) {
@@ -80,6 +154,20 @@ export class LeadsController {
     });
     if (!country) throw new BadRequestException('Select a supported country');
 
+    // Link to the member's account only when they actively confirmed the
+    // match ("yes, that's me"). Matching on the email alone would attach
+    // an account to whoever typed that address, and answering "not me"
+    // has to mean the registration stays anonymous -- that is the whole
+    // point of asking.
+    const member = dto.confirmedMember
+      ? await this.prisma.user.findUnique({
+          where: { email },
+          select: { id: true, status: true },
+        })
+      : null;
+    const userId = member && member.status === 'ACTIVE' ? member.id : null;
+    const linkedAt = userId ? new Date() : null;
+
     const speaking = dto.interest === 'speak';
     await this.prisma.connectRegistration.upsert({
       where: { eventKey_email: { eventKey, email } },
@@ -92,6 +180,8 @@ export class LeadsController {
         speakerTopic: speaking ? dto.speakerTopic?.trim() : null,
         speakerSummary: speaking ? dto.speakerSummary?.trim() : null,
         consentedAt: new Date(),
+        userId,
+        linkedAt,
       },
       update: {
         name,
@@ -104,6 +194,11 @@ export class LeadsController {
               speakerSummary: dto.speakerSummary?.trim(),
             }
           : {}),
+        // Only ever sets a link, never clears one. Re-registering without
+        // confirming (or from the dialog, where the prompt may not have
+        // been shown) should not silently unlink an account the person
+        // already claimed.
+        ...(userId ? { userId, linkedAt } : {}),
         consentedAt: new Date(),
       },
     });
