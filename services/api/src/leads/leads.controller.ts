@@ -139,7 +139,17 @@ export class LeadsController {
   @HttpCode(HttpStatus.CREATED)
   async registerForConnect(@Body() dto: CreateConnectRegistrationDto) {
     if (!dto.consent) throw new BadRequestException('Consent is required');
-    if (dto.website) return { status: 'received' };
+    // Same shape as a real success, so a bot cannot tell it was caught by
+    // comparing responses.
+    if (dto.website) {
+      return {
+        status: 'received' as const,
+        alreadyRegistered: false,
+        registeredAt: null,
+        speaking: dto.interest === 'speak',
+        memberLinked: false,
+      };
+    }
 
     const eventKey = 'connect-2026';
     const name = dto.name.trim();
@@ -167,6 +177,15 @@ export class LeadsController {
       : null;
     const userId = member && member.status === 'ACTIVE' ? member.id : null;
     const linkedAt = userId ? new Date() : null;
+
+    // Read before the upsert so the response can tell the person they
+    // were already on the list. The upsert itself cannot distinguish a
+    // create from an update, and "you're already registered" is the whole
+    // point of the duplicate notice.
+    const existing = await this.prisma.connectRegistration.findUnique({
+      where: { eventKey_email: { eventKey, email } },
+      select: { id: true, createdAt: true, speaking: true },
+    });
 
     const speaking = dto.interest === 'speak';
     await this.prisma.connectRegistration.upsert({
@@ -202,7 +221,34 @@ export class LeadsController {
         consentedAt: new Date(),
       },
     });
-    return { status: 'received' };
+
+    // Best-effort, exactly like every other notification in this file: the
+    // registration is already durable, and a Resend outage must not turn a
+    // successful reservation into an error the visitor sees.
+    //
+    // Sent on a repeat registration too. Someone registering again usually
+    // does so because they never saw the first email, so suppressing it
+    // would withhold the one thing they came back for.
+    try {
+      await this.mail.sendConnectRegistrationEmail({
+        email,
+        name,
+        speaking,
+        alreadyRegistered: !!existing,
+      });
+    } catch {
+      // Swallowed deliberately -- see above.
+    }
+
+    return {
+      status: 'received' as const,
+      alreadyRegistered: !!existing,
+      // Lets the dialog say "you registered on 3 October" rather than a
+      // bare "you're already on the list".
+      registeredAt: existing?.createdAt ?? null,
+      speaking,
+      memberLinked: !!userId,
+    };
   }
 
   @Post('data-access')

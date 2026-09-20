@@ -331,6 +331,33 @@ export class MailService {
     );
   }
 
+  /**
+   * Confirms a Dialect Library Connect reservation. Sent best-effort from
+   * LeadsController.registerForConnect -- the registration row is already
+   * durable by the time this runs, so a mail failure must never surface as
+   * a failed reservation.
+   *
+   * Also sent when the person was already registered: they usually come
+   * back precisely because they never saw the first one.
+   */
+  async sendConnectRegistrationEmail(payload: {
+    email: string;
+    name: string;
+    speaking: boolean;
+    alreadyRegistered: boolean;
+  }): Promise<void> {
+    const subject = payload.alreadyRegistered
+      ? "You're already on the list for Connect 2026"
+      : 'Your place at Dialect Library Connect 2026 is reserved';
+    await this.send(
+      payload.email,
+      subject,
+      connectRegistrationHtml(payload.name, payload.speaking, payload.alreadyRegistered),
+      connectRegistrationText(payload.name, payload.speaking, payload.alreadyRegistered),
+      { kind: 'sendConnectRegistrationEmail', optional: true },
+    );
+  }
+
   async sendPhoneVerifiedEmail(email: string, phoneNumber: string): Promise<void> {
     const dashboardUrl = `${frontendUrl()}/dashboard`;
     await this.send(
@@ -863,6 +890,41 @@ function auditHoldReleasedText(dashboardUrl: string): string {
   return `Good news -- your account review is complete and your account is back in good standing.
 You can resume training right away.
 Go to your dashboard: ${dashboardUrl}`;
+}
+
+function connectRegistrationHtml(
+  name: string,
+  speaking: boolean,
+  alreadyRegistered: boolean,
+): string {
+  const opening = alreadyRegistered
+    ? `<p>Hi ${escapeHtml(name)}, you are already on the list for <strong>Dialect Library Connect 2026</strong> &mdash; there is nothing more to do.</p>`
+    : `<p>Hi ${escapeHtml(name)}, your place at <strong>Dialect Library Connect 2026</strong> is reserved. Thank you for joining us.</p>`;
+  const speakerLine = speaking
+    ? '<p>We have your speaker application as well. Our team reviews every submission and will be in touch about it by email.</p>'
+    : '';
+  return `${opening}
+${speakerLine}
+<p>The event is planned for <strong>October 2026</strong> and will be held online. We will email the exact date, time and joining link as soon as they are confirmed.</p>
+<p>See you there.</p>`;
+}
+
+function connectRegistrationText(
+  name: string,
+  speaking: boolean,
+  alreadyRegistered: boolean,
+): string {
+  const opening = alreadyRegistered
+    ? `Hi ${name}, you are already on the list for Dialect Library Connect 2026 -- there is nothing more to do.`
+    : `Hi ${name}, your place at Dialect Library Connect 2026 is reserved. Thank you for joining us.`;
+  const speakerLine = speaking
+    ? '\nWe have your speaker application as well. Our team reviews every submission and will be in touch about it by email.'
+    : '';
+  return `${opening}
+${speakerLine}
+The event is planned for October 2026 and will be held online. We will email the exact date, time and joining link as soon as they are confirmed.
+
+See you there.`;
 }
 
 function phoneVerifiedHtml(phoneNumber: string, dashboardUrl: string): string {

@@ -91,6 +91,14 @@ h2,h3,p { overflow-wrap:anywhere; }
 .chip { min-height:34px; padding:0 14px; border:1px solid #b68afa; border-radius:999px; background:#fff; color:var(--purple-dark); font-size:12px; font-weight:800; }
 .chip:hover { background:#efe8ff; }
 .chip-active { color:#fff; background:var(--purple); border-color:var(--purple); }
+.result-modal { width:min(100% - 32px,430px); padding:28px 26px 24px; border-radius:12px; background:#fff; text-align:center; }
+.result-icon { display:inline-flex; align-items:center; justify-content:center; width:72px; height:72px; margin-bottom:14px; border-radius:50%; color:#16794a; background:#dcfae6; }
+.result-icon-info { color:var(--purple-dark); background:var(--soft); }
+.result-modal h2 { margin:0; font:800 25px/1.15 'Outfit',Arial,sans-serif; }
+.result-body { margin:9px 0 0; color:var(--muted); font-size:14px; line-height:1.5; }
+.result-meta { display:flex; align-items:flex-start; gap:9px; margin:16px 0 18px; padding:11px 12px; border-radius:8px; color:#414b66; background:#f6f5fd; font-size:12px; line-height:1.45; text-align:left; }
+.result-meta svg { flex:0 0 auto; margin-top:1px; color:var(--purple); }
+.result-modal .button { width:100%; }
 .signup-section { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding-bottom:17px; }
 .registration-panel,.speaker-panel { min-width:0; border:1px solid #d8d6f0; border-radius:8px; padding:19px 24px 13px; }
 .registration-panel { background:#fefeff; }

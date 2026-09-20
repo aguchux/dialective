@@ -3,6 +3,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import {
   ArrowRight,
+  BadgeCheck,
+  CalendarCheck,
   ChevronLeft,
   ChevronRight,
   CircleHelp,
@@ -13,6 +15,7 @@ import {
   MonitorPlay,
   Play,
   ShieldCheck,
+  Info,
   Sparkles,
   UsersRound,
   X,
@@ -56,6 +59,12 @@ type Keynote = {
  * that does not exist. Add an entry here the day a speaker signs on.
  */
 const keynotes: Keynote[] = [];
+
+type RegistrationResult = {
+  interest: Interest;
+  alreadyRegistered: boolean;
+  registeredAt: string | null;
+};
 
 type MemberMatch = {
   found: true;
@@ -226,6 +235,7 @@ export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [speakerOpen, setSpeakerOpen] = useState(false);
   const [attendOpen, setAttendOpen] = useState(false);
+  const [result, setResult] = useState<RegistrationResult | null>(null);
   const [countries, setCountries] = useState<Country[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [attendStatus, setAttendStatus] = useState('');
@@ -298,14 +308,23 @@ export default function Home() {
             : {}),
         }),
       });
-      const data = (await response.json()) as { message?: string | string[] };
+      const data = (await response.json()) as {
+        message?: string | string[];
+        alreadyRegistered?: boolean;
+        registeredAt?: string | null;
+      };
       if (!response.ok) throw new Error(errorMessage(data));
-      setStatus(
-        interest === 'attend'
-          ? 'You are on the interest list. We will email event details when confirmed.'
-          : 'Speaker application received. Our team will review it and contact you by email.',
-      );
       form.reset();
+      // The outcome is a dialog, not a line of text under the button --
+      // a reservation is the thing the visitor came to do, and it should
+      // land as clearly as it matters.
+      setResult({
+        interest,
+        alreadyRegistered: !!data.alreadyRegistered,
+        registeredAt: data.registeredAt ?? null,
+      });
+      setAttendOpen(false);
+      setSpeakerOpen(false);
       void loadData();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Could not submit. Please try again.');
@@ -444,6 +463,50 @@ export default function Home() {
       </main>
 
       <footer className="site-footer"><div className="content-width footer-inner"><Brand /><p>Different voices. A brighter tomorrow.</p><div><a href="https://www.dialectlibrary.com/privacy">Privacy</a><a href="https://www.dialectlibrary.com/terms">Terms</a><a href="mailto:hello@dialectlibrary.com">Contact</a></div></div></footer>
+
+      {result && (
+        <div
+          className="modal-backdrop"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setResult(null);
+          }}
+        >
+          <div className="result-modal" role="dialog" aria-modal="true" aria-labelledby="result-title">
+            <div className={result.alreadyRegistered ? 'result-icon result-icon-info' : 'result-icon'}>
+              {result.alreadyRegistered ? <Info size={38} /> : <BadgeCheck size={38} />}
+            </div>
+            <h2 id="result-title">
+              {result.alreadyRegistered
+                ? "You're already registered"
+                : result.interest === 'speak'
+                  ? 'Application received'
+                  : 'Your place is reserved'}
+            </h2>
+            <p className="result-body">
+              {result.alreadyRegistered ? (
+                <>
+                  This email is already on the list for Connect 2026
+                  {result.registeredAt
+                    ? ` — you registered on ${new Date(result.registeredAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}`
+                    : ''}
+                  . We have not created a second reservation, and your details are up to date.
+                </>
+              ) : result.interest === 'speak' ? (
+                'Thank you. Our team reviews every speaker application and will contact you by email about yours.'
+              ) : (
+                'Thank you for joining us. A confirmation email is on its way.'
+              )}
+            </p>
+            <div className="result-meta">
+              <CalendarCheck size={17} />
+              <span>October 2026 · Online · We will email the date, time and joining link once confirmed.</span>
+            </div>
+            <button className="button button-primary" onClick={() => setResult(null)} type="button">
+              Done
+            </button>
+          </div>
+        </div>
+      )}
 
       {attendOpen && (
         <div

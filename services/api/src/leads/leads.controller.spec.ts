@@ -9,13 +9,19 @@ import { MailService } from '../mail/mail.service';
 describe('Connect 2026 registration', () => {
   const prisma = {
     country: { findUnique: jest.fn() },
-    connectRegistration: { count: jest.fn(), groupBy: jest.fn(), upsert: jest.fn() },
+    connectRegistration: {
+      count: jest.fn(),
+      groupBy: jest.fn(),
+      upsert: jest.fn(),
+      findUnique: jest.fn(),
+    },
     user: { findUnique: jest.fn() },
   };
+  const mail = { sendConnectRegistrationEmail: jest.fn() };
   const controller = new LeadsController(
     prisma as unknown as PrismaService,
     {} as SubscriberAuthService,
-    {} as MailService,
+    mail as unknown as MailService,
   );
 
   beforeEach(() => {
@@ -23,6 +29,8 @@ describe('Connect 2026 registration', () => {
     prisma.country.findUnique.mockResolvedValue({ id: 'ng' });
     prisma.connectRegistration.upsert.mockResolvedValue({ id: 'registration' });
     prisma.user.findUnique.mockResolvedValue(null);
+    prisma.connectRegistration.findUnique.mockResolvedValue(null);
+    mail.sendConnectRegistrationEmail.mockResolvedValue(undefined);
   });
 
   const attendee: CreateConnectRegistrationDto = {
@@ -34,7 +42,9 @@ describe('Connect 2026 registration', () => {
   };
 
   it('deduplicates an attendee by normalized event email', async () => {
-    await expect(controller.registerForConnect(attendee)).resolves.toEqual({ status: 'received' });
+    await expect(controller.registerForConnect(attendee)).resolves.toMatchObject({
+      status: 'received',
+    });
     expect(prisma.connectRegistration.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { eventKey_email: { eventKey: 'connect-2026', email: 'ada@example.com' } },
@@ -111,6 +121,8 @@ describe('Connect 2026 registration', () => {
 
     it('reports no match for an email with no account', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
+    prisma.connectRegistration.findUnique.mockResolvedValue(null);
+    mail.sendConnectRegistrationEmail.mockResolvedValue(undefined);
       await expect(controller.lookupConnectMember({ email: 'nobody@example.com' })).resolves.toEqual({
         found: false,
       });
@@ -162,11 +174,77 @@ describe('Connect 2026 registration', () => {
 
     it('never clears an existing link on re-registration', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
+    prisma.connectRegistration.findUnique.mockResolvedValue(null);
+    mail.sendConnectRegistrationEmail.mockResolvedValue(undefined);
 
       await controller.registerForConnect({ ...attendee, confirmedMember: false });
 
       const call = prisma.connectRegistration.upsert.mock.calls[0][0];
       expect(call.update).not.toHaveProperty('userId');
+    });
+  });
+
+  describe('duplicate registration', () => {
+    it('reports a first-time registration as new', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue(null);
+      const result = await controller.registerForConnect(attendee);
+      expect(result).toMatchObject({ status: 'received', alreadyRegistered: false });
+    });
+
+    it('tells a returning visitor they are already on the list', async () => {
+      const registeredAt = new Date('2026-09-01T10:00:00Z');
+      prisma.connectRegistration.findUnique.mockResolvedValue({
+        id: 'existing',
+        createdAt: registeredAt,
+        speaking: false,
+      });
+
+      const result = await controller.registerForConnect(attendee);
+
+      expect(result).toMatchObject({ status: 'received', alreadyRegistered: true });
+      expect(result.registeredAt).toEqual(registeredAt);
+    });
+  });
+
+  describe('confirmation email', () => {
+    it('emails the registrant after a successful reservation', async () => {
+      await controller.registerForConnect(attendee);
+      expect(mail.sendConnectRegistrationEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'ada@example.com',
+          name: 'Ada Example',
+          alreadyRegistered: false,
+        }),
+      );
+    });
+
+    /**
+     * The registration row is already committed by this point, so a mail
+     * outage must not turn a successful reservation into an error the
+     * visitor sees.
+     */
+    it('still reports success when the email fails to send', async () => {
+      mail.sendConnectRegistrationEmail.mockRejectedValue(new Error('resend down'));
+      await expect(controller.registerForConnect(attendee)).resolves.toMatchObject({
+        status: 'received',
+      });
+    });
+
+    it('emails a repeat registrant too, flagged as already registered', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue({
+        id: 'existing',
+        createdAt: new Date(),
+        speaking: false,
+      });
+      await controller.registerForConnect(attendee);
+      expect(mail.sendConnectRegistrationEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ alreadyRegistered: true }),
+      );
+    });
+
+    it('does not email a honeypot submission', async () => {
+      await controller.registerForConnect({ ...attendee, website: 'http://spam.example' });
+      expect(mail.sendConnectRegistrationEmail).not.toHaveBeenCalled();
     });
   });
 });
