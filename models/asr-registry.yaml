@@ -39,3 +39,33 @@ rw:
   engine: whisper
   stream: asr-jobs-whisper
   checkpoint: mbazaNLP/Whisper-Small-Kinyarwanda
+
+# Added 2026-09-20. 17 dialect_tags were in production with no entry here,
+# so api attached no asr_stream, no worker ever saw them, and 82k+
+# recordings (58k of them already SETTLED) carry no transcript at all. The
+# skip is silent by design -- resolve() returns undefined and publishing
+# just omits the route -- which is why it went unnoticed for a month.
+#
+# Deliberately NOT all 17 at once. These are community fine-tunes with
+# three-figure download counts, not the NCAIR1 checkpoints above, so each
+# needs its output judged on real audio before the next is added. Every one
+# below was checked to be ungated and WhisperForConditionalGeneration (the
+# only architecture worker.py's transformers pipeline can load -- the most
+# downloaded pidgin model, asr-nigerian-pidgin/pidgin-wav2vec2-xlsr53, is
+# Wav2Vec2ForCTC and would fail at load).
+#
+# Still unmapped and needing a decision: ibb (11k recordings, no public
+# ASR model exists at all), am, ak, sw-ke, fr-bj, arz, af-za, en-za, nd,
+# ny, st-za, zu, xh.
+
+# 44k recordings, the single largest gap.
+pcm:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: Mansa-Labs/obum-whisper-medium-nigerian-pidgin
+
+# 14k recordings.
+sn:
+  engine: whisper
+  stream: asr-jobs-whisper
+  checkpoint: Code-Dev/whisper-small-shona-v3-a
