@@ -12,13 +12,25 @@ spec:
     name: whisper-worker
     kind: StatefulSet
   minReplicaCount: 0
-  # 1, not 10: each whisper pod requests 500m CPU and the default-pool is
-  # three e2-standard-2 (1930m allocatable each), capped at maxNodeCount 3
+  # Raised 1 -> 6 on 2026-09-20, together with the whisper-pool that makes
+  # it schedulable (e2-standard-4, 1-4 nodes, node-labelled workload=whisper
+  # and selected by the StatefulSet's nodeSelector). DO's own pool is stuck
+  # at its ceiling of 5 -- its nodes are 72-96% memory-requested, so a 6th
+  # pod there sits Pending -- and asr-jobs-whisper had a 5,851-job lag that
+  # never drained, leaving yo/ha/ig recordings PENDING for a day. This is
+  # the capacity DO cannot provide.
+  #
+  # The note below still governs: this number is only safe while a node pool
+  # exists that can actually hold the pods.
+  #
+  # Previously 1, not 10: each whisper pod requests 500m CPU and the
+  # default-pool is three e2-standard-2 (1930m allocatable each), capped at
+  # maxNodeCount 3
   # and already ~98-99% CPU-requested by quality-gate-worker. Exactly one
   # whisper pod fits cluster-wide, so a higher cap just parks pods in
   # Pending and spams FailedScheduling. Raise this only together with the
   # node pool's size/count -- that is a spend decision, not a free one.
-  maxReplicaCount: 1
+  maxReplicaCount: 6
   cooldownPeriod: 120
   pollingInterval: 15
   triggers:
