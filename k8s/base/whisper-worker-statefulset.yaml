@@ -133,5 +133,21 @@ spec:
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 5Gi
+            # 30Gi, raised from 5Gi on 2026-09-20 when asr-registry.yaml
+            # went from 3 whisper checkpoints to 14. The registry's models
+            # now total ~22GB on disk (Shona's is a large-v3 at 6.2GB,
+            # Zulu and Darija are mediums at 3.1GB each); 5Gi was already
+            # 60% full holding just the three NCAIR1 models.
+            #
+            # A worker caches every checkpoint it is asked for, so this
+            # must fit ALL of them, not the largest -- an out-of-space
+            # /models does not degrade to "that dialect is unsupported",
+            # it breaks the download for whatever dialect is next,
+            # including ones that work today.
+            #
+            # Existing PVCs were expanded in place (do-block-storage has
+            # allowVolumeExpansion: true); volumeClaimTemplates is
+            # immutable on a StatefulSet, so this line only governs
+            # newly-created replicas.
+            storage: 30Gi
         storageClassName: do-block-storage

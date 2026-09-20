@@ -21,8 +21,11 @@
 # nearly empty. Don't "upgrade" this back to standard-rwo without first
 # raising SSD_TOTAL_GB or shrinking the node boot disks.
 #
-# 8Gi, not 5Gi: the three NCAIR1 ASR models total ~2.8GB today and 5Gi left
-# little room for a second dialect.
+# 30Gi, raised from 8Gi on 2026-09-20 alongside DO's -- see that file for
+# the full reasoning. asr-registry.yaml went from 3 whisper checkpoints to
+# 14 and the models now total ~22GB on disk, so a worker that caches every
+# checkpoint it is asked for no longer fits in 8Gi. An out-of-space /models
+# breaks the next download, including for dialects that work today.
 apiVersion: v1
 kind: Service
 metadata:
@@ -170,5 +173,5 @@ spec:
         accessModes: ["ReadWriteOnce"]
         resources:
           requests:
-            storage: 8Gi
+            storage: 30Gi
         storageClassName: standard
