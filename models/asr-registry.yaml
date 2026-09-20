@@ -113,6 +113,18 @@ pcm:
   checkpoint: ocansey/whisper-small-nigerian-pidgin
 
 # 7k recordings. Verified to load on whisper-worker-0.
+#
+# BACKFILL WARNING (2026-09-20): this is a whisper-MEDIUM (~3GB resident)
+# against a 3584Mi pod limit. It loads fine for the occasional live
+# recording, but feeding it a sustained backlog alongside live pcm/yo/ig
+# traffic OOMKilled all five whisper-worker pods within minutes and
+# stopped live transcription entirely -- the cache cap of 1 does not help,
+# because the medium model alone plus a second dialect's arrival is enough
+# to cross the limit. ~260 backfill jobs were sent; 19 dead-lettered with
+# max_delivery_attempts_exceeded, none produced a transcript. Recovery was
+# XGROUP SETID to the stream tail plus a pod restart. Do not backfill this
+# dialect (or any medium: ary, ar-dz) until the fleet has more memory
+# headroom -- the same capacity wall that blocks sn.
 zu:
   engine: whisper
   stream: asr-jobs-whisper

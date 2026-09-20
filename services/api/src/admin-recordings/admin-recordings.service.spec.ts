@@ -144,14 +144,15 @@ describe('AdminRecordingsService', () => {
 
   describe('setAsrBackfill', () => {
     it('ticks a dialect that has recoverable recordings', async () => {
+      // xh, not zu: zu is in BACKFILL_BLOCKED (whisper-medium).
       prisma.dialect = {
-        findUnique: jest.fn().mockResolvedValue({ id: 'd1', tag: 'zu' }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'd1', tag: 'xh' }),
         update: jest.fn().mockResolvedValue({}),
       };
-      prisma.wordRecording.count = jest.fn().mockResolvedValue(7033);
+      prisma.wordRecording.count = jest.fn().mockResolvedValue(1443);
 
-      await expect(service.setAsrBackfill('zu', true)).resolves.toEqual({
-        dialectTag: 'zu',
+      await expect(service.setAsrBackfill('xh', true)).resolves.toEqual({
+        dialectTag: 'xh',
         backfillEnabled: true,
       });
       expect(prisma.dialect.update).toHaveBeenCalledWith({
@@ -178,18 +179,48 @@ describe('AdminRecordingsService', () => {
 
     it('allows unticking without checking what is left', async () => {
       prisma.dialect = {
-        findUnique: jest.fn().mockResolvedValue({ id: 'd1', tag: 'zu' }),
+        findUnique: jest.fn().mockResolvedValue({ id: 'd1', tag: 'xh' }),
         update: jest.fn().mockResolvedValue({}),
       };
       prisma.wordRecording.count = jest.fn();
 
-      await expect(service.setAsrBackfill('zu', false)).resolves.toEqual({
-        dialectTag: 'zu',
+      await expect(service.setAsrBackfill('xh', false)).resolves.toEqual({
+        dialectTag: 'xh',
         backfillEnabled: false,
       });
       // An admin must always be able to stop a running backfill, whatever
       // its remaining count says.
       expect(prisma.wordRecording.count).not.toHaveBeenCalled();
+    });
+
+    /**
+     * zu is a whisper-medium. Backfilling it OOMKilled all five
+     * whisper-worker pods and stopped live transcription for every
+     * dialect, so the tick has to fail with the reason rather than be
+     * accepted and silently cleared by the job.
+     */
+    it('refuses to tick a dialect whose model is too large to backfill', async () => {
+      prisma.dialect = {
+        findUnique: jest.fn().mockResolvedValue({ id: 'd1', tag: 'zu' }),
+        update: jest.fn(),
+      };
+      prisma.wordRecording.count = jest.fn();
+
+      await expect(service.setAsrBackfill('zu', true)).rejects.toThrow(
+        /would take live transcription down/,
+      );
+      expect(prisma.dialect.update).not.toHaveBeenCalled();
+    });
+
+    it('still allows unticking a blocked dialect', async () => {
+      prisma.dialect = {
+        findUnique: jest.fn().mockResolvedValue({ id: 'd1', tag: 'zu' }),
+        update: jest.fn().mockResolvedValue({}),
+      };
+      await expect(service.setAsrBackfill('zu', false)).resolves.toEqual({
+        dialectTag: 'zu',
+        backfillEnabled: false,
+      });
     });
 
     it('404s on an unknown dialect tag', async () => {

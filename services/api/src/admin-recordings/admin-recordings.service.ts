@@ -15,6 +15,7 @@ import { adminActionContextHash } from '../wallet/otp-context.util';
 import { ListTrainerRecordingsDto } from './dto/list-trainer-recordings.dto';
 import { ListAllRecordingsDto } from './dto/list-all-recordings.dto';
 import { AuditRecordingDto } from './dto/audit-recording.dto';
+import { BACKFILL_BLOCKED } from './backfill-blocked.const';
 
 export type WordDetail = { word: string; start: number; end: number; conf: number | null };
 
@@ -142,6 +143,13 @@ export class AdminRecordingsService {
     // it queued before a checkpoint lands. But there is no point letting
     // one be ticked when there is nothing to recover.
     if (enabled) {
+      const blocked = BACKFILL_BLOCKED[dialectTag];
+      if (blocked) {
+        throw new UnprocessableEntityException(
+          `Backfilling "${dialectTag}" would take live transcription down: ${blocked}. It needs more worker memory first.`,
+        );
+      }
+
       const backfillable = await this.prisma.wordRecording.count({
         where: {
           dialectTag,

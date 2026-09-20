@@ -4,6 +4,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@dialectiva/db';
 import { buildRedisConnectionOptions } from './common/redis-connection.util';
 import { AsrRegistryService } from './asr-registry/asr-registry.service';
+import { BACKFILL_BLOCKED } from './admin-recordings/backfill-blocked.const';
 
 /**
  * Re-publishes already-recorded audio to ASR for dialects an admin has
@@ -59,6 +60,7 @@ import { AsrRegistryService } from './asr-registry/asr-registry.service';
  */
 const BATCH_PER_DIALECT = 500;
 
+
 async function bootstrap() {
   const prisma = new PrismaClient({
     adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -93,6 +95,25 @@ async function bootstrap() {
     }[] = [];
 
     for (const dialect of enabled) {
+      const blocked = BACKFILL_BLOCKED[dialect.tag];
+      if (blocked) {
+        // Untick it. Unlike the unmapped case below, leaving this ticked
+        // would mean retrying something known to take live transcription
+        // down for every dialect, every five minutes.
+        await prisma.dialect.update({
+          where: { id: dialect.id },
+          data: { asrBackfillEnabled: false },
+        });
+        summary.push({
+          tag: dialect.tag,
+          published: 0,
+          remaining: 0,
+          completed: false,
+          skipped: `backfill blocked: ${blocked}`,
+        });
+        continue;
+      }
+
       const route = asrRegistry.resolve(dialect.tag);
       if (!route) {
         // Ticked but unmapped: there is no engine to send this to. Leave
