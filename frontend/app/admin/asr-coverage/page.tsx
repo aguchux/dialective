@@ -97,7 +97,11 @@ export default function AdminAsrCoveragePage() {
     <AdminShell>
       <div className="grid gap-5">
         <div>
-          <h1 className="text-2xl font-black">ASR coverage</h1>
+          {/* "ASR Transcription", not "ASR Coverage" -- this group already
+              has a Coverage page (geographic reach), and the two are
+              different questions: which dialects are collected vs which of
+              them get transcribed. */}
+          <h1 className="text-2xl font-black">ASR transcription</h1>
           <p className="mt-1 text-sm text-muted">
             {unmapped.length > 0
               ? `${unmapped.length} dialect${unmapped.length === 1 ? '' : 's'} with ${unmappedRecordings.toLocaleString()} recording${unmappedRecordings === 1 ? '' : 's'} have no ASR model mapped. `

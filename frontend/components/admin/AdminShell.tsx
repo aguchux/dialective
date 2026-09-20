@@ -53,7 +53,7 @@ const navGroups: NavGroup[] = [
       { href: '/admin/words', label: 'Words', icon: WordsIcon },
       { href: '/admin/domain-prompts', label: 'Domain Prompts', icon: WordsIcon },
       { href: '/admin/recordings', label: 'Recordings', icon: RecordingsIcon },
-      { href: '/admin/asr-coverage', label: 'ASR Coverage', icon: RecordingsIcon },
+      { href: '/admin/asr-coverage', label: 'ASR Transcription', icon: RecordingsIcon },
       { href: '/admin/misplaced-dialects', label: 'Misplaced Dialects', icon: AuditQueueIcon },
       { href: '/admin/validator-decks', label: 'Validator Decks', icon: SettlementIcon },
       { href: '/admin/settlement', label: 'Unsettled Tasks', icon: SettlementIcon },
