@@ -161,10 +161,11 @@ function FilterButton({
       </button>
       {isOpen && (
         <div
-          className="fixed z-50 min-w-44 overflow-hidden rounded-lg border border-catalogue-line-strong bg-catalogue-surface-raised p-1 shadow-catalogue"
+          className="stream-catalogue-scrollbar fixed z-50 min-w-44 overflow-x-hidden overflow-y-auto rounded-lg border border-catalogue-line-strong bg-catalogue-surface-raised p-1 shadow-catalogue"
           ref={panelRef}
           style={{
             left: panelStyle?.left ?? -9999,
+            maxHeight: panelStyle ? `calc(100svh - ${panelStyle.top + 12}px)` : undefined,
             top: panelStyle?.top ?? -9999,
             visibility: panelStyle ? 'visible' : 'hidden',
           }}

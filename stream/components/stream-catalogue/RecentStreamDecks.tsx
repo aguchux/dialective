@@ -37,7 +37,7 @@ export function RecentStreamDecks({
               const added = addedDeckIds.has(deck.id);
               return (
                 <FocusableRow key={deck.id} onClick={() => onSelect(deck)}>
-                  <div className="grid min-w-0 grid-cols-[34px_minmax(0,1.05fr)_minmax(80px,0.9fr)_auto_auto] items-center gap-2 rounded-full border border-catalogue-line bg-catalogue-surface px-2.5 py-2 transition-colors hover:border-catalogue-line-strong hover:bg-catalogue-surface-hover sm:grid-cols-[38px_minmax(0,1.2fr)_minmax(120px,1fr)_auto_auto] sm:gap-3 sm:px-3">
+                  <div className="grid min-w-0 grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-2 rounded-full border border-catalogue-line bg-catalogue-surface px-2.5 py-2 transition-colors hover:border-catalogue-line-strong hover:bg-catalogue-surface-hover sm:grid-cols-[38px_minmax(0,1.2fr)_minmax(120px,1fr)_auto_auto] sm:gap-3 sm:px-3">
                     <CoverImage
                       alt={deck.coverAlt}
                       className="size-8 rounded-full object-cover sm:size-9"
@@ -56,7 +56,7 @@ export function RecentStreamDecks({
                     <div className="hidden h-6 min-w-0 sm:block">
                       <Waveform bars={deck.waveform} />
                     </div>
-                    <span className="inline-flex items-center gap-1 text-[10px] text-catalogue-muted">
+                    <span className="hidden items-center gap-1 text-[10px] text-catalogue-muted sm:inline-flex">
                       <Clock3 aria-hidden="true" className="size-3" />
                       {formatDuration(deck.durationSeconds)}
                     </span>

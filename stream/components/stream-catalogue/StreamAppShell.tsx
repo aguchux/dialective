@@ -373,11 +373,11 @@ export function StreamAppShell() {
           role="presentation"
         >
           <div
-            className="max-h-[calc(100svh-var(--catalogue-player-height))] w-full overflow-hidden rounded-t-2xl border border-catalogue-line bg-catalogue-surface shadow-2xl"
+            className="flex max-h-[calc(100svh-var(--catalogue-player-height))] w-full flex-col overflow-hidden rounded-t-2xl border border-catalogue-line bg-catalogue-surface shadow-2xl"
             role="dialog"
             aria-label={`${selectedCollection.title} details`}
           >
-            <div className="flex items-center justify-between border-b border-catalogue-line px-5 py-3">
+            <div className="relative flex shrink-0 items-center justify-between border-b border-catalogue-line px-5 py-3">
               <span className="mx-auto h-1 w-10 rounded-full bg-catalogue-line-strong" />
               <button
                 aria-label="Close collection details"

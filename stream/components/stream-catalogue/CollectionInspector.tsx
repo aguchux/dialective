@@ -80,7 +80,7 @@ export function CollectionInspector({
   }
 
   return (
-    <div className="stream-catalogue-scrollbar h-full overflow-y-auto px-5 pb-8 pt-5 lg:px-4">
+    <div className="stream-catalogue-scrollbar h-full min-h-0 flex-1 overflow-y-auto px-5 pb-8 pt-5 lg:px-4">
       <div className="flex items-start gap-3">
         <CoverImage
           alt={collection.coverAlt}
