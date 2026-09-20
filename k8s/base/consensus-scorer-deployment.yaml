@@ -43,6 +43,27 @@ spec:
             configMapKeyRef:
               key: redis_port
               name: consensus-scorer-config-tbf45h27gg
+        # Redis requires auth and this was missing: the deployment predates
+        # the repo (see the file header), so when auth was turned on and
+        # every committed workload gained REDIS_PASSWORD, this one was
+        # invisible to that change. It logs NOAUTH on every Redis call.
+        #
+        # NOT sufficient on its own. The running image builds its ioredis
+        # client from REDIS_HOST/REDIS_PORT only and never reads a password
+        # (verified against /app/services/consensus-scorer/dist/redis-streams/
+        # redis-streams.service.js in the live pod), and that service's
+        # SOURCE IS NOT IN THIS REPO -- only this manifest is. Setting the
+        # variable here is the half that can be fixed from here; the client
+        # needs a `password` option before it takes effect.
+        #
+        # Scoring itself is NOT blocked by this -- recordings still reach
+        # SCORED through the quality-gate path -- so this is a latent config
+        # gap to close when the image is next rebuilt, not a live outage.
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: redis-auth
         - name: CONSENSUS_STREAM
           valueFrom:
             configMapKeyRef:

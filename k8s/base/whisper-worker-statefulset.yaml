@@ -17,8 +17,9 @@ metadata:
     app: whisper-worker
 spec:
   serviceName: whisper-worker
-  # KEDA (whisper-worker-keda.yaml) drives replica count 0-5 off Redis
-  # stream lag; this is just the floor when nothing has scaled it yet.
+  # KEDA (whisper-worker-keda.yaml) drives replica count off Redis stream
+  # lag; this is just the floor when nothing has scaled it yet. KEDA owns
+  # this field at runtime, so do not read it as the live replica count.
   replicas: 1
   selector:
     matchLabels:

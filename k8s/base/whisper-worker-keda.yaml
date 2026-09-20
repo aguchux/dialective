@@ -7,6 +7,16 @@ spec:
     name: whisper-worker
     kind: StatefulSet
   minReplicaCount: 0
+  # NOTE (2026-09-20): 5 is a CAPACITY ceiling, not a tuning choice. At 5
+  # workers the group clears ~300 clips/hour against 200-340 arriving, so
+  # the scaler sits pinned here with a multi-thousand-job lag that never
+  # drains -- yo/ha/ig recordings stay PENDING for a day while vosk
+  # dialects are unaffected, which reads as "Yoruba is not transcribing".
+  #
+  # Raising this alone does NOT help: each pod requests 2560Mi and the five
+  # nodes are already 72-96% memory-requested, so a 6th pod sits Pending
+  # with "Insufficient memory". Fixing the backlog needs more nodes (or a
+  # smaller per-pod footprint), not a higher ceiling.
   maxReplicaCount: 5
   cooldownPeriod: 120
   pollingInterval: 15
