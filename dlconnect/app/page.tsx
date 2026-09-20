@@ -38,6 +38,34 @@ const speakerThemes = [
   { title: 'Community impact', detail: 'What happens when more voices are heard.', position: '96% 44%' },
 ];
 
+type Keynote = {
+  name: string;
+  role: string;
+  topic: string;
+  /** Optional headshot in /public/images. Falls back to the speaker's initials. */
+  photo?: string;
+};
+
+/**
+ * Confirmed keynote speakers, announced as they are booked.
+ *
+ * Empty until someone is actually confirmed: the section below falls back
+ * to the themes above rather than inventing names or showing "TBA" cards.
+ * A webinar landing page that lists placeholder people reads as padding
+ * and, worse, invites a visitor to register on the strength of a lineup
+ * that does not exist. Add an entry here the day a speaker signs on.
+ */
+const keynotes: Keynote[] = [];
+
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
 function Brand() {
   return (
     <a className="brand" href="#top" aria-label="Dialect Library Connect home">
@@ -209,16 +237,38 @@ export default function Home() {
         </section>
 
         <section className="speaker-section content-width" id="speakers">
-          <div className="section-topline"><span className="section-kicker">Featured speakers</span><span className="line" /></div>
-          <div className="section-heading"><div><h2>Meet the voices of Connect</h2><p>Contributors, researchers, and community builders will lead the conversation.</p></div><button className="text-link" onClick={() => setSpeakerOpen(true)} type="button">Apply to join the lineup <ArrowRight size={16} /></button></div>
-          <div className="speaker-grid">
-            {speakerThemes.map((theme) => (
-              <article className="speaker-card" key={theme.title}>
-                <div className="speaker-portrait" style={{ backgroundPosition: theme.position }} aria-hidden="true" />
-                <div className="speaker-copy"><span>Lineup in progress</span><h3>{theme.title}</h3><p>{theme.detail}</p></div>
-              </article>
-            ))}
-          </div>
+          <div className="section-topline"><span className="section-kicker">{keynotes.length > 0 ? 'Keynote speakers' : 'Featured speakers'}</span><span className="line" /></div>
+          <div className="section-heading"><div><h2>Meet the voices of Connect</h2><p>{keynotes.length > 0 ? 'Leading the conversation at Connect 2026.' : 'Contributors, researchers, and community builders will lead the conversation.'}</p></div><button className="text-link" onClick={() => setSpeakerOpen(true)} type="button">Apply to join the lineup <ArrowRight size={16} /></button></div>
+          {keynotes.length > 0 ? (
+            <div className="keynote-grid">
+              {keynotes.map((person) => (
+                <article className="keynote-card" key={person.name}>
+                  {person.photo ? (
+                    <div className="keynote-photo" style={{ backgroundImage: `url(${person.photo})` }} aria-hidden="true" />
+                  ) : (
+                    <div className="keynote-photo keynote-initials" aria-hidden="true">{initials(person.name)}</div>
+                  )}
+                  <div className="keynote-copy">
+                    <h3>{person.name}</h3>
+                    <span className="keynote-role">{person.role}</span>
+                    <p>{person.topic}</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            // No confirmed lineup yet. These are the themes the event will
+            // cover, labelled as such -- not speaker cards with invented
+            // names, and not empty "TBA" slots.
+            <div className="speaker-grid">
+              {speakerThemes.map((theme) => (
+                <article className="speaker-card" key={theme.title}>
+                  <div className="speaker-portrait" style={{ backgroundPosition: theme.position }} aria-hidden="true" />
+                  <div className="speaker-copy"><span>Lineup in progress</span><h3>{theme.title}</h3><p>{theme.detail}</p></div>
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
         <section className="signup-section content-width" id="register" aria-label="Register or apply to speak">
