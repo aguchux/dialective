@@ -345,15 +345,31 @@ export class MailService {
     name: string;
     speaking: boolean;
     alreadyRegistered: boolean;
+    /** An existing attendee has just added a speaker application. */
+    addedSpeakerApplication?: boolean;
   }): Promise<void> {
-    const subject = payload.alreadyRegistered
-      ? "You're already on the list for Connect 2026"
-      : 'Your place at Dialect Library Connect 2026 is reserved';
+    const subject = payload.addedSpeakerApplication
+      ? 'We have your Connect 2026 speaker application'
+      : payload.alreadyRegistered
+        ? "You're already on the list for Connect 2026"
+        : payload.speaking
+          ? 'We have your Connect 2026 speaker application'
+          : 'Your place at Dialect Library Connect 2026 is reserved';
     await this.send(
       payload.email,
       subject,
-      connectRegistrationHtml(payload.name, payload.speaking, payload.alreadyRegistered),
-      connectRegistrationText(payload.name, payload.speaking, payload.alreadyRegistered),
+      connectRegistrationHtml(
+        payload.name,
+        payload.speaking,
+        payload.alreadyRegistered,
+        !!payload.addedSpeakerApplication,
+      ),
+      connectRegistrationText(
+        payload.name,
+        payload.speaking,
+        payload.alreadyRegistered,
+        !!payload.addedSpeakerApplication,
+      ),
       { kind: 'sendConnectRegistrationEmail', optional: true },
     );
   }
@@ -967,12 +983,15 @@ function connectRegistrationHtml(
   name: string,
   speaking: boolean,
   alreadyRegistered: boolean,
+  addedSpeakerApplication: boolean,
 ): string {
-  const opening = alreadyRegistered
-    ? `<p>Hi ${escapeHtml(name)}, you are already on the list for <strong>Dialect Library Connect 2026</strong> &mdash; there is nothing more to do.</p>`
-    : `<p>Hi ${escapeHtml(name)}, your place at <strong>Dialect Library Connect 2026</strong> is reserved. Thank you for joining us.</p>`;
+  const opening = addedSpeakerApplication
+    ? `<p>Hi ${escapeHtml(name)}, thank you &mdash; we have your speaker application for <strong>Dialect Library Connect 2026</strong>. Your place as an attendee is unchanged.</p>`
+    : alreadyRegistered
+      ? `<p>Hi ${escapeHtml(name)}, you are already on the list for <strong>Dialect Library Connect 2026</strong> &mdash; there is nothing more to do.</p>`
+      : `<p>Hi ${escapeHtml(name)}, your place at <strong>Dialect Library Connect 2026</strong> is reserved. Thank you for joining us.</p>`;
   const speakerLine = speaking
-    ? '<p>We have your speaker application as well. Our team reviews every submission and will be in touch about it by email.</p>'
+    ? '<p>Our team reviews every speaker submission and will be in touch about yours by email.</p>'
     : '';
   return `${opening}
 ${speakerLine}
@@ -984,12 +1003,15 @@ function connectRegistrationText(
   name: string,
   speaking: boolean,
   alreadyRegistered: boolean,
+  addedSpeakerApplication: boolean,
 ): string {
-  const opening = alreadyRegistered
-    ? `Hi ${name}, you are already on the list for Dialect Library Connect 2026 -- there is nothing more to do.`
-    : `Hi ${name}, your place at Dialect Library Connect 2026 is reserved. Thank you for joining us.`;
+  const opening = addedSpeakerApplication
+    ? `Hi ${name}, thank you -- we have your speaker application for Dialect Library Connect 2026. Your place as an attendee is unchanged.`
+    : alreadyRegistered
+      ? `Hi ${name}, you are already on the list for Dialect Library Connect 2026 -- there is nothing more to do.`
+      : `Hi ${name}, your place at Dialect Library Connect 2026 is reserved. Thank you for joining us.`;
   const speakerLine = speaking
-    ? '\nWe have your speaker application as well. Our team reviews every submission and will be in touch about it by email.'
+    ? '\nOur team reviews every speaker submission and will be in touch about yours by email.'
     : '';
   return `${opening}
 ${speakerLine}

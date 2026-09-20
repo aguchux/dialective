@@ -491,4 +491,95 @@ describe('Connect 2026 registration', () => {
       expect(result).toMatchObject({ sent: 1, smsSent: 0, failed: [] });
     });
   });
+
+  /**
+   * Attending and speaking are two things one person does, not competing
+   * registrations. Reported as a duplicate, an added speaker application
+   * reads as a rejection and hides that it was in fact recorded.
+   */
+  describe('attendee adds a speaker application', () => {
+    const asAttendee = { id: 'existing', createdAt: new Date('2026-09-01'), speaking: false };
+
+    it('confirms the application instead of reporting a duplicate', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue(asAttendee);
+
+      const result = await controller.registerForConnect({
+        ...attendee,
+        interest: 'speak',
+        speakerTopic: 'Why dialects matter',
+        speakerSummary: 'A short talk.',
+      });
+
+      expect(result).toMatchObject({
+        alreadyRegistered: false,
+        addedSpeakerApplication: true,
+        speaking: true,
+      });
+    });
+
+    it('records the topic on the existing registration', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue(asAttendee);
+
+      await controller.registerForConnect({
+        ...attendee,
+        interest: 'speak',
+        speakerTopic: 'Why dialects matter',
+        speakerSummary: 'A short talk.',
+      });
+
+      const update = prisma.connectRegistration.upsert.mock.calls[0][0].update;
+      expect(update).toMatchObject({ speaking: true, speakerTopic: 'Why dialects matter' });
+    });
+
+    it('emails the application confirmation, not the duplicate notice', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue(asAttendee);
+
+      await controller.registerForConnect({
+        ...attendee,
+        interest: 'speak',
+        speakerTopic: 'Why dialects matter',
+        speakerSummary: 'A short talk.',
+      });
+
+      expect(mail.sendConnectRegistrationEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ alreadyRegistered: false, addedSpeakerApplication: true }),
+      );
+    });
+
+    /**
+     * The reverse direction is a genuine duplicate: a speaker applicant is
+     * already attending, so reserving again adds nothing.
+     */
+    it('still reports a duplicate when a speaker re-reserves a place', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue({
+        id: 'existing',
+        createdAt: new Date('2026-09-01'),
+        speaking: true,
+      });
+
+      const result = await controller.registerForConnect(attendee);
+
+      expect(result).toMatchObject({
+        alreadyRegistered: true,
+        addedSpeakerApplication: false,
+      });
+    });
+
+    it('still reports a duplicate when a speaker re-applies', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue({
+        id: 'existing',
+        createdAt: new Date('2026-09-01'),
+        speaking: true,
+      });
+
+      const result = await controller.registerForConnect({
+        ...attendee,
+        interest: 'speak',
+        speakerTopic: 'Same topic',
+        speakerSummary: 'Same summary.',
+      });
+
+      expect(result).toMatchObject({ alreadyRegistered: true, addedSpeakerApplication: false });
+    });
+  });
 });

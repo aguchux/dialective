@@ -63,6 +63,8 @@ const keynotes: Keynote[] = [];
 type RegistrationResult = {
   interest: Interest;
   alreadyRegistered: boolean;
+  /** An existing attendee just added a speaker application. */
+  addedSpeakerApplication: boolean;
   registeredAt: string | null;
 };
 
@@ -311,6 +313,7 @@ export default function Home() {
       const data = (await response.json()) as {
         message?: string | string[];
         alreadyRegistered?: boolean;
+        addedSpeakerApplication?: boolean;
         registeredAt?: string | null;
       };
       if (!response.ok) throw new Error(errorMessage(data));
@@ -321,6 +324,7 @@ export default function Home() {
       setResult({
         interest,
         alreadyRegistered: !!data.alreadyRegistered,
+        addedSpeakerApplication: !!data.addedSpeakerApplication,
         registeredAt: data.registeredAt ?? null,
       });
       setAttendOpen(false);
@@ -472,18 +476,32 @@ export default function Home() {
           }}
         >
           <div className="result-modal" role="dialog" aria-modal="true" aria-labelledby="result-title">
-            <div className={result.alreadyRegistered ? 'result-icon result-icon-info' : 'result-icon'}>
-              {result.alreadyRegistered ? <Info size={38} /> : <BadgeCheck size={38} />}
+            <div
+              className={
+                result.alreadyRegistered && !result.addedSpeakerApplication
+                  ? 'result-icon result-icon-info'
+                  : 'result-icon'
+              }
+            >
+              {result.alreadyRegistered && !result.addedSpeakerApplication ? (
+                <Info size={38} />
+              ) : (
+                <BadgeCheck size={38} />
+              )}
             </div>
             <h2 id="result-title">
-              {result.alreadyRegistered
-                ? "You're already registered"
-                : result.interest === 'speak'
-                  ? 'Application received'
-                  : 'Your place is reserved'}
+              {result.addedSpeakerApplication
+                ? 'Application received'
+                : result.alreadyRegistered
+                  ? "You're already registered"
+                  : result.interest === 'speak'
+                    ? 'Application received'
+                    : 'Your place is reserved'}
             </h2>
             <p className="result-body">
-              {result.alreadyRegistered ? (
+              {result.addedSpeakerApplication ? (
+                'Thank you. We have your speaker application, and your place as an attendee is unchanged. Our team reviews every submission and will contact you by email.'
+              ) : result.alreadyRegistered ? (
                 <>
                   This email is already on the list for Connect 2026
                   {result.registeredAt

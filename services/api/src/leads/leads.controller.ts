@@ -184,6 +184,7 @@ export class LeadsController {
       return {
         status: 'received' as const,
         alreadyRegistered: false,
+        addedSpeakerApplication: false,
         registeredAt: null,
         speaking: dto.interest === 'speak',
         memberLinked: false,
@@ -227,6 +228,16 @@ export class LeadsController {
     });
 
     const speaking = dto.interest === 'speak';
+
+    // Attending and speaking are two things one person does, not two
+    // competing registrations. An attendee who later applies to speak is
+    // ADDING something, and telling them "you already registered" both
+    // reads as a rejection and hides the fact that their application was
+    // in fact recorded. The same holds in reverse: a speaker applicant
+    // who later reserves a place is confirming attendance, not
+    // duplicating.
+    const addedSpeakerApplication = !!existing && speaking && !existing.speaking;
+    const isDuplicate = !!existing && !addedSpeakerApplication;
     await this.prisma.connectRegistration.upsert({
       where: { eventKey_email: { eventKey, email } },
       create: {
@@ -273,7 +284,8 @@ export class LeadsController {
         email,
         name,
         speaking,
-        alreadyRegistered: !!existing,
+        alreadyRegistered: isDuplicate,
+        addedSpeakerApplication,
       });
     } catch {
       // Swallowed deliberately -- see above.
@@ -281,7 +293,11 @@ export class LeadsController {
 
     return {
       status: 'received' as const,
-      alreadyRegistered: !!existing,
+      alreadyRegistered: isDuplicate,
+      // True when an existing attendee has just added a speaker
+      // application, so the page can confirm the application rather than
+      // report a duplicate.
+      addedSpeakerApplication,
       // Lets the dialog say "you registered on 3 October" rather than a
       // bare "you're already on the list".
       registeredAt: existing?.createdAt ?? null,
