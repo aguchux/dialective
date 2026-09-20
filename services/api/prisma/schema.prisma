@@ -3359,6 +3359,27 @@ model SupportRequest {
   @@map("support_requests")
 }
 
+/// Public interest list for the first Dialect Library Connect webinar.
+/// Speaker applications may be added to an existing attendee registration.
+model ConnectRegistration {
+  id              String   @id @default(uuid())
+  eventKey        String
+  name            String
+  email           String
+  countryCode     String
+  attending       Boolean  @default(true)
+  speaking        Boolean  @default(false)
+  speakerTopic    String?
+  speakerSummary  String?
+  consentedAt     DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([eventKey, email])
+  @@index([eventKey, countryCode])
+  @@map("connect_registrations")
+}
+
 /// Editor.js-backed editorial content. `excerpt` is derived by BlogService
 /// from the first non-empty paragraph and is the canonical SEO description.
 model BlogPost {

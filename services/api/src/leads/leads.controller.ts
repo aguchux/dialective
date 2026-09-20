@@ -1,5 +1,6 @@
 import {
   Body,
+  BadRequestException,
   ConflictException,
   Controller,
   DefaultValuePipe,
@@ -28,6 +29,7 @@ import { CreateDataAccessLeadDto } from './dto/create-data-access-lead.dto';
 import { UpdateDataAccessLeadContactDto } from './dto/update-data-access-lead-contact.dto';
 import { InviteDataAccessLeadDto } from './dto/invite-data-access-lead.dto';
 import { CreateSupportRequestDto } from './dto/create-support-request.dto';
+import { CreateConnectRegistrationDto } from './dto/create-connect-registration.dto';
 import { UpdateSupportRequestResolutionDto } from './dto/update-support-request-resolution.dto';
 
 /**
@@ -44,6 +46,69 @@ export class LeadsController {
     private readonly subscriberAuth: SubscriberAuthService,
     private readonly mail: MailService,
   ) {}
+
+  @Get('connect-2026/stats')
+  async getConnectStats() {
+    const eventKey = 'connect-2026';
+    const [interested, speakerApplicants, countryGroups] = await Promise.all([
+      this.prisma.connectRegistration.count({ where: { eventKey } }),
+      this.prisma.connectRegistration.count({ where: { eventKey, speaking: true } }),
+      this.prisma.connectRegistration.groupBy({
+        by: ['countryCode'],
+        where: { eventKey },
+      }),
+    ]);
+    return { interested, speakerApplicants, countries: countryGroups.length };
+  }
+
+  @Post('connect-2026')
+  @HttpCode(HttpStatus.CREATED)
+  async registerForConnect(@Body() dto: CreateConnectRegistrationDto) {
+    if (!dto.consent) throw new BadRequestException('Consent is required');
+    if (dto.website) return { status: 'received' };
+
+    const eventKey = 'connect-2026';
+    const name = dto.name.trim();
+    const email = dto.email.trim().toLowerCase();
+    const countryCode = dto.countryCode.trim().toUpperCase();
+    if (!name || !/^[A-Z]{2}$/.test(countryCode)) {
+      throw new BadRequestException('Enter a name and a valid country');
+    }
+    const country = await this.prisma.country.findUnique({
+      where: { code: countryCode },
+      select: { id: true },
+    });
+    if (!country) throw new BadRequestException('Select a supported country');
+
+    const speaking = dto.interest === 'speak';
+    await this.prisma.connectRegistration.upsert({
+      where: { eventKey_email: { eventKey, email } },
+      create: {
+        eventKey,
+        name,
+        email,
+        countryCode,
+        speaking,
+        speakerTopic: speaking ? dto.speakerTopic?.trim() : null,
+        speakerSummary: speaking ? dto.speakerSummary?.trim() : null,
+        consentedAt: new Date(),
+      },
+      update: {
+        name,
+        countryCode,
+        attending: true,
+        ...(speaking
+          ? {
+              speaking: true,
+              speakerTopic: dto.speakerTopic?.trim(),
+              speakerSummary: dto.speakerSummary?.trim(),
+            }
+          : {}),
+        consentedAt: new Date(),
+      },
+    });
+    return { status: 'received' };
+  }
 
   @Post('data-access')
   @HttpCode(HttpStatus.CREATED)
