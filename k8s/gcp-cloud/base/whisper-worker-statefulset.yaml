@@ -53,14 +53,6 @@ spec:
       labels:
         app: whisper-worker
     spec:
-      # Pinned to the whisper-pool (e2-standard-4) added 2026-09-20. The
-      # default-pool is e2-standard-2, and KEDA + GKE system pods already
-      # request 83-98% of those 2 vCPUs -- a whisper pod asking for 500m
-      # (limit 2) either fails to schedule there or starves. Whisper
-      # inference here is CPU-only, so it needs the bigger machine to be
-      # worth running at all.
-      nodeSelector:
-        workload: whisper
       containers:
         - name: whisper-worker
           image: golojan/dialect-whisper-worker:latest
