@@ -41,6 +41,22 @@ spec:
     spec:
       containers:
         - name: whisper-worker
+          # models/asr-registry.yaml is BAKED INTO this image, and api has
+          # its own copy baked into its own image. The two must agree: api
+          # routes a dialect to asr-jobs-whisper based on its copy, and the
+          # worker decides which checkpoint to load from its copy, so a
+          # worker running an older image silently drops jobs for any
+          # dialect added since -- no error, just no transcripts.
+          #
+          # `:latest` makes that easy to get wrong. A `rollout restart`
+          # pulls whatever :latest points to AT THAT MOMENT, so restarting
+          # the workers while a newer image is still building leaves them
+          # on the previous digest while api moves ahead (this happened on
+          # 2026-09-20). After changing the registry, deploy api and the
+          # workers from the SAME commit, and verify with:
+          #   kubectl exec whisper-worker-N -- \
+          #     grep -E '^[a-z0-9-]+:$' /app/models/asr-registry.yaml
+          # against the same grep inside an api pod.
           image: golojan/dialect-whisper-worker:latest
           env:
             - name: REDIS_HOST
