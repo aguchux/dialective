@@ -4835,6 +4835,26 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['ConnectAdmin'],
     }),
+    withdrawConnectSpeaker: builder.mutation<
+      { withdrawn: boolean; stillAttending: boolean },
+      { id: string }
+    >({
+      query: ({ id }) => ({
+        url: `/leads/admin/connect-2026/speakers/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['ConnectAdmin'],
+    }),
+    deleteConnectRegistration: builder.mutation<
+      { deleted: boolean; email: string },
+      { id: string }
+    >({
+      query: ({ id }) => ({
+        url: `/leads/admin/connect-2026/registrations/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['ConnectAdmin'],
+    }),
     sendConnectReminders: builder.mutation<
       ConnectReminderResult,
       { audience: 'all' | 'speakers'; message?: string }
@@ -6449,6 +6469,8 @@ export const {
   useDecideConnectSpeakerMutation,
   useResendConnectPhotoLinkMutation,
   useSendConnectRemindersMutation,
+  useWithdrawConnectSpeakerMutation,
+  useDeleteConnectRegistrationMutation,
   useGetAsrCoverageQuery,
   useSetAsrBackfillMutation,
   useGetUnsettledQuery,

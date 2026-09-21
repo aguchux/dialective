@@ -9,6 +9,8 @@ import {
   useGetConnectAdminOverviewQuery,
   useResendConnectPhotoLinkMutation,
   useSendConnectRemindersMutation,
+  useWithdrawConnectSpeakerMutation,
+  useDeleteConnectRegistrationMutation,
 } from '@/store/api';
 
 /**
@@ -20,11 +22,33 @@ import {
  * generic leads table -- approving mints a 48-hour photo-upload link and
  * emails it, so the decision has a side effect worth seeing confirmed.
  */
+/**
+ * Withdrawing a speaker keeps their reservation -- the row is one record
+ * with two roles, so removing the application must not also take away a
+ * seat. The label says so, because "Delete" on this row would imply the
+ * person is gone.
+ */
+function WithdrawButton({ busy, onWithdraw }: { busy: boolean; onWithdraw: () => void }) {
+  return (
+    <button
+      className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-black text-red-700 disabled:opacity-50"
+      disabled={busy}
+      onClick={onWithdraw}
+      title="Removes the speaker application. Their reservation is kept."
+      type="button"
+    >
+      Withdraw
+    </button>
+  );
+}
+
 export default function AdminConnectPage() {
   const { data, isLoading } = useGetConnectAdminOverviewQuery();
   const [decide] = useDecideConnectSpeakerMutation();
   const [resendPhotoLink] = useResendConnectPhotoLinkMutation();
   const [sendReminders, { isLoading: sending }] = useSendConnectRemindersMutation();
+  const [withdrawSpeaker] = useWithdrawConnectSpeakerMutation();
+  const [deleteRegistration] = useDeleteConnectRegistrationMutation();
 
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
@@ -71,6 +95,32 @@ export default function AdminConnectPage() {
       );
       return result;
     }, 'Reminder sent.');
+  }
+
+  async function withdraw(row: ConnectRegistrationRow) {
+    if (
+      !window.confirm(
+        `Withdraw ${row.name}'s speaker application? They stay registered as an attendee.`,
+      )
+    ) {
+      return;
+    }
+    await run(
+      () => withdrawSpeaker({ id: row.id }).unwrap(),
+      `Withdrew ${row.name}'s application. They are still attending.`,
+      row.id,
+    );
+  }
+
+  async function remove(row: ConnectRegistrationRow) {
+    // Deleting a registration cannot be undone and takes the person off
+    // the list entirely, so it names them in the confirmation.
+    if (!window.confirm(`Remove ${row.name} (${row.email}) from Connect 2026 entirely?`)) return;
+    await run(
+      () => deleteRegistration({ id: row.id }).unwrap(),
+      `Removed ${row.email} from the list.`,
+      row.id,
+    );
   }
 
   const speakerColumns: DataTableColumn<ConnectRegistrationRow>[] = [
@@ -167,28 +217,36 @@ export default function AdminConnectPage() {
               >
                 Decline
               </button>
+              <WithdrawButton busy={busy} onWithdraw={() => void withdraw(row)} />
             </div>
           );
         }
         if (row.speakerStatus === 'APPROVED') {
           return (
-            <button
-              className="rounded-lg border border-line px-3 py-1.5 text-xs font-black disabled:opacity-50"
-              disabled={busy}
-              onClick={() =>
-                void run(
-                  () => resendPhotoLink({ id: row.id }).unwrap(),
-                  `Sent a new 48-hour photo link to ${row.email}.`,
-                  row.id,
-                )
-              }
-              type="button"
-            >
-              {row.photoUrl ? 'Resend photo link' : 'Send photo link'}
-            </button>
+            <div className="flex gap-2">
+              <button
+                className="rounded-lg border border-line px-3 py-1.5 text-xs font-black disabled:opacity-50"
+                disabled={busy}
+                onClick={() =>
+                  void run(
+                    () => resendPhotoLink({ id: row.id }).unwrap(),
+                    `Sent a new 48-hour photo link to ${row.email}.`,
+                    row.id,
+                  )
+                }
+                type="button"
+              >
+                {row.photoUrl ? 'Resend photo link' : 'Send photo link'}
+              </button>
+              <WithdrawButton busy={busy} onWithdraw={() => void withdraw(row)} />
+            </div>
           );
         }
-        return <span className="text-xs text-muted">—</span>;
+        return (
+          <div className="flex gap-2">
+            <WithdrawButton busy={busy} onWithdraw={() => void withdraw(row)} />
+          </div>
+        );
       },
     },
   ];
@@ -232,6 +290,21 @@ export default function AdminConnectPage() {
         <span className="text-xs text-muted">
           {new Date(row.createdAt).toLocaleDateString()}
         </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      searchable: false,
+      render: (row) => (
+        <button
+          className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-black text-red-700 disabled:opacity-50"
+          disabled={pendingId === row.id}
+          onClick={() => void remove(row)}
+          type="button"
+        >
+          Remove
+        </button>
       ),
     },
   ];

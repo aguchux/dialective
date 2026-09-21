@@ -18,6 +18,7 @@ describe('Connect 2026 registration', () => {
       findUnique: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
     },
     user: { findUnique: jest.fn() },
   };
@@ -28,7 +29,11 @@ describe('Connect 2026 registration', () => {
     sendConnectPhotoLinkEmail: jest.fn(),
     sendConnectReminderEmail: jest.fn(),
   };
-  const storage = { createPresignedUploadUrl: jest.fn(), getPublicObjectUrl: jest.fn() };
+  const storage = {
+    createPresignedUploadUrl: jest.fn(),
+    getPublicObjectUrl: jest.fn(),
+    deleteObject: jest.fn(),
+  };
   const sms = { sendTransactional: jest.fn() };
   const controller = new LeadsController(
     prisma as unknown as PrismaService,
@@ -52,6 +57,8 @@ describe('Connect 2026 registration', () => {
     prisma.connectRegistration.update.mockResolvedValue({ id: 'r1', speakerStatus: 'APPROVED' });
     prisma.connectRegistration.findMany.mockResolvedValue([]);
     sms.sendTransactional.mockResolvedValue({ provider: 'termii' });
+    storage.deleteObject.mockResolvedValue(undefined);
+    prisma.connectRegistration.delete.mockResolvedValue({ id: 'r1' });
   });
 
   const attendee: CreateConnectRegistrationDto = {
@@ -142,15 +149,6 @@ describe('Connect 2026 registration', () => {
 
     it('reports no match for an email with no account', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
-    prisma.connectRegistration.findUnique.mockResolvedValue(null);
-    mail.sendConnectRegistrationEmail.mockResolvedValue(undefined);
-    mail.sendConnectSpeakerApprovedEmail.mockResolvedValue(undefined);
-    mail.sendConnectSpeakerDeclinedEmail.mockResolvedValue(undefined);
-    mail.sendConnectPhotoLinkEmail.mockResolvedValue(undefined);
-    mail.sendConnectReminderEmail.mockResolvedValue(undefined);
-    prisma.connectRegistration.update.mockResolvedValue({ id: 'r1', speakerStatus: 'APPROVED' });
-    prisma.connectRegistration.findMany.mockResolvedValue([]);
-    sms.sendTransactional.mockResolvedValue({ provider: 'termii' });
       await expect(controller.lookupConnectMember({ email: 'nobody@example.com' })).resolves.toEqual({
         found: false,
       });
@@ -202,15 +200,6 @@ describe('Connect 2026 registration', () => {
 
     it('never clears an existing link on re-registration', async () => {
       prisma.user.findUnique.mockResolvedValue(null);
-    prisma.connectRegistration.findUnique.mockResolvedValue(null);
-    mail.sendConnectRegistrationEmail.mockResolvedValue(undefined);
-    mail.sendConnectSpeakerApprovedEmail.mockResolvedValue(undefined);
-    mail.sendConnectSpeakerDeclinedEmail.mockResolvedValue(undefined);
-    mail.sendConnectPhotoLinkEmail.mockResolvedValue(undefined);
-    mail.sendConnectReminderEmail.mockResolvedValue(undefined);
-    prisma.connectRegistration.update.mockResolvedValue({ id: 'r1', speakerStatus: 'APPROVED' });
-    prisma.connectRegistration.findMany.mockResolvedValue([]);
-    sms.sendTransactional.mockResolvedValue({ provider: 'termii' });
 
       await controller.registerForConnect({ ...attendee, confirmedMember: false });
 
@@ -580,6 +569,92 @@ describe('Connect 2026 registration', () => {
       });
 
       expect(result).toMatchObject({ alreadyRegistered: true, addedSpeakerApplication: false });
+    });
+  });
+
+  describe('removing speakers and registrations', () => {
+    /**
+     * A speaker row IS the person's registration. Withdrawing the
+     * application must not also take away a seat they are entitled to.
+     */
+    it('withdraws the application but keeps the reservation', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue({
+        id: 'r1',
+        speaking: true,
+        photoKey: null,
+      });
+
+      const result = await controller.withdrawConnectSpeaker('r1');
+
+      const update = prisma.connectRegistration.update.mock.calls[0][0];
+      expect(update.data).toMatchObject({
+        speaking: false,
+        speakerTopic: null,
+        speakerStatus: 'PENDING',
+        // Any live upload link dies with the application.
+        photoTokenHash: null,
+      });
+      expect(prisma.connectRegistration.delete).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ withdrawn: true, stillAttending: true });
+    });
+
+    it('removes the speaker photo when withdrawing', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue({
+        id: 'r1',
+        speaking: true,
+        photoKey: 'connect-2026/speakers/r1/photo.jpg',
+      });
+
+      await controller.withdrawConnectSpeaker('r1');
+
+      expect(storage.deleteObject).toHaveBeenCalledWith(
+        expect.any(String),
+        'connect-2026/speakers/r1/photo.jpg',
+      );
+    });
+
+    /** Object storage must never block the withdrawal itself. */
+    it('withdraws even when deleting the photo fails', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue({
+        id: 'r1',
+        speaking: true,
+        photoKey: 'connect-2026/speakers/r1/photo.jpg',
+      });
+      storage.deleteObject.mockRejectedValue(new Error('spaces down'));
+
+      await expect(controller.withdrawConnectSpeaker('r1')).resolves.toMatchObject({
+        withdrawn: true,
+      });
+      expect(prisma.connectRegistration.update).toHaveBeenCalled();
+    });
+
+    it('refuses to withdraw a registration that is not a speaker', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue({
+        id: 'r1',
+        speaking: false,
+        photoKey: null,
+      });
+      await expect(controller.withdrawConnectSpeaker('r1')).rejects.toThrow(
+        /not a speaker application/,
+      );
+    });
+
+    it('deletes a registration outright', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue({
+        id: 'r1',
+        email: 'gone@example.com',
+        photoKey: null,
+      });
+
+      const result = await controller.deleteConnectRegistration('r1');
+
+      expect(prisma.connectRegistration.delete).toHaveBeenCalledWith({ where: { id: 'r1' } });
+      expect(result).toMatchObject({ deleted: true, email: 'gone@example.com' });
+    });
+
+    it('404s on an unknown registration', async () => {
+      prisma.connectRegistration.findUnique.mockResolvedValue(null);
+      await expect(controller.deleteConnectRegistration('nope')).rejects.toThrow(/not found/i);
     });
   });
 });

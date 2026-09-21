@@ -443,6 +443,91 @@ export class LeadsController {
   }
 
   /**
+   * Withdraw a speaker application, keeping the person's reservation.
+   *
+   * A speaker row IS their registration -- one record, two roles -- so
+   * deleting it would also take away a seat they are entitled to. This
+   * clears only the speaking half: they leave the speaker queue and
+   * reappear under Attendees. Use the attendee delete to remove someone
+   * from the event entirely.
+   */
+  @Delete('admin/connect-2026/speakers/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async withdrawConnectSpeaker(@Param('id') id: string) {
+    const registration = await this.prisma.connectRegistration.findUnique({
+      where: { id },
+      select: { id: true, speaking: true, photoKey: true },
+    });
+    if (!registration) throw new NotFoundException('Registration not found');
+    if (!registration.speaking) {
+      throw new BadRequestException('This registration is not a speaker application');
+    }
+
+    // The photo was collected for the event page; once the application is
+    // gone there is no reason to keep serving it.
+    if (registration.photoKey) {
+      try {
+        await this.storage.deleteObject(connectPhotoBucket(), registration.photoKey);
+      } catch {
+        // A stranded object is untidy, not harmful -- never block the
+        // withdrawal on object storage.
+      }
+    }
+
+    await this.prisma.connectRegistration.update({
+      where: { id },
+      data: {
+        speaking: false,
+        speakerTopic: null,
+        speakerSummary: null,
+        speakerStatus: 'PENDING',
+        speakerDecidedAt: null,
+        speakerDecidedById: null,
+        photoUrl: null,
+        photoKey: null,
+        photoUploadedAt: null,
+        // Kills any live upload link -- the application it belonged to no
+        // longer exists.
+        photoTokenHash: null,
+        photoTokenExpiresAt: null,
+      },
+    });
+
+    return { withdrawn: true, stillAttending: true };
+  }
+
+  /**
+   * Remove a registration entirely. Used for spam, a duplicate under a
+   * second address, or someone asking to be taken off the list.
+   *
+   * Deletes the row rather than flagging it: this is an event interest
+   * list, not a financial record, and "take me off your list" should mean
+   * exactly that.
+   */
+  @Delete('admin/connect-2026/registrations/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async deleteConnectRegistration(@Param('id') id: string) {
+    const registration = await this.prisma.connectRegistration.findUnique({
+      where: { id },
+      select: { id: true, email: true, photoKey: true },
+    });
+    if (!registration) throw new NotFoundException('Registration not found');
+
+    if (registration.photoKey) {
+      try {
+        await this.storage.deleteObject(connectPhotoBucket(), registration.photoKey);
+      } catch {
+        // See above -- a stranded object must not block the removal.
+      }
+    }
+
+    await this.prisma.connectRegistration.delete({ where: { id } });
+    return { deleted: true, email: registration.email };
+  }
+
+  /**
    * Reminder blast. `audience: 'speakers'` writes each speaker's own topic
    * into their email; `'all'` goes to every registration.
    *
