@@ -22,7 +22,13 @@ import {
 } from 'lucide-react';
 
 type Country = { code: string; name: string };
-type Stats = { interested: number; speakerApplicants: number; countries: number };
+type Stats = {
+  interested: number;
+  speakerApplicants: number;
+  countries: number;
+  /** Initials of the most recent registrants -- never full names. */
+  recentInitials?: string[];
+};
 type Interest = 'attend' | 'speak';
 
 const slides = ['/images/connect-hero-1.png', '/images/connect-hero-2.png'];
@@ -400,7 +406,20 @@ export default function Home() {
             </div>
           </div>
           <div className="stats-bar content-width" aria-label="Event interest">
-            <div className="stat-primary"><div className="avatar-stack" aria-hidden="true"><span /><span /><span /><span /></div><p><strong>{stats ? stats.interested.toLocaleString() : '—'}</strong><small>Interested contributors</small></p></div>
+            <div className="stat-primary">
+              {/* Initials of people who actually reserved a place. The stack
+                  renders nothing at all until the API has returned some --
+                  an empty circle is better than a stand-in face belonging
+                  to someone who never registered. */}
+              {stats?.recentInitials?.length ? (
+                <div className="avatar-stack" aria-hidden="true">
+                  {stats.recentInitials.map((text, index) => (
+                    <span key={`${text}-${index}`}>{text}</span>
+                  ))}
+                </div>
+              ) : null}
+              <p><strong>{stats ? stats.interested.toLocaleString() : '—'}</strong><small>Interested contributors</small></p>
+            </div>
             <div className="stat"><Globe2 /><p><strong>{stats ? stats.countries.toLocaleString() : '—'}</strong><small>Countries represented</small></p></div>
             <div className="stat"><Mic2 /><p><strong>{stats ? stats.speakerApplicants.toLocaleString() : '—'}</strong><small>Speaker applicants</small></p></div>
             <div className="stat"><MessageCircle /><p><strong>Live Q&amp;A</strong><small>Ask. Learn. Connect.</small></p></div>

@@ -56,6 +56,20 @@ const CONNECT_PHOTO_TYPES: Record<string, string> = {
 };
 
 /**
+ * Up to two initials for the Connect landing page's avatar stack. Mirrors
+ * the frontend's own initials() helper so the two agree on what a name
+ * reduces to.
+ */
+function connectInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
+/**
  * Speaker photos live in the marketing bucket -- they are public event
  * assets, shown on the Connect page, not private user data.
  */
@@ -124,15 +138,31 @@ export class LeadsController {
   @Get('connect-2026/stats')
   async getConnectStats() {
     const eventKey = await this.platformSettings.getConnectEventKey();
-    const [interested, speakerApplicants, countryGroups] = await Promise.all([
+    const [interested, speakerApplicants, countryGroups, recent] = await Promise.all([
       this.prisma.connectRegistration.count({ where: { eventKey } }),
       this.prisma.connectRegistration.count({ where: { eventKey, speaking: true } }),
       this.prisma.connectRegistration.groupBy({
         by: ['countryCode'],
         where: { eventKey },
       }),
+      // The avatar stack beside the headline count. Initials only -- this
+      // route is public and unauthenticated, so it follows the same
+      // minimum-disclosure rule as the member lookup below: someone who
+      // reserved a place has not agreed to have their name listed on the
+      // landing page. Two letters identify nobody on their own.
+      this.prisma.connectRegistration.findMany({
+        where: { eventKey },
+        orderBy: { createdAt: 'desc' },
+        take: 4,
+        select: { name: true },
+      }),
     ]);
-    return { interested, speakerApplicants, countries: countryGroups.length };
+    return {
+      interested,
+      speakerApplicants,
+      countries: countryGroups.length,
+      recentInitials: recent.map((row) => connectInitials(row.name)).filter(Boolean),
+    };
   }
 
   /**

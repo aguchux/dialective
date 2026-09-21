@@ -123,10 +123,18 @@ describe('Connect 2026 registration', () => {
   it('reports real registrations and distinct countries', async () => {
     prisma.connectRegistration.count.mockResolvedValueOnce(23).mockResolvedValueOnce(4);
     prisma.connectRegistration.groupBy.mockResolvedValue([{ countryCode: 'NG' }, { countryCode: 'GB' }]);
+    // The avatar stack reduces each recent registrant to initials -- a
+    // single-word name yields one letter, never a blank circle.
+    prisma.connectRegistration.findMany.mockResolvedValueOnce([
+      { name: 'Ada Okafor' },
+      { name: 'chinwe  eze' },
+      { name: 'Madonna' },
+    ]);
     await expect(controller.getConnectStats()).resolves.toEqual({
       interested: 23,
       speakerApplicants: 4,
       countries: 2,
+      recentInitials: ['AO', 'CE', 'M'],
     });
   });
 
