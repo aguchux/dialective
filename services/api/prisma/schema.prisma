@@ -3248,6 +3248,24 @@ model PlatformSettings {
   topBannerImageKey                          String?
   topBannerAltText                           String? // accessible alt text for the banner image
   topBannerLearnMoreUrl                      String? // destination when the banner (or its "Learn more" affordance) is clicked -- opens in a new tab; banner is not clickable at all if unset
+  // --- DL Connect (the contributor webinar) --------------------------------
+  // Master switch for the full-bleed Connect hero shown under the menu bar on
+  // the trainer dashboard and the community app. Off means neither app renders
+  // it at all -- the event is over, or not announced yet.
+  connectHeroEnabled                         Boolean   @default(false)
+  // Which year's event everything refers to. This is the eventKey suffix
+  // ("2026" -> connect-2026) that registrations, the speaker queue and the
+  // reminder blasts are scoped by, so running Connect 2027 is a settings
+  // change rather than a deploy: flip the year and the whole subsystem --
+  // including next year's empty registration list -- follows.
+  connectEventYear                           String    @default("2026")
+  connectHeroTitle                           String? // overrides the default "Dialect Library Connect <year>" headline
+  connectHeroSubtitle                        String? // e.g. "Our first contributor webinar"
+  connectHeroDateLabel                       String? // free text, e.g. "October 2026 - Online"; the exact date is usually not fixed when the hero first goes up
+  connectHeroCtaLabel                        String? // defaults to "Reserve your place"
+  connectHeroUrl                             String? // where the hero links; defaults to CONNECT_FRONTEND_URL
+  connectHeroImageBucket                     String? // bucket+key rather than a URL, same reasoning as topBannerImageBucket
+  connectHeroImageKey                        String?
   updatedAt                                  DateTime  @updatedAt
   createdAt                                  DateTime  @default(now())
 

@@ -595,6 +595,61 @@ export class PlatformSettingsService {
     };
   }
 
+  /**
+   * The event key everything Connect-related is scoped by. Derived from
+   * the admin-set year so a new event is a settings change, not a deploy
+   * -- see PlatformSettings.connectEventYear.
+   */
+  async getConnectEventKey(): Promise<string> {
+    const row = await this.getRow();
+    const year = row.connectEventYear?.trim();
+    // A blank or nonsense year would silently point the whole subsystem
+    // at a key nothing is registered under, so fall back rather than
+    // build "connect-".
+    return /^\d{4}$/.test(year ?? '') ? `connect-${year}` : 'connect-2026';
+  }
+
+  /**
+   * The full-bleed Connect hero shown under the menu bar on the trainer
+   * dashboard and in the community app.
+   *
+   * Unlike the top banner, this does NOT require an uploaded image: the
+   * hero has a designed gradient fallback, so an admin can announce an
+   * event before artwork exists. Copy falls back to the event year, which
+   * is always set.
+   */
+  async getConnectHero(): Promise<{
+    enabled: boolean;
+    eventYear: string;
+    title: string;
+    subtitle: string | null;
+    dateLabel: string | null;
+    ctaLabel: string;
+    url: string;
+    imageUrl: string | null;
+  }> {
+    const row = await this.getRow();
+    const eventYear = /^\d{4}$/.test(row.connectEventYear?.trim() ?? '')
+      ? row.connectEventYear.trim()
+      : '2026';
+    return {
+      enabled: row.connectHeroEnabled,
+      eventYear,
+      title: row.connectHeroTitle?.trim() || `Dialect Library Connect ${eventYear}`,
+      subtitle: row.connectHeroSubtitle?.trim() || null,
+      dateLabel: row.connectHeroDateLabel?.trim() || null,
+      ctaLabel: row.connectHeroCtaLabel?.trim() || 'Reserve your place',
+      url:
+        row.connectHeroUrl?.trim() ||
+        process.env.CONNECT_FRONTEND_URL ||
+        'https://connect.dialectlibrary.com',
+      imageUrl:
+        row.connectHeroImageBucket && row.connectHeroImageKey
+          ? this.storage.getPublicObjectUrl(row.connectHeroImageBucket, row.connectHeroImageKey)
+          : null,
+    };
+  }
+
   async getSupportChatSettings(): Promise<{ mode: 'NONE' | 'TAWK' | 'AI' }> {
     const row = await this.getRow();
     const mode = row.supportChatMode.toUpperCase();
@@ -2285,6 +2340,7 @@ export class PlatformSettingsService {
       isCryptoWithdrawalsEnabled,
       topBanner,
       withdrawalsStatus,
+      connectHero,
     ] = await Promise.all([
       this.getReferralCookiePersistSeconds(),
       this.getReferralInviteExpirySeconds(),
@@ -2307,8 +2363,12 @@ export class PlatformSettingsService {
       this.isCryptoWithdrawalsEnabled(),
       this.getTopBanner(),
       this.getWithdrawalsEnabledStatus(),
+      this.getConnectHero(),
     ]);
     return {
+      // Consumed by the trainer dashboard and the community app to render
+      // the full-bleed Connect hero under the menu bar.
+      connectHero,
       referralCookiePersistSeconds,
       referralInviteExpirySeconds,
       wordTrainingRecordingTimeoutSeconds,
