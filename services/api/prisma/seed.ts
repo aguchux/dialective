@@ -1,6 +1,7 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@dialectiva/db';
 import { AFRICA_COUNTRIES, CountrySeed } from './africa-countries-dialects';
+import { ASIA_COUNTRIES } from './asia-countries-dialects';
 import { PAYMENT_METHOD_CATALOG_SEED } from './payment-method-catalog-seed';
 
 // Fixed word bank for the word-library flow (AGENTS.md "Word library").
@@ -120,13 +121,14 @@ const DIALECT_VARIANTS_BY_TAG: Record<string, { tag: string; name: string }[]> =
   ],
 };
 
-// Onboarding country/dialect list: all African Union member countries
-// (africa-countries-dialects.ts) plus the United States, kept for the
+// Onboarding country/dialect list: African and Asian country catalogues,
+// plus the United States, kept for the
 // `en-us` tag Sentence content is always seeded under. Nigeria's ig/yo/ha
 // tags here match the tags used by WordRecording -- not new dialects, just
 // the same values as real rows.
 const COUNTRIES: CountrySeed[] = [
   ...AFRICA_COUNTRIES,
+  ...ASIA_COUNTRIES,
   { code: 'US', name: 'United States', dialects: [{ tag: 'en-us', name: 'English (US)' }] },
 ];
 
