@@ -83,6 +83,7 @@ import {
   MobileNavigation,
 } from '@/components/dashboard/DashboardShell';
 import { TopPromoBanner } from '@/components/dashboard/TopPromoBanner';
+import { ConnectHeroBanner } from '@/components/dashboard/ConnectHeroBanner';
 import {
   DomainConversationSubmissionSummary,
   EarningsChartRange,
@@ -346,6 +347,8 @@ export function TrainerDashboard({ forcedView }: { forcedView?: DashboardView } 
               : null
           }
         />
+
+        <ConnectHeroBanner />
 
         <TopPromoBanner />
 

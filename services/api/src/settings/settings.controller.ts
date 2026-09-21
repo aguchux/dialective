@@ -42,6 +42,13 @@ export class SettingsController {
   uploadTopBannerImage(@Body() dto: TopBannerUploadDto) {
     return this.settings.uploadTopBannerImage(dto.contentType);
   }
+
+  @Post('connect-hero/upload-url')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  uploadConnectHeroImage(@Body() dto: TopBannerUploadDto) {
+    return this.settings.uploadConnectHeroImage(dto.contentType);
+  }
 }
 
 @Controller('settings')

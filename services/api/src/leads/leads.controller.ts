@@ -30,6 +30,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { SubscriberAuthService } from '../voice-stream/subscriber-auth/subscriber-auth.service';
 import { MailService } from '../mail/mail.service';
 import { SmsService } from '../sms/sms.service';
+import { PlatformSettingsService } from '../settings/platform-settings.service';
 import { CreateDataAccessLeadDto } from './dto/create-data-access-lead.dto';
 import { UpdateDataAccessLeadContactDto } from './dto/update-data-access-lead-contact.dto';
 import { InviteDataAccessLeadDto } from './dto/invite-data-access-lead.dto';
@@ -109,11 +110,20 @@ export class LeadsController {
     private readonly mail: MailService,
     private readonly storage: StorageService,
     private readonly sms: SmsService,
+    private readonly platformSettings: PlatformSettingsService,
   ) {}
 
+  /**
+   * The route paths below stay spelled "connect-2026" deliberately -- they
+   * are public URLs the Connect site and the admin dashboard already call,
+   * and renaming them next year would break both. What actually scopes a
+   * year's data is ConnectRegistration.eventKey, which comes from settings
+   * (PlatformSettings.connectEventYear), so hosting Connect 2027 is a
+   * settings change rather than a deploy.
+   */
   @Get('connect-2026/stats')
   async getConnectStats() {
-    const eventKey = 'connect-2026';
+    const eventKey = await this.platformSettings.getConnectEventKey();
     const [interested, speakerApplicants, countryGroups] = await Promise.all([
       this.prisma.connectRegistration.count({ where: { eventKey } }),
       this.prisma.connectRegistration.count({ where: { eventKey, speaking: true } }),
@@ -191,7 +201,7 @@ export class LeadsController {
       };
     }
 
-    const eventKey = 'connect-2026';
+    const eventKey = await this.platformSettings.getConnectEventKey();
     const name = dto.name.trim();
     const email = dto.email.trim().toLowerCase();
     const countryCode = dto.countryCode.trim().toUpperCase();
@@ -318,7 +328,7 @@ export class LeadsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async getAdminConnectOverview() {
-    const eventKey = 'connect-2026';
+    const eventKey = await this.platformSettings.getConnectEventKey();
     const [registrations, countryGroups] = await Promise.all([
       this.prisma.connectRegistration.findMany({
         where: { eventKey },
@@ -539,7 +549,7 @@ export class LeadsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async sendConnectReminders(@Body() dto: SendConnectRemindersDto) {
-    const eventKey = 'connect-2026';
+    const eventKey = await this.platformSettings.getConnectEventKey();
     const speakersOnly = dto.audience === 'speakers';
     const recipients = await this.prisma.connectRegistration.findMany({
       where: {
@@ -693,7 +703,10 @@ export class LeadsController {
     if (!extension) throw new BadRequestException('Upload a JPEG, PNG or WebP image');
 
     const bucket = connectPhotoBucket();
-    const key = `connect-2026/speakers/${registration.id}/${randomUUID()}.${extension}`;
+    // Prefixed by the registration's own eventKey rather than current
+    // settings, so a link issued for last year's event still writes into
+    // last year's folder after the admin rolls the year forward.
+    const key = `${registration.eventKey}/speakers/${registration.id}/${randomUUID()}.${extension}`;
     const upload = await this.storage.createPresignedUploadUrl(bucket, key, dto.contentType, true);
 
     return { uploadUrl: upload.url, key, expiresInSeconds: upload.expiresInSeconds };
@@ -711,7 +724,7 @@ export class LeadsController {
     @Body() dto: CompleteConnectPhotoUploadDto,
   ) {
     const registration = await this.speakerForPhotoToken(token);
-    if (!dto.key.startsWith(`connect-2026/speakers/${registration.id}/`)) {
+    if (!dto.key.startsWith(`${registration.eventKey}/speakers/${registration.id}/`)) {
       throw new BadRequestException('That upload does not belong to this link');
     }
 

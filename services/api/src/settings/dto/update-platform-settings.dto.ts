@@ -987,4 +987,53 @@ export class UpdatePlatformSettingsDto {
   @IsString()
   @MaxLength(500)
   topBannerLearnMoreUrl?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  connectHeroEnabled?: boolean;
+
+  /**
+   * Four digits, e.g. "2027". Becomes ConnectRegistration.eventKey
+   * ("connect-2027"), which is how next year's event gets its own
+   * registrations without a deploy. Validated again in the service.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(4)
+  connectEventYear?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  connectHeroTitle?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(400)
+  connectHeroSubtitle?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  connectHeroDateLabel?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  connectHeroCtaLabel?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  connectHeroUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  connectHeroImageBucket?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  connectHeroImageKey?: string | null;
 }

@@ -1519,6 +1519,24 @@ export interface PublicClientSettings {
   topBannerImageUrl: string | null;
   topBannerAltText: string | null;
   topBannerLearnMoreUrl: string | null;
+  connectHero: ConnectHeroSettings;
+}
+
+/**
+ * The DL Connect event hero shown full-bleed under the dashboard and
+ * community nav. The API resolves every fallback (title from the event
+ * year, CTA label, URL), so the client just renders what it is given --
+ * and renders nothing at all when `enabled` is false.
+ */
+export interface ConnectHeroSettings {
+  enabled: boolean;
+  eventYear: string;
+  title: string;
+  subtitle: string | null;
+  dateLabel: string | null;
+  ctaLabel: string;
+  url: string;
+  imageUrl: string | null;
 }
 
 export type TestimonyKind = 'VIDEO' | 'TEXT';
@@ -2133,6 +2151,14 @@ export interface PlatformSettings {
   topBannerImageUrl: string | null;
   topBannerAltText: string | null;
   topBannerLearnMoreUrl: string | null;
+  connectHeroEnabled: boolean;
+  connectEventYear: string;
+  connectHeroTitle: string | null;
+  connectHeroSubtitle: string | null;
+  connectHeroDateLabel: string | null;
+  connectHeroCtaLabel: string | null;
+  connectHeroUrl: string | null;
+  connectHeroImageUrl: string | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -2321,6 +2347,15 @@ export interface PlatformSettingsInput {
   topBannerImageKey?: string | null;
   topBannerAltText?: string | null;
   topBannerLearnMoreUrl?: string | null;
+  connectHeroEnabled?: boolean;
+  connectEventYear?: string;
+  connectHeroTitle?: string | null;
+  connectHeroSubtitle?: string | null;
+  connectHeroDateLabel?: string | null;
+  connectHeroCtaLabel?: string | null;
+  connectHeroUrl?: string | null;
+  connectHeroImageBucket?: string | null;
+  connectHeroImageKey?: string | null;
 }
 
 export type WordTrainingDirection = 'ENGLISH_TO_DIALECT' | 'DIALECT_TO_ENGLISH';
@@ -5776,6 +5811,16 @@ export const dialectivaApi = createApi({
         body,
       }),
     }),
+    uploadConnectHeroImage: builder.mutation<
+      { uploadUrl: string; key: string; bucket: string },
+      { contentType: string }
+    >({
+      query: (body) => ({
+        url: '/admin/platform-settings/connect-hero/upload-url',
+        method: 'POST',
+        body,
+      }),
+    }),
     getApiAccessTokens: builder.query<ApiAccessTokenSummary[], void>({
       query: () => '/admin/api-access-tokens',
       providesTags: ['ApiAccessTokens'],
@@ -6513,6 +6558,7 @@ export const {
   useDeleteFaqMutation,
   useUpdatePlatformSettingsMutation,
   useUploadTopBannerImageMutation,
+  useUploadConnectHeroImageMutation,
   useGetApiAccessTokensQuery,
   useSetApiAccessTokenMutation,
   useDeleteApiAccessTokenMutation,

@@ -18,6 +18,7 @@ import {
   User,
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
+import { ConnectHeroBanner } from './ConnectHeroBanner';
 import { IconButton } from './ui';
 import { getInitials, getSpaceTone } from '@/lib/community-format';
 import { useListNotificationsQuery, useListSpacesQuery } from '@/store/api';
@@ -65,6 +66,7 @@ export function CommunityShell({ children }: { children: ReactNode }) {
           displayName={session?.user?.name ?? session?.user?.firstName ?? 'Member'}
           unreadCount={unreadCount}
         />
+        <ConnectHeroBanner />
         <main className="min-w-0 flex-1 pb-[calc(76px+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
         </main>

@@ -33,6 +33,7 @@ import { DomainConversationSettingsPanel } from './DomainConversationSettingsPan
 import { DialectValidationSettingsPanel } from './DialectValidationSettingsPanel';
 import { AdsMonetisationSettingsPanel } from './AdsMonetisationSettingsPanel';
 import { AnalyticsSettingsPanel } from './AnalyticsSettingsPanel';
+import { DlConnectSettingsPanel } from './DlConnectSettingsPanel';
 
 const groups = [
   { key: 'general', label: 'General Settings' },
@@ -51,6 +52,7 @@ const groups = [
   { key: 'pwa', label: 'Web App Install' },
   { key: 'dyk', label: 'Do you know?' },
   { key: 'community', label: 'Community' },
+  { key: 'dlConnect', label: 'DL Connect' },
   { key: 'wordGeneration', label: 'Word Generation' },
   { key: 'qualityGate', label: 'Voice Quality Gate' },
   { key: 'testimonials', label: 'Testimony Settings' },
@@ -86,6 +88,7 @@ const panelComponents: Record<GroupKey, () => JSX.Element> = {
   pwa: PwaSettingsPanel,
   dyk: DykSettingsPanel,
   community: CommunitySettingsPanel,
+  dlConnect: DlConnectSettingsPanel,
   wordGeneration: WordGenerationSettingsPanel,
   qualityGate: QualityGateSettingsPanel,
   testimonials: TestimonySettingsPanel,

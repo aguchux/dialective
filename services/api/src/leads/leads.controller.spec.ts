@@ -7,6 +7,7 @@ import { SubscriberAuthService } from '../voice-stream/subscriber-auth/subscribe
 import { MailService } from '../mail/mail.service';
 import { StorageService } from '../storage/storage.service';
 import { SmsService } from '../sms/sms.service';
+import { PlatformSettingsService } from '../settings/platform-settings.service';
 
 describe('Connect 2026 registration', () => {
   const prisma = {
@@ -35,16 +36,19 @@ describe('Connect 2026 registration', () => {
     deleteObject: jest.fn(),
   };
   const sms = { sendTransactional: jest.fn() };
+  const platformSettings = { getConnectEventKey: jest.fn() };
   const controller = new LeadsController(
     prisma as unknown as PrismaService,
     {} as SubscriberAuthService,
     mail as unknown as MailService,
     storage as unknown as StorageService,
     sms as unknown as SmsService,
+    platformSettings as unknown as PlatformSettingsService,
   );
 
   beforeEach(() => {
     jest.clearAllMocks();
+    platformSettings.getConnectEventKey.mockResolvedValue('connect-2026');
     prisma.country.findUnique.mockResolvedValue({ id: 'ng' });
     prisma.connectRegistration.upsert.mockResolvedValue({ id: 'registration' });
     prisma.user.findUnique.mockResolvedValue(null);

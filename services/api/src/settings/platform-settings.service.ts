@@ -1348,6 +1348,17 @@ export class PlatformSettingsService {
           : null,
       topBannerAltText: row.topBannerAltText,
       topBannerLearnMoreUrl: row.topBannerLearnMoreUrl,
+      connectHeroEnabled: row.connectHeroEnabled,
+      connectEventYear: row.connectEventYear,
+      connectHeroTitle: row.connectHeroTitle,
+      connectHeroSubtitle: row.connectHeroSubtitle,
+      connectHeroDateLabel: row.connectHeroDateLabel,
+      connectHeroCtaLabel: row.connectHeroCtaLabel,
+      connectHeroUrl: row.connectHeroUrl,
+      connectHeroImageUrl:
+        row.connectHeroImageBucket && row.connectHeroImageKey
+          ? this.storage.getPublicObjectUrl(row.connectHeroImageBucket, row.connectHeroImageKey)
+          : null,
       updatedAt: row.updatedAt,
       createdAt: row.createdAt,
     };
@@ -1376,6 +1387,15 @@ export class PlatformSettingsService {
       'dialectiva-marketing';
     const result = await this.storage.createPresignedUploadUrl(bucket, key, contentType, true);
     return { uploadUrl: result.url, key, bucket };
+  }
+
+  /**
+   * Presigned upload for the Connect hero background. Same `dyk/` prefix
+   * and the same reason as uploadTopBannerImage above -- the production
+   * bucket policy's public-GET allow-list is fixed outside this codebase.
+   */
+  uploadConnectHeroImage(contentType: string) {
+    return this.uploadTopBannerImage(contentType);
   }
 
   async update(data: {
@@ -1568,7 +1588,22 @@ export class PlatformSettingsService {
     topBannerImageKey?: string | null;
     topBannerAltText?: string | null;
     topBannerLearnMoreUrl?: string | null;
+    connectHeroEnabled?: boolean;
+    connectEventYear?: string;
+    connectHeroTitle?: string | null;
+    connectHeroSubtitle?: string | null;
+    connectHeroDateLabel?: string | null;
+    connectHeroCtaLabel?: string | null;
+    connectHeroUrl?: string | null;
+    connectHeroImageBucket?: string | null;
+    connectHeroImageKey?: string | null;
   }) {
+    if (data.connectEventYear !== undefined && !/^\d{4}$/.test(data.connectEventYear.trim())) {
+      // The year is not cosmetic -- it becomes ConnectRegistration.eventKey,
+      // so a malformed value would silently start writing registrations into
+      // a partition nothing else reads.
+      throw new BadRequestException('connectEventYear must be a four-digit year, e.g. 2027');
+    }
     if (data.authMaintenanceEnabled) {
       // Turning it on (or extending it) always needs a concrete end time --
       // an admin flipping this switch is expected to say when it ends, per
