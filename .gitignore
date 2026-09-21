@@ -31,3 +31,10 @@ __pycache__/
 
 # Vercel CLI link (root is the deploy dir for the `dialective` project)
 .vercel
+
+# Added by `vercel link`, which writes .env.local. The negation keeps the
+# committed *.env.example templates visible -- without it a newly added
+# template would be silently ignored.
+.env*
+!*.env.example
+!.env.example
