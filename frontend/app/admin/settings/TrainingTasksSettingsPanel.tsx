@@ -288,8 +288,10 @@ export function TrainingTasksSettingsPanel() {
                 <span className="mt-1 block text-sm leading-relaxed text-muted">
                   Independent of the hourly limit above -- you can run either, both, or neither.
                   The hourly limit stops a burst; this one caps a whole day, which is what governs
-                  how fast DL is minted. Counted over a rolling 24 hours from actual recordings, so
-                  it survives a restart and a trainer cannot reset it at midnight.
+                  how fast DL is minted. Enforced at tasking: a trainer who has spent their
+                  allowance stops being given new words, rather than recording first and being
+                  refused on submit. Counted over a rolling 24 hours from actual recordings, so it
+                  survives a restart and cannot be reset at midnight.
                 </span>
               </span>
             </label>

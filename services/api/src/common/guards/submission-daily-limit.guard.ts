@@ -7,17 +7,9 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlatformSettingsService } from '../../settings/platform-settings.service';
+import { formatResumeWindow } from '../resume-window.util';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** "in 3 hours" / "in 25 minutes" -- so a blocked trainer knows when to come back. */
-function formatResumeWindow(msUntilResume: number): string {
-  const minutes = Math.ceil(msUntilResume / 60_000);
-  if (minutes <= 1) return 'in a minute';
-  if (minutes < 60) return `in ${minutes} minutes`;
-  const hours = Math.ceil(minutes / 60);
-  return hours === 1 ? 'in an hour' : `in ${hours} hours`;
-}
 
 /**
  * Per-trainer DAILY submission cap, sitting alongside

@@ -26,6 +26,7 @@ describe('WordsService', () => {
     getWordTrainingRecordingMaxTimeoutSeconds: jest.fn().mockResolvedValue(180),
     getAuditHoldEveryNSubmissions: jest.fn().mockResolvedValue(0),
     isQracEnabled: jest.fn().mockResolvedValue(false),
+    getSubmissionDailyLimit: jest.fn().mockResolvedValue({ enabled: false, perDay: 200 }),
     isQracRequiredAtSessionStart: jest.fn().mockResolvedValue(false),
     getQracIntervalMinutes: jest.fn().mockResolvedValue(30),
   };
@@ -62,6 +63,7 @@ describe('WordsService', () => {
       wordRecording: {
         count: jest.fn(),
         findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue(null),
         findUnique: jest.fn(),
         create: jest.fn(),
       },
@@ -90,6 +92,7 @@ describe('WordsService', () => {
     courses.getIncompleteRequiredCourses.mockReset().mockResolvedValue([]);
     settings.getAuditHoldEveryNSubmissions.mockReset().mockResolvedValue(0);
     settings.isQracEnabled.mockReset().mockResolvedValue(false);
+    settings.getSubmissionDailyLimit.mockReset().mockResolvedValue({ enabled: false, perDay: 200 });
     settings.isQracRequiredAtSessionStart.mockReset().mockResolvedValue(false);
     settings.getQracIntervalMinutes.mockReset().mockResolvedValue(30);
     session.lastQracAt = null;
@@ -1404,6 +1407,67 @@ describe('WordsService', () => {
       await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow(
         'NO_WORDS_AVAILABLE',
       );
+    });
+  });
+
+  describe('daily tasking gate', () => {
+    beforeEach(() => {
+      settings.getSubmissionDailyLimit.mockResolvedValue({ enabled: true, perDay: 200 });
+    });
+
+    it('hands out work while the trainer is under the cap', async () => {
+      prisma.wordRecording.count.mockResolvedValue(199);
+
+      await expect(service.startSession(trainer.id)).resolves.toMatchObject({
+        sessionId: expect.any(String),
+      });
+    });
+
+    it('refuses a new session once the cap is spent', async () => {
+      prisma.wordRecording.count.mockResolvedValue(200);
+
+      await expect(service.startSession(trainer.id)).rejects.toMatchObject({
+        response: { dailyLimitReached: true, dailyLimit: 200, used: 200 },
+      });
+    });
+
+    it('refuses the next assignment once the cap is spent, so no work is issued', async () => {
+      prisma.wordRecording.count.mockResolvedValue(250);
+
+      await expect(service.nextAssignment(trainer.id, session.id)).rejects.toMatchObject({
+        response: { dailyLimitReached: true },
+      });
+      // The whole point of gating at tasking rather than at submit.
+      expect(prisma.wordTrainingAssignment.create).not.toHaveBeenCalled();
+    });
+
+    it('does not charge a skip when it refuses to issue more work', async () => {
+      prisma.wordRecording.count.mockResolvedValue(200);
+
+      await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow();
+      // recordSkipIfAbandoned would otherwise penalise the trainer for a
+      // word they were never given a replacement for.
+      expect(prisma.wordSkip.upsert).not.toHaveBeenCalled();
+    });
+
+    it('tells the trainer when they can train again', async () => {
+      prisma.wordRecording.count.mockResolvedValue(200);
+      prisma.wordRecording.findFirst.mockResolvedValue({
+        createdAt: new Date(Date.now() - 21 * 60 * 60 * 1000),
+      });
+
+      await expect(service.startSession(trainer.id)).rejects.toMatchObject({
+        response: {
+          message: "You've reached today's limit of 200 recordings. You can train again in 3 hours.",
+        },
+      });
+    });
+
+    it('is inert while disabled, without counting anything', async () => {
+      settings.getSubmissionDailyLimit.mockResolvedValue({ enabled: false, perDay: 200 });
+
+      await expect(service.startSession(trainer.id)).resolves.toBeDefined();
+      expect(prisma.wordRecording.count).not.toHaveBeenCalled();
     });
   });
 });

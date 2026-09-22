@@ -19,6 +19,7 @@ import { AsrRegistryService } from '../asr-registry/asr-registry.service';
 import { MailService } from '../mail/mail.service';
 import { SmsService } from '../sms/sms.service';
 import { AUDIT_HOLD_MESSAGE, isOnAuditHold } from '../common/audit-hold.util';
+import { formatResumeWindow } from '../common/resume-window.util';
 import { CHECKLIST_VERSION, QRAC_CHECKLIST, nextQracVersion } from './qrac.util';
 import { CreateWordRecordingDto } from './dto/create-word-recording.dto';
 import { CreateWordRecordingUploadUrlDto } from './dto/create-word-recording-upload-url.dto';
@@ -60,6 +61,7 @@ export class WordsService {
 
   async startSession(userId: string) {
     await this.assertNotOnAuditHold(userId);
+    await this.assertDailyTaskingAllowance(userId);
 
     const incompleteRequired = await this.courses.getIncompleteRequiredCourses(userId);
     if (incompleteRequired.length > 0) {
@@ -128,6 +130,11 @@ export class WordsService {
     if (session.endedAt) throw new ConflictException('This training session has ended');
 
     await this.assertNotOnAuditHold(userId);
+    // Before recordSkipIfAbandoned: a trainer who is out of allowance is
+    // not being handed another word, so the one they left on screen was
+    // not "abandoned in favour of the next" -- charging them a skip for
+    // it would be wrong.
+    await this.assertDailyTaskingAllowance(userId);
     await this.recordSkipIfAbandoned(userId, sessionId);
 
     // startSession only checks once, at session creation -- sessions have no
@@ -809,6 +816,52 @@ export class WordsService {
     if (isOnAuditHold(user)) {
       throw new ForbiddenException(AUDIT_HOLD_MESSAGE);
     }
+  }
+
+  /**
+   * The daily cap enforced at the TASKING chokepoint: a trainer who has
+   * spent their allowance is not handed more work, rather than being
+   * allowed to record and then refused on submit.
+   *
+   * This shares PlatformSettings.submissionDailyLimitPerDay with
+   * SubmissionDailyLimitGuard deliberately -- one number, two enforcement
+   * points. This gate is the one trainers actually experience (no wasted
+   * recording); the guard on POST /words/recordings stays as the backstop
+   * that a scripted client calling the submit endpoint directly cannot
+   * route around.
+   *
+   * Counts submitted recordings, not assignments issued. Assignments are
+   * keyed by session with no (userId, createdAt) index, so counting them
+   * per trainer would mean an unindexed join -- and it would charge a
+   * trainer for skipped or abandoned assignments they never recorded,
+   * which is the wrong behaviour as well as the slower query.
+   */
+  private async assertDailyTaskingAllowance(userId: string): Promise<void> {
+    const { enabled, perDay } = await this.settings.getSubmissionDailyLimit();
+    if (!enabled) return;
+
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const used = await this.prisma.wordRecording.count({
+      where: { userId, createdAt: { gte: since } },
+    });
+    if (used < perDay) return;
+
+    const oldest = await this.prisma.wordRecording.findFirst({
+      where: { userId, createdAt: { gte: since } },
+      orderBy: { createdAt: 'asc' },
+      select: { createdAt: true },
+    });
+    const resumesAt = oldest
+      ? new Date(oldest.createdAt.getTime() + 24 * 60 * 60 * 1000)
+      : new Date(Date.now() + 60 * 60 * 1000);
+
+    throw new ForbiddenException({
+      message: `You've reached today's limit of ${perDay} recordings. You can train again ${formatResumeWindow(resumesAt.getTime() - Date.now())}.`,
+      dailyLimitReached: true,
+      dailyLimit: perDay,
+      used,
+      resumesAt: resumesAt.toISOString(),
+    });
   }
 
   /**
