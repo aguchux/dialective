@@ -23,10 +23,6 @@ export function CommunitySettingsPanel() {
   const [reactionsEnabled, setReactionsEnabled] = useState(true);
   const [newMemberPostingDelayMinutes, setNewMemberPostingDelayMinutes] = useState('0');
   const [requireApprovalForNewMembers, setRequireApprovalForNewMembers] = useState(false);
-  const [adsterraEnabled, setAdsterraEnabled] = useState(false);
-  const [adsterraScriptUrl, setAdsterraScriptUrl] = useState('');
-  const [monetagEnabled, setMonetagEnabled] = useState(false);
-  const [monetagScriptUrl, setMonetagScriptUrl] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,10 +34,6 @@ export function CommunitySettingsPanel() {
     setReactionsEnabled(settings.reactionsEnabled);
     setNewMemberPostingDelayMinutes(String(settings.newMemberPostingDelayMinutes));
     setRequireApprovalForNewMembers(settings.requireApprovalForNewMembers);
-    setAdsterraEnabled(settings.adsterraEnabled);
-    setAdsterraScriptUrl(settings.adsterraScriptUrl ?? '');
-    setMonetagEnabled(settings.monetagEnabled);
-    setMonetagScriptUrl(settings.monetagScriptUrl ?? '');
   }, [settings]);
 
   async function handleSave(e: React.FormEvent) {
@@ -55,14 +47,6 @@ export function CommunitySettingsPanel() {
       );
       return;
     }
-    if (adsterraEnabled && !adsterraScriptUrl.trim()) {
-      setError('Paste the Adsterra script URL before enabling it.');
-      return;
-    }
-    if (monetagEnabled && !monetagScriptUrl.trim()) {
-      setError('Paste the Monetag script URL before enabling it.');
-      return;
-    }
     try {
       await updateSettings({
         postingEnabled,
@@ -71,10 +55,6 @@ export function CommunitySettingsPanel() {
         reactionsEnabled,
         newMemberPostingDelayMinutes: delayMinutes,
         requireApprovalForNewMembers,
-        adsterraEnabled,
-        adsterraScriptUrl: adsterraScriptUrl.trim() || null,
-        monetagEnabled,
-        monetagScriptUrl: monetagScriptUrl.trim() || null,
       }).unwrap();
       setMessage('Community settings saved.');
     } catch (err) {
@@ -217,84 +197,6 @@ export function CommunitySettingsPanel() {
               was created. 0 means no delay.
             </span>
           </label>
-
-          <div className="grid gap-3 border-t border-line pt-4">
-            <div>
-              <h3 className="font-bold">Ad networks</h3>
-              <p className="mt-1 text-sm leading-relaxed text-muted">
-                Site-wide popunder/social-bar scripts, monetizing community.dialectlibrary.com. Each
-                network only loads once it's enabled AND its script URL is set below -- a
-                half-configured toggle never ships a broken embed.
-              </p>
-            </div>
-
-            <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-4">
-              <label
-                className="flex cursor-pointer items-start gap-3"
-                htmlFor="community-adsterra-enabled"
-              >
-                <input
-                  checked={adsterraEnabled}
-                  className="mt-0.5 size-5 accent-accent"
-                  id="community-adsterra-enabled"
-                  onChange={(event) => setAdsterraEnabled(event.target.checked)}
-                  type="checkbox"
-                />
-                <span className="block font-bold">Adsterra enabled</span>
-              </label>
-              <label
-                className="grid gap-1 text-sm font-bold"
-                htmlFor="community-adsterra-script-url"
-              >
-                Script URL (Social Bar)
-                <input
-                  className={inputClass}
-                  id="community-adsterra-script-url"
-                  onChange={(event) => setAdsterraScriptUrl(event.target.value)}
-                  placeholder="https://pl.../invoke.js"
-                  type="url"
-                  value={adsterraScriptUrl}
-                />
-                <span className="text-sm font-normal text-muted">
-                  From the Adsterra dashboard's Social Bar ad unit -- &quot;Get code&quot; -- copy
-                  just the script&apos;s src URL, not the full snippet.
-                </span>
-              </label>
-            </div>
-
-            <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-4">
-              <label
-                className="flex cursor-pointer items-start gap-3"
-                htmlFor="community-monetag-enabled"
-              >
-                <input
-                  checked={monetagEnabled}
-                  className="mt-0.5 size-5 accent-accent"
-                  id="community-monetag-enabled"
-                  onChange={(event) => setMonetagEnabled(event.target.checked)}
-                  type="checkbox"
-                />
-                <span className="block font-bold">Monetag enabled</span>
-              </label>
-              <label
-                className="grid gap-1 text-sm font-bold"
-                htmlFor="community-monetag-script-url"
-              >
-                Script URL
-                <input
-                  className={inputClass}
-                  id="community-monetag-script-url"
-                  onChange={(event) => setMonetagScriptUrl(event.target.value)}
-                  placeholder="https://.../tag.min.js?z=..."
-                  type="url"
-                  value={monetagScriptUrl}
-                />
-                <span className="text-sm font-normal text-muted">
-                  From the Monetag dashboard's ad unit -- copy just the script&apos;s src URL.
-                </span>
-              </label>
-            </div>
-          </div>
 
           {message && <p className="font-bold text-emerald-700 dark:text-emerald-400">{message}</p>}
           {error && (
