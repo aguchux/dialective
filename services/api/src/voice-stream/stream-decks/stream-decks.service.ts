@@ -167,7 +167,7 @@ export class StreamDecksService {
    * An org with no credentials yet gets an empty list, and coverage is then
    * reported as pending rather than as a false 100%.
    */
-  private async organizationPurposes(organizationId: string): Promise<VdclPurpose[]> {
+  async organizationPurposesFor(organizationId: string): Promise<VdclPurpose[]> {
     const [keys, clients] = await Promise.all([
       this.prisma.streamApiKey.findMany({
         where: { organizationId, revokedAt: null },
@@ -193,7 +193,7 @@ export class StreamDecksService {
    */
   async coverage(organizationId: string, deckId: string) {
     await this.get(organizationId, deckId);
-    const purposes = await this.organizationPurposes(organizationId);
+    const purposes = await this.organizationPurposesFor(organizationId);
     return this.deckCoverage.forDeck(deckId, purposes);
   }
 
@@ -235,7 +235,7 @@ export class StreamDecksService {
     // adding blind is how a deck's usable coverage gets depleted without
     // anyone noticing until a subscriber's pipeline starts throwing 403s, so
     // the caller always learns where this clip stands.
-    const purposes = await this.organizationPurposes(organizationId);
+    const purposes = await this.organizationPurposesFor(organizationId);
     const licence = await this.deckCoverage.forRecording(recordingId, purposes);
 
     return { ...item, licence };

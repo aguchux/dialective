@@ -44,6 +44,21 @@ export class PublicDecksController {
     return this.publicDecks.listPublic(subscriber.organizationId, minQualityTier);
   }
 
+  /**
+   * What this org would actually be able to use if it copied this deck.
+   *
+   * A public deck is a shelf, not a bundle -- the pick is the point, so the
+   * coverage that decides the pick has to be visible before copying, not
+   * discovered afterwards.
+   */
+  @Get(':id/coverage')
+  previewCoverage(
+    @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,
+    @Param('id') id: string,
+  ) {
+    return this.publicDecks.previewCoverage(subscriber.organizationId, id);
+  }
+
   @Post(':id/accept-license')
   acceptLicense(
     @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,

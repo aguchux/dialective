@@ -16,17 +16,32 @@ function setup() {
     },
   };
   const catalogue = { isEligible: jest.fn().mockResolvedValue(true) };
-  const decks = { create: jest.fn(), get: jest.fn() };
+  const decks = {
+    create: jest.fn(),
+    get: jest.fn(),
+    coverage: jest.fn().mockResolvedValue({
+      totalItems: 0,
+      breakdown: { licensed: 0, pending: 0, purposeNotGranted: 0, withdrawn: 0, suspended: 0 },
+      coveragePercent: 100,
+      contributingAgreements: 0,
+      advisory: false,
+      purposes: [],
+    }),
+    organizationPurposesFor: jest.fn().mockResolvedValue([]),
+  };
   const versioning = { writeNewVersionIfMaterial: jest.fn().mockResolvedValue(undefined) };
   const orgActivity = { record: jest.fn().mockResolvedValue(undefined) };
+  // VDCL coverage -- reported on a copy, never blocking it.
+  const deckCoverage = { forRecordings: jest.fn(), forDeck: jest.fn(), forRecording: jest.fn() };
   const service = new PublicDecksService(
     prisma as any,
     catalogue as any,
     decks as any,
     versioning as any,
     orgActivity as any,
+    deckCoverage as any,
   );
-  return { prisma, catalogue, decks, versioning, orgActivity, service };
+  return { prisma, catalogue, decks, versioning, orgActivity, deckCoverage, service };
 }
 
 describe('PublicDecksService', () => {
@@ -295,7 +310,50 @@ describe('PublicDecksService', () => {
         'new-deck-1',
         'copied_from_public_deck',
       );
-      expect(result).toEqual({ id: 'new-deck-1', name: 'My copy' });
+      // The copy now reports what the org may actually use, since copying IS
+      // the picking mechanism -- a successful-looking copy that yields a
+      // partly unusable dataset is worse than a visible shortfall.
+      expect(result).toEqual({
+        id: 'new-deck-1',
+        name: 'My copy',
+        coverage: expect.objectContaining({ coveragePercent: expect.any(Number) }),
+      });
+    });
+
+    it('reports partial coverage rather than failing or silently dropping items', async () => {
+      // A public deck is a shelf: an org copies from it and keeps whatever
+      // it may use. Unlicensed clips are copied and reported, never
+      // silently skipped -- the contributor may sign later.
+      const { prisma, catalogue, decks, service } = setup();
+      prisma.streamDeck.findUnique.mockResolvedValue({
+        id: 'deck-1',
+        organizationId: 'org-2',
+        visibility: 'PUBLIC',
+      });
+      prisma.deckLicense.findUnique.mockResolvedValue(null);
+      prisma.streamDeckItem.findMany.mockResolvedValue([
+        { recordingId: 'rec-1' },
+        { recordingId: 'rec-2' },
+      ]);
+      prisma.streamDeckItem.findUnique.mockResolvedValue(null);
+      catalogue.isEligible.mockResolvedValue(true);
+      decks.create.mockResolvedValue({ id: 'new-deck-1' });
+      decks.get.mockResolvedValue({ id: 'new-deck-1', name: 'My copy' });
+      decks.coverage.mockResolvedValue({
+        totalItems: 2,
+        breakdown: { licensed: 1, pending: 1, purposeNotGranted: 0, withdrawn: 0, suspended: 0 },
+        coveragePercent: 50,
+        contributingAgreements: 1,
+        advisory: false,
+        purposes: [],
+      });
+
+      const result = await service.copyToOwnDeck('org-1', 'user-1', 'deck-1', 'My copy');
+
+      // Both items were copied; only the coverage number tells the story.
+      expect(prisma.streamDeckItem.create).toHaveBeenCalledTimes(2);
+      expect(result.coverage.coveragePercent).toBe(50);
+      expect(result.coverage.breakdown.pending).toBe(1);
     });
 
     it('skips ineligible (purged) recordings when copying', async () => {

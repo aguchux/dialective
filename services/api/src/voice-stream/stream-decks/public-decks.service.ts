@@ -11,6 +11,7 @@ import { StreamDecksService } from './stream-decks.service';
 import { StreamDeckVersioningService } from './stream-deck-versioning.service';
 import { SetDeckLicenseDto } from './dto/set-deck-license.dto';
 import { OrgActivityService } from '../org-activity/org-activity.service';
+import { DeckCoverageService } from '../../vdcl/rights/deck-coverage.service';
 
 const TIER_RANK: Record<QualityTier, number> = { standard: 0, high: 1, premium_verified: 2 };
 
@@ -34,6 +35,7 @@ export class PublicDecksService {
     private readonly decks: StreamDecksService,
     private readonly versioning: StreamDeckVersioningService,
     private readonly orgActivity: OrgActivityService,
+    private readonly deckCoverage: DeckCoverageService,
   ) {}
 
   private async getOwnedDeck(organizationId: string, deckId: string) {
@@ -147,6 +149,35 @@ export class PublicDecksService {
     return withTier.filter((d) => TIER_RANK[d.minQualityTier] >= TIER_RANK[minQualityTier]);
   }
 
+  /**
+   * Licence coverage a browsing org would get if it copied this public deck.
+   *
+   * A public deck is a shelf, not a bundle -- an org browses it and picks
+   * from its contents. This answers the question that actually decides the
+   * pick: of these recordings, how many may WE use, for the purposes our
+   * credentials declare? The answer differs per browsing org, since coverage
+   * depends on the asking org's declared purposes, so it is computed on
+   * demand rather than being a property of the deck.
+   *
+   * There is deliberately no minimum-coverage floor on publishing. A deck at
+   * 30% coverage is still a useful shelf -- the org simply picks the 30% it
+   * can use -- and hiding it would conceal usable recordings to prevent a
+   * problem that does not arise, since nobody streams a public deck as-is.
+   */
+  async previewCoverage(callerOrganizationId: string, deckId: string) {
+    const deck = await this.getPublicDeck(deckId, callerOrganizationId);
+    const items = await this.prisma.streamDeckItem.findMany({
+      where: { deckId: deck.id },
+      select: { recordingId: true },
+    });
+    const purposes = await this.decks.organizationPurposesFor(callerOrganizationId);
+    const coverage = await this.deckCoverage.forRecordings(
+      items.map((i) => i.recordingId),
+      purposes,
+    );
+    return { deckId: deck.id, deckKey: deck.deckKey, ...coverage };
+  }
+
   /** The weakest quality tier present across a deck's items -- an empty deck reports 'standard' (no floor to claim). */
   private async tierBreakdown(recordingIds: string[]): Promise<{
     minTier: QualityTier;
@@ -249,7 +280,17 @@ export class PublicDecksService {
     if (copied > 0) {
       await this.versioning.writeNewVersionIfMaterial(newDeck.id, 'copied_from_public_deck');
     }
-    return this.decks.get(callerOrganizationId, newDeck.id);
+
+    // Copying IS the picking mechanism: an org browses a public deck and
+    // takes what it wants into a deck of its own. So this is the single most
+    // important place for licence coverage to be visible -- an org that
+    // copies 5,000 recordings and learns only at stream time that 900 are
+    // unlicensed has been handed a broken dataset by a successful-looking
+    // operation. Reported, never blocking: a clip whose contributor has not
+    // signed yet is legitimately worth holding.
+    const created = await this.decks.get(callerOrganizationId, newDeck.id);
+    const coverage = await this.decks.coverage(callerOrganizationId, newDeck.id);
+    return { ...created, coverage };
   }
 
   /** Queues a public deck's recordings for the caller's OWN validators -- creates ValidationQueueItem rows, never a SubscriberValidation (no scores exist yet). */
