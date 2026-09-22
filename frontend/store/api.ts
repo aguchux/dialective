@@ -2060,6 +2060,8 @@ export interface PlatformSettings {
   testimonyApprovalMonthlyLimit: number;
   testimonyTextRewardTokens: string;
   testimonyVideoRewardTokens: string;
+  vdclEnforcementEnabled: boolean;
+  vdclRetentionExemptionEnabled: boolean;
   qualityGateEnabled: boolean;
   qualityWeightConsensus: string;
   qualityWeightNoise: string;
@@ -2257,6 +2259,8 @@ export interface PlatformSettingsInput {
   testimonyApprovalMonthlyLimit?: number;
   testimonyTextRewardTokens?: number;
   testimonyVideoRewardTokens?: number;
+  vdclEnforcementEnabled?: boolean;
+  vdclRetentionExemptionEnabled?: boolean;
   qualityGateEnabled?: boolean;
   qualityWeightConsensus?: number;
   qualityWeightNoise?: number;

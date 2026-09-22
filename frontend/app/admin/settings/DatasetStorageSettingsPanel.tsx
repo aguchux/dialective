@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   normalizeErrorMessage,
+  useGetPlatformSettingsQuery,
+  useUpdatePlatformSettingsMutation,
   useCreateAudioRetentionRuleMutation,
   useDeleteAudioRetentionRuleMutation,
   useGetAdminCountriesQuery,
@@ -36,6 +38,33 @@ export function DatasetStorageSettingsPanel() {
   const [createRule, { isLoading: isCreating }] = useCreateAudioRetentionRuleMutation();
   const [updateRule] = useUpdateAudioRetentionRuleMutation();
   const [deleteRule] = useDeleteAudioRetentionRuleMutation();
+  const { data: settings } = useGetPlatformSettingsQuery();
+  const [updateSettings, { isLoading: isSavingVdcl }] = useUpdatePlatformSettingsMutation();
+
+  const [vdclEnforcement, setVdclEnforcement] = useState(false);
+  const [vdclRetentionExemption, setVdclRetentionExemption] = useState(true);
+  const [vdclMessage, setVdclMessage] = useState<string | null>(null);
+  const [vdclError, setVdclError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!settings) return;
+    setVdclEnforcement(settings.vdclEnforcementEnabled);
+    setVdclRetentionExemption(settings.vdclRetentionExemptionEnabled);
+  }, [settings]);
+
+  async function saveVdcl() {
+    setVdclMessage(null);
+    setVdclError(null);
+    try {
+      await updateSettings({
+        vdclEnforcementEnabled: vdclEnforcement,
+        vdclRetentionExemptionEnabled: vdclRetentionExemption,
+      }).unwrap();
+      setVdclMessage('Licensing settings saved.');
+    } catch (err) {
+      setVdclError(normalizeErrorMessage(err, 'Could not save licensing settings.'));
+    }
+  }
 
   const [newCountryId, setNewCountryId] = useState('');
   const [newDialectTag, setNewDialectTag] = useState('');
@@ -111,6 +140,64 @@ export function DatasetStorageSettingsPanel() {
           consensus scores, and all other dataset fields are never deleted by this feature -- they
           remain in Postgres permanently.
         </p>
+      </div>
+
+      <div className="grid gap-3 rounded-lg border border-line bg-bg p-4">
+        <div className="grid gap-1">
+          <h3 className="text-lg font-bold leading-snug">Contributor licensing (VDCL)</h3>
+          <p className="text-sm leading-relaxed text-muted">
+            Controls whether a contributor licence is required before a subscriber may stream a
+            recording, and whether licensed audio is protected from the retention rules below.
+          </p>
+        </div>
+
+        <label className="flex items-start gap-3" htmlFor="vdcl-enforcement">
+          <input
+            checked={vdclEnforcement}
+            className="mt-0.5 size-5 accent-accent"
+            id="vdcl-enforcement"
+            onChange={(event) => setVdclEnforcement(event.target.checked)}
+            type="checkbox"
+          />
+          <span>
+            <span className="block font-bold">Require a licence to stream</span>
+            <span className="mt-1 block text-sm leading-relaxed text-muted">
+              When on, a subscriber cannot stream or preview any recording not covered by an active
+              contributor licence granting their declared purpose.{' '}
+              <strong>
+                This denies everything until licence manifests exist -- do not turn it on before
+                compilation is producing them.
+              </strong>
+            </span>
+          </span>
+        </label>
+
+        <label className="flex items-start gap-3" htmlFor="vdcl-retention-exemption">
+          <input
+            checked={vdclRetentionExemption}
+            className="mt-0.5 size-5 accent-accent"
+            id="vdcl-retention-exemption"
+            onChange={(event) => setVdclRetentionExemption(event.target.checked)}
+            type="checkbox"
+          />
+          <span>
+            <span className="block font-bold">Protect licensed audio from retention</span>
+            <span className="mt-1 block text-sm leading-relaxed text-muted">
+              On by default. A signed licence says &ldquo;this manifest covers these clips, verify
+              by hash&rdquo;, so the audio behind them must not be purged by the rules below.
+              Turning this off lets retention delete licensed audio, which breaks the provenance
+              claim of any licence already issued.
+            </span>
+          </span>
+        </label>
+
+        <div className="flex items-center gap-3">
+          <ActionButton className={primaryButtonClass} disabled={isSavingVdcl} onClick={saveVdcl}>
+            {isSavingVdcl ? 'Saving...' : 'Save licensing settings'}
+          </ActionButton>
+          {vdclMessage ? <span className="text-sm text-accent">{vdclMessage}</span> : null}
+          {vdclError ? <span className="text-sm text-red-600">{vdclError}</span> : null}
+        </div>
       </div>
 
       {isLoading && <p className="text-muted">Loading...</p>}
