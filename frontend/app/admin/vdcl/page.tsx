@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { cardClass } from '@/components/dashboard/shared';
+import { alertTone, primaryButton, secondaryButton } from '@/components/vdcl/vdcl-ui';
 import {
   normalizeErrorMessage,
   useCompileVdclVersionMutation,
@@ -77,7 +78,7 @@ export default function AdminVdclPage() {
           </p>
         </div>
 
-      <div className={`${cardClass} space-y-3`}>
+      <div className={`${cardClass} space-y-3 p-5`}>
         <label className="block text-sm font-bold text-ink" htmlFor="vdcl-version-id">
           VDCL version ID
         </label>
@@ -97,6 +98,7 @@ export default function AdminVdclPage() {
               setActive(versionId.trim());
             }}
             disabled={!versionId.trim()}
+            className={primaryButton}
           >
             Inspect
           </ActionButton>
@@ -104,10 +106,10 @@ export default function AdminVdclPage() {
       </div>
 
       {error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700">{error}</p>
+        <p className={`rounded-lg px-3.5 py-3 text-sm font-bold ${alertTone.danger}`}>{error}</p>
       ) : null}
       {notice ? (
-        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700">
+        <p className={`rounded-lg px-3.5 py-3 text-sm font-bold ${alertTone.success}`}>
           {notice}
         </p>
       ) : null}
@@ -115,20 +117,26 @@ export default function AdminVdclPage() {
       {active && manifest.isLoading ? <p className="text-sm text-muted">Loading...</p> : null}
 
       {data && !data.manifest ? (
-        <div className={`${cardClass} space-y-3`}>
+        <div className={`${cardClass} space-y-3 p-5`}>
           <p className="text-sm text-muted">{data.message}</p>
           <p className="text-sm text-muted">
             Status: <span className="font-bold text-ink">{data.status}</span>
           </p>
           {job?.blockerMessage ? (
-            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-bold text-amber-800">
+            <p className={`rounded-lg px-3.5 py-3 text-sm font-bold ${alertTone.warning}`}>
               {job.blockerMessage}
               {job.failureReason ? ` (${job.failureReason})` : ''}
             </p>
           ) : null}
           {data.status === 'DRAFT' || data.status === 'PENDING_COMPILATION' ? (
-            <ActionButton onClick={handleCompile} disabled={compileState.isLoading}>
-              {compileState.isLoading ? 'Compiling...' : 'Compile now'}
+            <ActionButton
+              onClick={handleCompile}
+              disabled={compileState.isLoading}
+              pending={compileState.isLoading}
+              pendingLabel="Compiling..."
+              className={primaryButton}
+            >
+              Compile now
             </ActionButton>
           ) : null}
         </div>
@@ -136,7 +144,7 @@ export default function AdminVdclPage() {
 
       {data?.manifest ? (
         <>
-          <div className={`${cardClass} space-y-3`}>
+          <div className={`${cardClass} space-y-3 p-5`}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-base font-bold text-ink">{data.manifest.manifestKey}</h2>
               <span className="text-sm text-muted">{data.status}</span>
@@ -179,7 +187,7 @@ export default function AdminVdclPage() {
           {hashCheck.data ? (
             <div
               className={`${cardClass} ${
-                hashCheck.data.matches ? '' : 'border-red-300 bg-red-50'
+                hashCheck.data.matches ? 'border-accent/30 bg-accent-soft' : 'border-danger/40 bg-danger/10'
               }`}
             >
               <p className="text-sm font-bold text-ink">
@@ -191,7 +199,7 @@ export default function AdminVdclPage() {
                 stored {hashCheck.data.storedHash ?? 'none'}
               </p>
               {!hashCheck.data.matches ? (
-                <p className="break-all text-xs text-red-700">
+                <p className="break-all text-xs text-danger">
                   recomputed {hashCheck.data.recomputedHash} — this manifest was changed after it
                   was compiled.
                 </p>
@@ -200,9 +208,9 @@ export default function AdminVdclPage() {
           ) : null}
 
           {data.anomalies?.length ? (
-            <div className={`${cardClass} border-amber-300 bg-amber-50`}>
+            <div className={`${cardClass} border-warning/40 bg-warning/10 p-4`}>
               {data.anomalies.map((anomaly) => (
-                <p key={anomaly.kind} className="text-sm font-bold text-amber-900">
+                <p key={anomaly.kind} className="text-sm font-bold text-warning">
                   {anomaly.count} affected: {anomaly.detail}
                 </p>
               ))}
@@ -210,7 +218,7 @@ export default function AdminVdclPage() {
           ) : null}
 
           {exclusions.data ? (
-            <div className={`${cardClass} space-y-3`}>
+            <div className={`${cardClass} space-y-3 p-5`}>
               <h2 className="text-base font-bold text-ink">Why recordings were left out</h2>
               <p className="text-xs text-muted">
                 Recomputed {new Date(exclusions.data.recomputedAt).toLocaleString()} against the
@@ -231,7 +239,7 @@ export default function AdminVdclPage() {
                         <span className="text-sm font-bold text-ink">{exclusion.count}</span>
                         <span
                           className={`text-xs font-bold ${
-                            exclusion.transient ? 'text-amber-700' : 'text-muted'
+                            exclusion.transient ? 'text-warning' : 'text-muted'
                           }`}
                         >
                           {exclusion.transient ? 'resolves on its own' : 'permanent'}
@@ -257,7 +265,7 @@ export default function AdminVdclPage() {
             </div>
           ) : null}
 
-          <div className={`${cardClass} space-y-3`}>
+          <div className={`${cardClass} space-y-3 p-5`}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-base font-bold text-ink">Covered recordings</h2>
               <span className="text-sm text-muted">
@@ -294,7 +302,11 @@ export default function AdminVdclPage() {
               </table>
             </div>
             <div className="flex gap-2">
-              <ActionButton onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
+              <ActionButton
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className={secondaryButton}
+              >
                 Previous
               </ActionButton>
               <ActionButton
@@ -302,6 +314,7 @@ export default function AdminVdclPage() {
                 disabled={
                   ((data.page ?? 0) + 1) * (data.pageSize ?? 0) >= (data.totalItems ?? 0)
                 }
+                className={secondaryButton}
               >
                 Next
               </ActionButton>

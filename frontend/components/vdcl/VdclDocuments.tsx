@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { AlertCircle, FileText, Image as ImageIcon, QrCode } from 'lucide-react';
 import { cardClass } from '@/components/dashboard/shared';
 import { ActionButton } from '@/components/ui/ActionButton';
+import { alertTone, secondaryButton } from '@/components/vdcl/vdcl-ui';
 import { normalizeErrorMessage, useLazyGetVdclDocumentLinkQuery } from '@/store/api';
 
 /**
@@ -37,33 +39,56 @@ export function VdclDocuments({ versionId }: { versionId: string }) {
   }
 
   return (
-    <div className={`${cardClass} space-y-3`}>
-      <div>
-        <h2 className="text-base font-bold text-ink">Your licence documents</h2>
-        <p className="text-sm text-muted">
-          Issued once Dialect Library countersigns. Only you and Dialect Library can download
-          them.
-        </p>
-      </div>
+    <section className={`${cardClass} p-5`}>
+      <h2 className="text-lg font-black text-ink">Your licence documents</h2>
+      <p className="mt-1 text-sm leading-relaxed text-muted">
+        Issued once Dialect Library countersigns. Only you and Dialect Library can download them.
+      </p>
 
       {error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-red-700">{error}</p>
+        <p
+          className={`mt-3 flex items-start gap-2 rounded-lg px-3.5 py-3 text-sm font-bold ${alertTone.danger}`}
+        >
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          {error}
+        </p>
       ) : null}
 
-      <div className="flex flex-wrap gap-2">
-        <ActionButton onClick={() => open('pdf')} disabled={busy !== null}>
-          {busy === 'pdf' ? 'Opening...' : 'Signed licence (PDF)'}
+      <div className="mt-4 flex flex-wrap gap-2.5">
+        <ActionButton
+          onClick={() => open('pdf')}
+          disabled={busy !== null}
+          pending={busy === 'pdf'}
+          pendingLabel="Opening..."
+          className={secondaryButton}
+        >
+          <span className="inline-flex items-center gap-2">
+            <FileText className="size-4" aria-hidden="true" />
+            Signed licence (PDF)
+          </span>
         </ActionButton>
-        <ActionButton onClick={() => open('png')} disabled={busy !== null}>
-          {busy === 'png' ? 'Opening...' : 'Certificate (PNG)'}
+        <ActionButton
+          onClick={() => open('png')}
+          disabled={busy !== null}
+          pending={busy === 'png'}
+          pendingLabel="Opening..."
+          className={secondaryButton}
+        >
+          <span className="inline-flex items-center gap-2">
+            <ImageIcon className="size-4" aria-hidden="true" />
+            Certificate (PNG)
+          </span>
         </ActionButton>
       </div>
 
-      <p className="text-xs text-muted">
-        The certificate is a shareable summary and carries a QR code anyone can scan to confirm
-        the licence is genuine. Scanning it shows the licence status and dataset size — never your
-        name.
+      <p className="mt-4 flex items-start gap-2.5 rounded-lg border border-line bg-surface-muted px-3.5 py-3 text-sm leading-relaxed text-muted">
+        <QrCode className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden="true" />
+        <span>
+          The certificate is a shareable summary carrying a QR code anyone can scan to confirm the
+          licence is genuine. Scanning it shows the licence status and dataset size —{' '}
+          <strong className="font-bold text-ink">never your name</strong>.
+        </span>
       </p>
-    </div>
+    </section>
   );
 }
