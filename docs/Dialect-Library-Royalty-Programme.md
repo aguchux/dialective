@@ -57,6 +57,18 @@ earns = VDCL-certified  ∧  published to market  ∧  in a subscriber's deck  �
 
 Deck membership is a **precondition**. Streaming is the **measure**.
 
+### Neither side sees the other
+
+A subscriber never learns who made a recording; a contributor never learns
+which organisation streamed it. **Dialect Library is the counterparty to
+both** and the only party that sees both halves — it collects from
+subscribers and pays contributors, and neither transacts with the other.
+
+This is structural, not cosmetic: symmetric blindness is what makes the
+platform the necessary intermediary rather than an optional broker, and it
+is the constraint most likely to be breached by a royalty feature, since
+royalties are inherently about who paid whom. See §4.
+
 ---
 
 ## 1. Why this is a separate system
@@ -136,19 +148,33 @@ already owed** and are paid in the next settlement. Earned is earned.
 
 ---
 
-## 4. Contributor anonymity is absolute
+## 4. Anonymity is mutual, and Dialect Library sits in the middle
 
 > "Subscribers know no user/contributor, they only know recordings and
 > recordings belong to user/contributors — recording owners are hidden 100%
 > from subscribers. Only VDCL is verifiable by subscribers when they must"
+>
+> "Just as the subscriber does not know the contributor, the contributor
+> does not know the subscriber. The DL company sits in the middle."
 
-**A subscriber never learns who made a recording.** They see recordings,
-their metadata, their quality scores and their licence status. They never
-see a contributor's identity, and they must never be able to derive it.
+**Neither side sees the other.** A subscriber never learns who made a
+recording; a contributor never learns which organisation streamed it.
+Dialect Library is the counterparty to both, and the only party that sees
+both halves.
 
 This is a hard boundary, not a default. Every feature in this programme is
 subject to it, and the royalty system is the one most likely to breach it
-by accident — because royalties are inherently about *who earned what*.
+by accident — because royalties are inherently about *who paid whom for
+what*.
+
+**Why it is mutual, not merely polite.** A contributor who knows which
+organisation streams them has something to sell, and a channel to sell it
+through: the licensing relationship the platform exists to intermediate
+could be taken off-platform by either side. Symmetric blindness is what
+makes Dialect Library the necessary counterparty rather than an optional
+broker. It also protects contributors from pressure — nobody can approach
+a contributor about what a named customer wants if no contributor knows a
+customer's name.
 
 ### 4.1 What a subscriber may see
 
@@ -226,19 +252,52 @@ agreement — returning an agreement's full manifest to a subscriber would
 hand them the complete set of one contributor's recordings, which is the
 correlation leak in its purest form.
 
-### 4.4 Consequences for royalty features
+### 4.4 What a contributor may see
+
+The mirror of §4.1. A contributor sees **their own work and their own
+earnings**, aggregated — never the identity of who consumed it.
+
+| | Visible to contributor |
+|---|---|
+| Their own recordings, scores, transcripts | Yes |
+| Their own published decks | Yes |
+| Total streams of their recordings, per period | Yes |
+| Streams broken down **per recording** | Yes |
+| Their royalty balance, accrued and estimated | Yes |
+| **Which organisation streamed them** | **Never** |
+| Organisation name, id, industry, size | **Never** |
+| How many distinct organisations streamed them | **Suppressed on small counts** — see below |
+| What an organisation paid, or its plan | **Never** |
+
+**This corrects an earlier draft of this document**, which said a
+contributor seeing "which subscriber organisations streamed them" was
+acceptable because knowing your customer differs from a customer knowing
+their supplier. That reasoning was wrong: it is exactly the asymmetry the
+platform must not create, and it would let a contributor identify and
+approach a paying organisation directly.
+
+### 4.5 Consequences for royalty features
 
 - **Usage reporting to subscribers** stays per-recording and per-deck.
   Never "top earning contributors," never a breakdown by owner.
-- **`RecordingUsageMonth.contributorId`** (§5.2 below) is internal accounting
-  only. It exists so a royalty can be attributed and paid; it must never
-  reach a subscriber-facing endpoint, and the field's presence in the model
-  is not permission to select it in a subscriber query.
-- **The contributor dashboard** (§9) shows a contributor their own usage,
-  including which subscriber organisations streamed them. That direction is
-  fine — the contributor knowing their customer is not the same as the
-  customer knowing their supplier. If that asymmetry is itself unwanted,
-  it is a separate product decision, but it does not breach this boundary.
+- **`RecordingUsageMonth.contributorId` and `.organizationId`** (§5.2) are
+  **internal accounting only**. Each is invisible to the other side: a
+  subscriber query must never select `contributorId`, and a contributor
+  query must never select or group by `organizationId`. A field existing
+  in the model is not permission to expose it in either direction.
+- **`ROYALTY_ACCRUAL` ledger rows carry `organizationId`** so settlement
+  is auditable and a refund can be traced to its pool. That column is
+  **admin-only**. The contributor's own view of their ledger must
+  aggregate accruals for a period into one figure rather than listing one
+  row per organisation, because a row count alone tells them how many
+  customers they have, and amounts per row start to characterise those
+  customers.
+- **Distinct-organisation counts are suppressed on small numbers**, for
+  the same reason `contributingAgreements` is on the other side (§4.2).
+  "Streamed by 1 organisation" plus a dialect is a narrow field.
+- **Contributor support and dispute flows** run through Dialect Library.
+  A contributor querying their royalties talks to DL, never to the
+  organisation whose usage produced them.
 
 ---
 
@@ -438,9 +497,14 @@ subscription period ends
         → Wallet.royaltyBalance += share
 ```
 
-One `ROYALTY_ACCRUAL` row **per contributor per subscriber pool**, so a
-contributor can see exactly which subscriber's usage earned them what —
-not one opaque monthly figure.
+One `ROYALTY_ACCRUAL` row **per contributor per subscriber pool**, so
+settlement is auditable and a later refund can be traced back to the exact
+pool it came from.
+
+**That row's `organizationId` is admin-only.** The contributor's own view
+aggregates a period's accruals into a single figure — listing one row per
+organisation would tell them how many customers they have, and the amounts
+would begin to characterise those customers. See §4.4.
 
 ### 7.2 Rounding
 

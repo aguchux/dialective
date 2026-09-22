@@ -35,8 +35,14 @@ export class CoverageNotifierService {
    * organizations, since their recordings may have been copied into private
    * decks by anyone who licensed them. Each affected org gets one event per
    * deck, carrying how many items changed -- enough to act on without
-   * exposing which contributor withdrew, which is not the subscriber's
-   * business.
+   * exposing which contributor withdrew.
+   *
+   * Anonymity here is MUTUAL and Dialect Library sits in the middle: a
+   * subscriber never learns who made a recording, and a contributor never
+   * learns which organization streamed it. This event runs org-ward only --
+   * it tells an org about its OWN deck. There must be no contributor-facing
+   * mirror of it naming the organizations affected by their withdrawal,
+   * since that would hand a contributor the identity of a paying customer.
    */
   async notifyCoverageChange(params: {
     recordingIds: string[];
