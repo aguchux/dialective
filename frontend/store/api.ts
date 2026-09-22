@@ -2045,6 +2045,8 @@ export interface PlatformSettings {
   keyboardLayoutMaxLength: number;
   submissionRateLimitEnabled: boolean;
   submissionRateLimitPerHour: number;
+  submissionDailyLimitEnabled: boolean;
+  submissionDailyLimitPerDay: number;
   qracEnabled: boolean;
   qracRequiredAtSessionStart: boolean;
   qracIntervalMinutes: number;
@@ -2240,6 +2242,8 @@ export interface PlatformSettingsInput {
   keyboardLayoutMaxLength?: number;
   submissionRateLimitEnabled?: boolean;
   submissionRateLimitPerHour?: number;
+  submissionDailyLimitEnabled?: boolean;
+  submissionDailyLimitPerDay?: number;
   qracEnabled?: boolean;
   qracRequiredAtSessionStart?: boolean;
   qracIntervalMinutes?: number;

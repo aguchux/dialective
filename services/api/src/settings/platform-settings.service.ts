@@ -195,6 +195,22 @@ export class PlatformSettingsService {
     return row.submissionRateLimitPerHour;
   }
 
+  /**
+   * The daily cap's toggle and limit in ONE fresh read. The hourly pair
+   * above deliberately costs two uncached round-trips per request; there
+   * is no reason to repeat that for the daily guard, which needs both
+   * values together on every call. Fresh rather than cached for the same
+   * reason as the hourly pair: an admin tightening the cap during a
+   * minting spike should take effect immediately, not after ROW_CACHE_TTL_MS.
+   */
+  async getSubmissionDailyLimit(): Promise<{ enabled: boolean; perDay: number }> {
+    const row = await this.fetchRow();
+    return {
+      enabled: row.submissionDailyLimitEnabled,
+      perDay: row.submissionDailyLimitPerDay,
+    };
+  }
+
   async getTrainingPayoutBonusCapMultiple(): Promise<number> {
     const row = await this.getRow();
     if (row.trainingPayoutBonusCapMultiple) {
@@ -1225,6 +1241,8 @@ export class PlatformSettingsService {
       keyboardLayoutMaxLength: row.keyboardLayoutMaxLength,
       submissionRateLimitEnabled: row.submissionRateLimitEnabled,
       submissionRateLimitPerHour: row.submissionRateLimitPerHour,
+      submissionDailyLimitEnabled: row.submissionDailyLimitEnabled,
+      submissionDailyLimitPerDay: row.submissionDailyLimitPerDay,
       qracEnabled: row.qracEnabled,
       qracRequiredAtSessionStart: row.qracRequiredAtSessionStart,
       qracIntervalMinutes: row.qracIntervalMinutes,
@@ -1475,6 +1493,8 @@ export class PlatformSettingsService {
     keyboardLayoutMaxLength?: number;
     submissionRateLimitEnabled?: boolean;
     submissionRateLimitPerHour?: number;
+    submissionDailyLimitEnabled?: boolean;
+    submissionDailyLimitPerDay?: number;
     qracEnabled?: boolean;
     qracRequiredAtSessionStart?: boolean;
     qracIntervalMinutes?: number;
@@ -2225,6 +2245,8 @@ export class PlatformSettingsService {
       keyboardLayoutMaxLength: row.keyboardLayoutMaxLength,
       submissionRateLimitEnabled: row.submissionRateLimitEnabled,
       submissionRateLimitPerHour: row.submissionRateLimitPerHour,
+      submissionDailyLimitEnabled: row.submissionDailyLimitEnabled,
+      submissionDailyLimitPerDay: row.submissionDailyLimitPerDay,
       qracEnabled: row.qracEnabled,
       qracRequiredAtSessionStart: row.qracRequiredAtSessionStart,
       qracIntervalMinutes: row.qracIntervalMinutes,

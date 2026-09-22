@@ -9,6 +9,7 @@ import { AsrRegistryModule } from '../asr-registry/asr-registry.module';
 import { MailModule } from '../mail/mail.module';
 import { SmsModule } from '../sms/sms.module';
 import { WordsService } from './words.service';
+import { SubmissionDailyLimitGuard } from '../common/guards/submission-daily-limit.guard';
 import { SubmissionRateLimitGuard } from '../common/guards/submission-rate-limit.guard';
 
 @Module({
@@ -23,6 +24,6 @@ import { SubmissionRateLimitGuard } from '../common/guards/submission-rate-limit
     SmsModule,
   ],
   controllers: [WordsController],
-  providers: [WordsService, SubmissionRateLimitGuard],
+  providers: [WordsService, SubmissionRateLimitGuard, SubmissionDailyLimitGuard],
 })
 export class WordsModule {}

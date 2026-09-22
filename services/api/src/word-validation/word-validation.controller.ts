@@ -4,6 +4,7 @@ import { Role } from '@dialectiva/db';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { SubmissionDailyLimitGuard } from '../common/guards/submission-daily-limit.guard';
 import { SubmissionRateLimitGuard } from '../common/guards/submission-rate-limit.guard';
 import { WordValidationService } from './word-validation.service';
 import { SubmitWordValidationDto } from './dto/submit-word-validation.dto';
@@ -20,7 +21,7 @@ export class WordValidationController {
   }
 
   @Post('submit')
-  @UseGuards(SubmissionRateLimitGuard)
+  @UseGuards(SubmissionRateLimitGuard, SubmissionDailyLimitGuard)
   @Throttle({ default: { limit: 300, ttl: 60 * 60 * 1000 } })
   submit(@Req() req: AuthenticatedRequest, @Body() body: SubmitWordValidationDto) {
     return this.wordValidation.submit(req.user.sub, body);

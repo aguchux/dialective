@@ -433,6 +433,16 @@ export class UpdatePlatformSettingsDto {
 
   @IsOptional()
   @IsBoolean()
+  submissionDailyLimitEnabled?: boolean;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100000)
+  submissionDailyLimitPerDay?: number;
+
+  @IsOptional()
+  @IsBoolean()
   qracEnabled?: boolean;
 
   @IsOptional()

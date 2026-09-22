@@ -16,6 +16,7 @@ import { Role } from '@dialectiva/db';
 import { AuthenticatedRequest, JwtAuthGuard } from '../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { SubmissionDailyLimitGuard } from '../common/guards/submission-daily-limit.guard';
 import { SubmissionRateLimitGuard } from '../common/guards/submission-rate-limit.guard';
 import { SetDisabledDto } from '../words/dto/set-disabled.dto';
 import { DomainConversationsService } from './domain-conversations.service';
@@ -50,7 +51,7 @@ export class DomainConversationsController {
   }
 
   @Post('recordings')
-  @UseGuards(SubmissionRateLimitGuard)
+  @UseGuards(SubmissionRateLimitGuard, SubmissionDailyLimitGuard)
   @Throttle({ default: { limit: 120, ttl: 60 * 60 * 1000 } })
   createRecording(
     @Req() req: AuthenticatedRequest,

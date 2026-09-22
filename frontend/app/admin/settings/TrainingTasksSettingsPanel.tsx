@@ -19,6 +19,8 @@ export function TrainingTasksSettingsPanel() {
   const [auditHoldEveryN, setAuditHoldEveryN] = useState('500');
   const [submissionRateLimitEnabled, setSubmissionRateLimitEnabled] = useState(false);
   const [submissionRateLimitPerHour, setSubmissionRateLimitPerHour] = useState('120');
+  const [submissionDailyLimitEnabled, setSubmissionDailyLimitEnabled] = useState(false);
+  const [submissionDailyLimitPerDay, setSubmissionDailyLimitPerDay] = useState('200');
   const [wordTrainingEnabled, setWordTrainingEnabled] = useState(true);
   const [sentenceTrainingEnabled, setSentenceTrainingEnabled] = useState(true);
   const [reverseWordTrainingEnabled, setReverseWordTrainingEnabled] = useState(false);
@@ -36,6 +38,8 @@ export function TrainingTasksSettingsPanel() {
     setAuditHoldEveryN(String(platformSettings.auditHoldEveryNSubmissions));
     setSubmissionRateLimitEnabled(platformSettings.submissionRateLimitEnabled);
     setSubmissionRateLimitPerHour(String(platformSettings.submissionRateLimitPerHour));
+    setSubmissionDailyLimitEnabled(platformSettings.submissionDailyLimitEnabled);
+    setSubmissionDailyLimitPerDay(String(platformSettings.submissionDailyLimitPerDay));
     setWordTrainingEnabled(platformSettings.wordTrainingEnabled);
     setSentenceTrainingEnabled(platformSettings.sentenceTrainingEnabled);
     setReverseWordTrainingEnabled(platformSettings.reverseWordTrainingEnabled);
@@ -53,6 +57,8 @@ export function TrainingTasksSettingsPanel() {
         auditHoldEveryNSubmissions: Number(auditHoldEveryN),
         submissionRateLimitEnabled,
         submissionRateLimitPerHour: Number(submissionRateLimitPerHour),
+        submissionDailyLimitEnabled,
+        submissionDailyLimitPerDay: Number(submissionDailyLimitPerDay),
         wordTrainingEnabled,
         sentenceTrainingEnabled,
         reverseWordTrainingEnabled,
@@ -263,6 +269,43 @@ export function TrainingTasksSettingsPanel() {
               max="100000"
               value={submissionRateLimitPerHour}
               onChange={(e) => setSubmissionRateLimitPerHour(e.target.value)}
+              required
+            />
+
+            <label
+              className="flex cursor-pointer items-start gap-3 rounded-lg border border-line bg-surface-muted p-4"
+              htmlFor="submission-daily-limit-enabled"
+            >
+              <input
+                checked={submissionDailyLimitEnabled}
+                className="mt-0.5 size-5 accent-accent"
+                id="submission-daily-limit-enabled"
+                onChange={(event) => setSubmissionDailyLimitEnabled(event.target.checked)}
+                type="checkbox"
+              />
+              <span>
+                <span className="block font-bold">Enable daily submission cap</span>
+                <span className="mt-1 block text-sm leading-relaxed text-muted">
+                  Independent of the hourly limit above -- you can run either, both, or neither.
+                  The hourly limit stops a burst; this one caps a whole day, which is what governs
+                  how fast DL is minted. Counted over a rolling 24 hours from actual recordings, so
+                  it survives a restart and a trainer cannot reset it at midnight.
+                </span>
+              </span>
+            </label>
+
+            <label htmlFor="submission-daily-limit-per-day">
+              Max submissions per trainer per day
+            </label>
+            <input
+              className={`${inputClass} max-w-40`}
+              id="submission-daily-limit-per-day"
+              type="number"
+              step="1"
+              min="1"
+              max="100000"
+              value={submissionDailyLimitPerDay}
+              onChange={(e) => setSubmissionDailyLimitPerDay(e.target.value)}
               required
             />
           </div>
