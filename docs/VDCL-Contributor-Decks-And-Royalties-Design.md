@@ -10,11 +10,11 @@
 > each subscriber's payment is shared only among the contributors *that
 > subscriber* streamed. It also framed royalties as changing what a VDCL
 > is; they do not. A VDCL stays a licence and gains a policy provision
-> establishing eligibility. It also described royalties as minting DL
-> against subscription revenue; they do **not** — royalties are **real
-> money**, held in a fiat balance and paid to a bank account, never DL and
-> never touching the tokenomics reserve. **§2 (contributor-owned decks) and
-> §3 (usage attribution) remain current.**
+> establishing eligibility. Royalties **are** paid in DL, minted against
+> collected subscription revenue with that revenue in the reserve — but on
+> a separate, withdraw-only `royaltyBalance`, not the spendable wallet
+> balance this document assumed. **§2 (contributor-owned decks) and §3
+> (usage attribution) remain current.**
 
 ---
 

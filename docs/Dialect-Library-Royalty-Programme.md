@@ -189,104 +189,121 @@ accounting is fixed. Count is exact and not gameable the same way.
 
 ---
 
-## 5. Royalties are real money, not DL
+## 5. Royalties are DL, on their own track
 
-**This is the single most important property of the programme.**
-
-Royalties are denominated and held in **fiat**, accrued against real
-subscription revenue, and paid out to a **bank account**. They never touch
-the DL token wallet, never mint DL, and never interact with the reserve.
+Royalties are paid in **DL**, the same unit as every other payout on the
+platform — but they are held on a **separate, withdraw-only track** from
+ordinary wallet DL.
 
 | | Per-recording payout (today) | Royalty (this programme) |
 |---|---|---|
-| Unit | DL token | Fiat (USD, paid in local currency) |
-| Held in | `Wallet.balance` | `RoyaltyBalance` — separate |
-| Backed by | Tokenomics reserve | Actual collected subscription revenue |
-| Paid out via | Wallet withdrawal → payout rails | Royalty payout → payout rails |
-| Ledger | `LedgerEntry` | `RoyaltyLedgerEntry` — separate |
+| Unit | DL | **DL** |
+| Held in | `Wallet.balance` | `Wallet.royaltyBalance` |
+| Spendable on tasks / P2P | Yes | **No** |
+| Withdrawable | Yes | Yes, via its own path |
+| Backed by | Tokenomics reserve | Tokenomics reserve, funded by subscription revenue |
+| Ledger | `LedgerEntry` | `LedgerEntry`, royalty-typed |
 
-This removes the largest risk in the previous draft. A DL-denominated
-royalty would have been a **reserve-backed mint** against subscription
-revenue, requiring `TokenomicsService` integration and carrying a real
-danger of silently diluting token backing if the reserve transaction ever
-diverged from the credit. Fiat royalties have no such coupling: money in
-from Stripe, money out to a bank, with an auditable balance between.
+### 5.1 Why a separate balance rather than a tag
 
-**The two economies stay separate and must not be bridged.** No conversion
-between a royalty balance and DL in either direction, unless that is
-explicitly designed later as its own feature with its own reserve
-accounting.
+A dedicated payout path needs a dedicated balance to pay *from*. If royalty
+DL merged into `balance`, "pay only royalties" would be unanswerable — the
+DL would be fungible the moment it landed, and any figure claiming to be a
+royalty total would be a historical sum, not a payable amount.
 
-### 5.1 Balance and ledger
+Keeping it separate means:
+
+- **The two income streams never blur.** A contributor can always see what
+  they earned by contributing versus what they earned by licensing.
+- **Royalty DL cannot be consumed by task stakes.** `TASK_LOCK` moves
+  `balance → lockedBalance` and never touches `royaltyBalance`, so a
+  contributor cannot accidentally spend their royalties on training tasks.
+- **Withdrawal is unambiguous.** A royalty withdrawal debits
+  `royaltyBalance`; a wallet withdrawal debits `balance`. No shared pool to
+  race over.
+
+`Wallet` already carries two balances (`balance`, `lockedBalance`), so this
+is a third column on an established pattern, not a new concept.
 
 ```prisma
-/// A contributor's accrued, unpaid royalty balance, in fiat minor units
-/// (cents). Deliberately NOT the DL Wallet: royalties are real money from
-/// real subscription revenue, and mixing them with a reserve-backed token
-/// balance would make both harder to audit and risk implying convertibility
-/// that does not exist.
-model RoyaltyBalance {
-  id            String   @id @default(uuid())
-  contributorId String   @unique
-  contributor   User     @relation(fields: [contributorId], references: [id], onDelete: Cascade)
-  /// Minor units (cents). Integer, never float -- money.
-  accruedMinor  BigInt   @default(0)
-  paidMinor     BigInt   @default(0)
-  currency      String   @default("USD")
-  updatedAt     DateTime @updatedAt
-
-  entries RoyaltyLedgerEntry[]
-  @@map("royalty_balances")
-}
-
-/// Append-only, one row per balance change. Same discipline as LedgerEntry:
-/// never updated, never deleted, a correction is a compensating entry.
-model RoyaltyLedgerEntry {
-  id            String             @id @default(uuid())
-  balanceId     String
-  balance       RoyaltyBalance     @relation(fields: [balanceId], references: [id], onDelete: Cascade)
-  type          RoyaltyEntryType
-  /// Signed minor units: positive accrual, negative payout.
-  amountMinor   BigInt
-  currency      String             @default("USD")
-  /// Which month this accrual is for. Null on payouts.
-  periodStart   DateTime?
-  /// Which subscriber's pool it came from. Null on payouts, which aggregate.
-  organizationId String?
-  reference     String?
-  createdAt     DateTime           @default(now())
-
-  @@index([balanceId, createdAt])
-  @@index([periodStart])
-  @@map("royalty_ledger_entries")
-}
-
-enum RoyaltyEntryType {
-  ACCRUAL // monthly earning from one subscriber's pool
-  PAYOUT // paid out to a bank account
-  PAYOUT_REVERSED // a failed payout returned to the balance
-  ADJUSTMENT // admin correction, always compensating
+model Wallet {
+  balance       Decimal @default(0) @db.Decimal(20, 8) // spendable
+  lockedBalance Decimal @default(0) @db.Decimal(20, 8) // held pending a submission's outcome
+  /// Royalty earnings from the Royalty Programme. Deliberately NOT
+  /// spendable: it funds withdrawals only, never task stakes or P2P
+  /// escrow, so the money a contributor earned by LICENSING their work
+  /// stays distinguishable from what they earned by CONTRIBUTING it.
+  /// Credited only by royalty settlement, debited only by royalty
+  /// withdrawal.
+  royaltyBalance Decimal @default(0) @db.Decimal(20, 8)
 }
 ```
 
-### 5.2 Estimated on the go
+### 5.2 Ledger entries
+
+No separate ledger table — `LedgerEntry` is already the one honest record of
+every DL movement, and splitting it would mean two places to look for the
+truth about a wallet. New types instead:
+
+```prisma
+enum LedgerEntryType {
+  // ...
+  ROYALTY_ACCRUAL // positive, credits royaltyBalance at settlement
+  ROYALTY_WITHDRAWAL // negative, debits royaltyBalance on payout request
+  ROYALTY_WITHDRAWAL_REVERSED // positive, returns a failed/rejected payout
+  ROYALTY_ADJUSTMENT // signed admin correction, always compensating
+}
+```
+
+Existing consumers that sum `LedgerEntry` to reason about `balance` must be
+audited: a royalty entry moves `royaltyBalance`, not `balance`, and any
+code assuming every entry affects the spendable balance would be wrong.
+**This is the main integration risk of reusing the table** and is worth the
+audit, because the alternative — a second ledger — is worse.
+
+### 5.3 The reserve question, and why this shape is right
+
+Paying royalties in DL means **minting DL against subscription revenue**.
+That revenue is real money coming in, so it must land in the reserve
+exactly as a confirmed deposit does. Otherwise the platform issues tokens
+with nothing behind them and silently dilutes backing.
+
+This is the *correct* shape, and cleaner than a fiat alternative:
+
+- `ReserveTransaction` already models "real money in → DL minted."
+- `ConfirmedNowPaymentsReserveInput` and `ConfirmedFlutterwaveReserveInput`
+  are the existing precedent; a royalty mint is a third input of the same
+  kind.
+- The reserve inflow (subscription revenue) and the mint (royalty accrual)
+  are **one event**, settled together in one transaction, rather than two
+  loosely-coupled ones that could drift.
+
+**Consequence worth stating:** royalty DL is backed by revenue the platform
+genuinely collected, so it is as solvent as any deposited DL. It also
+avoids the money-transmission and safeguarding questions that holding
+contributors' fiat would have raised.
+
+The mint must flow through `TokenomicsService`, never by writing a wallet
+balance directly. **This is the part that most needs review before
+implementation.**
+
+### 5.4 Estimated on the go
 
 > "they hold real money calculated by subscription end, and estimated on
 > the go at any time"
 
 Two distinct numbers, and the UI must never confuse them:
 
-- **Accrued** — settled, final, owed. Written at period end from collected
-  revenue.
-- **Estimated** — the current month in progress. Computed live from
-  `RecordingUsageMonth` so far, against the subscriber's *expected* revenue
-  for the period.
+- **Accrued** — settled, final, in `royaltyBalance`. Written at period end
+  from collected revenue.
+- **Estimated** — the current period in progress. Computed live from
+  `RecordingUsageMonth` so far, against the subscriber's expected revenue.
 
 An estimate is **not a liability**. It moves as other contributors' usage
 accumulates: a contributor holding 60% of usage on day 3 may hold 20% by
 day 30 without their own streams changing at all, because the denominator
-grew. The dashboard must label it as provisional and say plainly that it
-can go down as well as up.
+grew. The dashboard must label it provisional and say plainly that it can
+go down as well as up.
 
 Estimates are computed on read, never stored — a stored estimate becomes a
 stale promise.
@@ -305,79 +322,102 @@ image as a CronJob, not a new service.
 subscription period ends
   → aggregate StreamAccessLog → RecordingUsageMonth (allowed rows only)
   → FOR EACH subscriber with COLLECTED revenue in the period:
-      pool = that subscriber's collected revenue × royaltySharePercent
+      pool_usd = that subscriber's collected revenue × royaltySharePercent
+      pool_dl  = pool_usd ÷ TOKEN_USD_RATE
+      record the reserve inflow for pool_usd
       FOR EACH contributor that subscriber streamed:
-        share = pool × (their streams ÷ that subscriber's total streams)
-        → RoyaltyLedgerEntry(ACCRUAL, +share, period, organizationId)
-  → each contributor's RoyaltyBalance.accruedMinor increases by their total
+        share = pool_dl × (their streams ÷ that subscriber's total streams)
+        → mint via TokenomicsService
+        → LedgerEntry(ROYALTY_ACCRUAL, +share)
+        → Wallet.royaltyBalance += share
 ```
 
-One `ACCRUAL` row **per contributor per subscriber pool**, so the
-contributor can see exactly where the money came from — not one opaque
-monthly figure.
+One `ROYALTY_ACCRUAL` row **per contributor per subscriber pool**, so a
+contributor can see exactly which subscriber's usage earned them what —
+not one opaque monthly figure.
 
 ### 6.2 Rounding
 
-Money in minor units, integer arithmetic. A pool rarely divides evenly, so
-the remainder must go somewhere deterministic rather than vanishing.
-**Recommendation:** allocate the remainder to the largest-share contributor,
-and assert that the sum of allocations equals the pool exactly. A
-settlement that does not balance should fail loudly, not silently lose
-cents.
+DL is `Decimal(20,8)`, so rounding is far less lossy than fiat minor units
+— but a pool still rarely divides evenly. Allocate the remainder
+deterministically to the largest-share contributor, and **assert the sum of
+allocations equals the pool exactly**. A settlement that does not balance
+should fail loudly rather than quietly mint a different amount than the
+reserve received.
 
 ### 6.3 Revenue basis: collected, not billed
 
 Pool is computed from **collected** revenue. A failed, refunded or
-charged-back payment must never generate a royalty — the platform would be
-paying out money it never received. Stripe payment state is the source, not
+charged-back payment must never generate a royalty — the platform would
+mint DL against money it never received, which is precisely the dilution
+the reserve exists to prevent. Stripe payment state is the source, not
 `SubscriptionPlan.monthlyUsdAmount` alone.
 
 **A refund after accrual is the hard case.** Recommendation: a negative
-`ADJUSTMENT` against the next period rather than clawing back a paid
-balance, with a floor at zero so a contributor is never driven negative by
-someone else's chargeback.
+`ROYALTY_ADJUSTMENT` against the next period rather than clawing back an
+already-withdrawn balance, floored at zero so a contributor is never driven
+negative by someone else's chargeback. The corresponding reserve
+transaction must be reversed too, or backing drifts.
 
 ### 6.4 Settlement discipline
 
+Identical to every other balance mutation in this repo:
+
 - **Idempotency is mandatory.** A settlement row per (period, subscriber),
   claimed atomically before any accrual is written, so a re-run cannot
-  double-accrue. **The highest-risk detail in the design.**
-- Balance update and ledger entry in **one** `$transaction`.
-- Append-only; corrections are compensating entries.
-- These are the same invariants the wallet ledger already enforces — the
-  currency differs, the discipline does not.
+  double-mint. **The highest-risk detail in the design.**
+- Balance update, ledger entry and token operation in **one**
+  `$transaction`.
+- Append-only; corrections are compensating entries, never updates.
 
 ---
 
 ## 7. Payout
 
-### 7.1 Rails already exist
+### 7.1 Its own request, the same rails
 
 `PayoutAccount` (bank via Flutterwave, mobile money, Stripe Connect) is
-already built, keyed to `User`, with encrypted account numbers, provider
-recipient ids, and verification state. **A contributor receiving royalties
-is the same `User` who already withdraws DL**, so the same payout account
+already built and keyed to `User`. **A contributor receiving royalties is
+the same `User` who already withdraws DL**, so the same payout account
 serves both.
 
-What must **not** happen is royalties borrowing the DL withdrawal path.
-`WithdrawalRequest` debits `Wallet.balance` and writes a `LedgerEntry`;
-a royalty payout debits `RoyaltyBalance` and writes a
-`RoyaltyLedgerEntry`. Separate request model, same rails underneath.
+What must **not** happen is royalties borrowing `WithdrawalRequest`. That
+model debits `Wallet.balance` and writes a `WITHDRAWAL` entry; a royalty
+payout debits `royaltyBalance` and writes `ROYALTY_WITHDRAWAL`. A separate
+request model, the same provider rails underneath.
+
+The atomic-guard discipline carries over exactly:
+
+```ts
+wallet.updateMany({
+  where: { id, royaltyBalance: { gte: amount } },
+  data: { royaltyBalance: { decrement: amount } },
+});
+```
+
+Never read-then-compare-then-update, so two concurrent requests cannot both
+pass a check taken before either debit lands.
 
 ### 7.2 Gating
 
-- **KYC** — the existing threshold gate applies. A royalty payout is a
-  fiat payout like any other.
-- **Minimum payout** — a `royaltyMinimumPayoutMinor` setting, below which
-  the balance rolls forward. Necessary: a $0.40 bank transfer costs more to
-  send than it is worth.
+- **KYC** — the existing threshold gate applies; a royalty payout is a
+  payout like any other.
+- **Minimum payout** — `royaltyMinimumPayout` setting, below which the
+  balance rolls forward. A trivial transfer costs more to send than it is
+  worth.
 - **OTP** — same step-up as wallet withdrawals. Fund-moving is fund-moving.
 
-### 7.3 Currency
+### 7.3 Settings
 
-Balances accrue in **USD** (subscription revenue's currency). Payout
-converts at the existing `Country.usdExchangeRate` used elsewhere, so a
-contributor sees a local-currency amount at the point of withdrawal.
+| Setting | Default | Purpose |
+|---|---|---|
+| `royaltiesEnabled` | `false` | Master switch |
+| `royaltySharePercent` | `30.00` | Contributor share of subscription revenue |
+| `royaltyMinimumPayout` | — | DL floor below which balance rolls forward |
+
+`royaltySharePercent` is global and current — the rate at settlement time,
+not one snapshotted per agreement. The VDCL states that a rate exists and
+is platform-set; it does not guarantee a number.
 
 ---
 
@@ -455,13 +495,15 @@ That subscriber streamed 10,000 times across 3 contributors:
 
 | Contributor | Streams | Share | Accrues |
 |---|---|---|---|
-| A | 6,000 | 60% | $7.02 |
-| B | 3,000 | 30% | $3.51 |
-| C | 1,000 | 10% | $1.17 |
+| A | 6,000 | 60% | $7.02 worth of DL |
+| B | 3,000 | 30% | $3.51 worth of DL |
+| C | 1,000 | 10% | $1.17 worth of DL |
 
-A contributor streamed by a second subscriber accrues from that pool too,
-independently. Their `RoyaltyBalance` is the sum, carried forward until it
-clears the minimum payout.
+The pool converts to DL at `TOKEN_USD_RATE`, and the $39 collected lands in
+the reserve backing that mint. A contributor streamed by a second
+subscriber accrues from that pool too, independently. Their
+`Wallet.royaltyBalance` is the sum, carried forward until it clears the
+minimum payout.
 
 **On scale.** With one subscriber the pool is small, and the programme only
 becomes meaningful as subscriber count grows. That is correct behaviour for
@@ -481,8 +523,10 @@ clause in a licence, not a change to what the licence is:
 2. **Nature of the payment** — consideration for the distribution right
    granted by the licence. **Not** additional payment for the recording,
    which is separately and already compensated in DL.
-3. **Currency** — royalties are **real money**, accrued in USD and paid to
-   a bank account. They are not DL and are not convertible to DL.
+3. **Unit** — royalties are paid in **DL**, computed from a share of
+   subscription revenue and held on a separate, withdraw-only balance.
+   Royalty DL is not spendable on platform activity; it funds withdrawals
+   only.
 4. **Rate** — platform-set, applies as at settlement, may change. The
    licence states that a rate exists, not what it is.
 5. **Measure** — by streams, per subscriber, pro-rata. Deck membership
@@ -497,12 +541,17 @@ clause in a licence, not a change to what the licence is:
 
 **Open questions for legal:**
 
-- Does holding accrued fiat on behalf of contributors create a
-  money-transmission or safeguarding obligation in the operating
-  jurisdiction? This is a materially different question from holding DL,
-  and it is the main new legal exposure the fiat model introduces.
 - Tax treatment and reporting for contributor royalty income across
-  jurisdictions.
+  jurisdictions, given it is denominated in DL rather than paid directly in
+  fiat.
+- Whether describing a DL-denominated share of revenue as a "royalty"
+  carries any regulatory meaning in the operating jurisdiction that a
+  token-denominated incentive would not.
+
+Note the fiat alternative was considered and rejected: holding accrued
+**fiat** on contributors' behalf would likely create money-transmission or
+safeguarding obligations. Minting DL against collected revenue, with that
+revenue in the reserve, avoids that while keeping the payout fully backed.
 
 ---
 
@@ -512,8 +561,8 @@ clause in a licence, not a change to what the licence is:
 |---|---|---|
 | **A** | Contributor decks + publishing to market | VDCL Phase 2 (manifests) |
 | **B** | `RecordingUsageMonth` aggregation + live estimates | Real streaming traffic |
-| **C** | Accrual settlement (fiat balance + ledger) | §10 settled; B has run a month |
-| **D** | Royalty payout to bank | C; KYC gate; minimum threshold |
+| **C** | Accrual settlement (royaltyBalance + mint + reserve) | §10 settled; B has run a month |
+| **D** | Royalty withdrawal (own request model, existing rails) | C; KYC gate; minimum threshold |
 | **E** | Contributor Stream dashboard + VDCL invite | §8.1 decided |
 
 **A is safe to build now** once Phase 2 lands — product work, no financial
@@ -523,9 +572,10 @@ surface.
 numbers nobody is paid from. A split rule that has never been computed
 against real usage should not first be computed with money attached.
 
-**C and D are financial infrastructure.** Lower risk than the DL-minting
-design they replace — no reserve coupling — but still held to full ledger
-discipline.
+**C and D are financial infrastructure**, held to the same ledger
+discipline as withdrawals and P2P escrow. C carries the reserve coupling
+(§5.3) and is the part most needing review: a royalty mint whose reserve
+inflow is missing or wrong dilutes token backing silently.
 
 **E's identity decision (§8.1) should be made before A**, because
 contributor deck ownership and contributor Stream access are the same
