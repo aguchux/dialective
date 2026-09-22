@@ -9,8 +9,18 @@ import { issueVerificationToken, verificationUrl } from './verification-token.ut
 import { VdclDocumentData, renderVdclPdf } from './vdcl-pdf.util';
 import { renderVdclCertificatePng } from './vdcl-png.util';
 
+/**
+ * Documents share the one Spaces bucket every other feature uses, separated
+ * by the `vdcl/` key prefix rather than by bucket. The fallback matches the
+ * other buckets' default instead of naming a VDCL-specific bucket that does
+ * not exist -- a plausible-looking default that silently fails on first
+ * write is worse than an obvious one.
+ *
+ * Objects are written private; the prefix is not the access control, the
+ * lack of a public-read ACL is.
+ */
 const DOCUMENTS_BUCKET =
-  process.env.SPACES_VDCL_DOCUMENTS_BUCKET ?? 'dialectiva-vdcl-documents';
+  process.env.SPACES_VDCL_DOCUMENTS_BUCKET ?? 'golojan-do-s3-bucket';
 
 function sha256(buf: Buffer): string {
   return createHash('sha256').update(buf).digest('hex');

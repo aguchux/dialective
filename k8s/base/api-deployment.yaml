@@ -128,9 +128,10 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: spaces_community_bucket
-            # VDCL licence PDFs and certificates. Must be a PRIVATE bucket:
-            # a licence PDF names a real contributor, and the certificate is
-            # served through short-lived presigned URLs, never public-read.
+            # VDCL licence PDFs and certificates -- the shared bucket, under
+            # the `vdcl/` key prefix. Objects are written PRIVATE: a licence
+            # PDF names a real contributor, and both documents are served
+            # through short-lived presigned URLs, never public-read.
             - name: SPACES_VDCL_DOCUMENTS_BUCKET
               valueFrom:
                 configMapKeyRef:
