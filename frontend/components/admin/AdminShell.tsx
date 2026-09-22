@@ -56,7 +56,7 @@ const navGroups: NavGroup[] = [
       { href: '/admin/asr-coverage', label: 'ASR Transcription', icon: RecordingsIcon },
       { href: '/admin/misplaced-dialects', label: 'Misplaced Dialects', icon: AuditQueueIcon },
       { href: '/admin/validator-decks', label: 'Validator Decks', icon: SettlementIcon },
-      { href: '/admin/vdcl', label: 'VDCL Manifests', icon: AuditQueueIcon },
+      { href: '/admin/vdcl', label: 'VDCL Licences', icon: AuditQueueIcon },
       { href: '/admin/settlement', label: 'Unsettled Tasks', icon: SettlementIcon },
     ],
   },

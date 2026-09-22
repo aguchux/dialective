@@ -2965,6 +2965,60 @@ export interface StartVdclDraftResult {
   manifestHash: string | null;
 }
 
+export interface VdclAgreementSummary {
+  id: string;
+  licenceKey: string;
+  contributorId: string;
+  dialectTag: string;
+  withdrawnAt: string | null;
+  activeVersionId: string | null;
+  createdAt: string;
+  activeVersion: {
+    id: string;
+    version: number;
+    status: VdclVersionStatus;
+    signedAt: string | null;
+    countersignedAt: string | null;
+    manifestHash: string | null;
+    _count: { grants: number };
+  } | null;
+  _count: { versions: number };
+}
+
+export interface VdclAgreementDetail extends VdclAgreementSummary {
+  contributor: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+  };
+  versions: {
+    id: string;
+    version: number;
+    status: VdclVersionStatus;
+    signedAt: string | null;
+    countersignedAt: string | null;
+    manifestHash: string | null;
+    termsVersion: string | null;
+    createdAt: string;
+    grants: { purpose: VdclPurpose; wordingVersion: string; grantedAt: string }[];
+    manifest: {
+      manifestKey: string;
+      recordingCount: number;
+      totalDurationMs: string;
+      transcriptCount: number;
+      compiledAt: string;
+    } | null;
+    signatureEvents: {
+      id: string;
+      eventType: string;
+      signatureKind: string | null;
+      stepUpMethod: string | null;
+      createdAt: string;
+    }[];
+  }[];
+}
+
 export interface VdclPublicVerification {
   outcome:
     | 'valid'
@@ -6529,6 +6583,58 @@ export const dialectivaApi = createApi({
     getVdclReceipt: builder.query<VdclSigningReceipt, string>({
       query: (id) => `/vdcl/versions/${id}/receipt`,
     }),
+    getVdclAgreements: builder.query<VdclAgreementSummary[], { take?: number } | void>({
+      query: (params) => ({ url: '/admin/vdcl/agreements', params: params ?? undefined }),
+      providesTags: ['VdclAgreements'],
+    }),
+    getVdclAgreement: builder.query<VdclAgreementDetail, string>({
+      query: (id) => `/admin/vdcl/agreements/${id}`,
+      providesTags: (_r, _e, id) => [{ type: 'VdclAgreements', id }],
+    }),
+    requestVdclCountersignOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      string
+    >({
+      query: (id) => ({ url: `/admin/vdcl/versions/${id}/countersign-otp`, method: 'POST' }),
+    }),
+    countersignVdclVersion: builder.mutation<
+      { id: string; status: VdclVersionStatus },
+      { id: string; otpRequestId?: string; code?: string }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/admin/vdcl/versions/${id}/activate`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['VdclAgreements', 'VdclManifest'],
+    }),
+    suspendVdclVersion: builder.mutation<unknown, { id: string; reason: string }>({
+      query: ({ id, reason }) => ({
+        url: `/admin/vdcl/versions/${id}/suspend`,
+        method: 'POST',
+        body: { reason },
+      }),
+      invalidatesTags: ['VdclAgreements'],
+    }),
+    reinstateVdclVersion: builder.mutation<unknown, string>({
+      query: (id) => ({ url: `/admin/vdcl/versions/${id}/reinstate`, method: 'POST' }),
+      invalidatesTags: ['VdclAgreements'],
+    }),
+    withdrawVdclAgreement: builder.mutation<unknown, { id: string; reason: string }>({
+      query: ({ id, reason }) => ({
+        url: `/admin/vdcl/agreements/${id}/withdraw`,
+        method: 'POST',
+        body: { reason },
+      }),
+      invalidatesTags: ['VdclAgreements'],
+    }),
+    reissueVdclDocuments: builder.mutation<unknown, string>({
+      query: (id) => ({
+        url: `/admin/vdcl/versions/${id}/reissue-documents`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['VdclAgreements'],
+    }),
     verifyVdclLicence: builder.query<VdclPublicVerification, string>({
       query: (token) => `/verify/${token}`,
     }),
@@ -6956,6 +7062,14 @@ export const {
   useGetVdclReceiptQuery,
   useDiscardVdclDraftMutation,
   useVerifyVdclLicenceQuery,
+  useGetVdclAgreementsQuery,
+  useGetVdclAgreementQuery,
+  useRequestVdclCountersignOtpMutation,
+  useCountersignVdclVersionMutation,
+  useSuspendVdclVersionMutation,
+  useReinstateVdclVersionMutation,
+  useWithdrawVdclAgreementMutation,
+  useReissueVdclDocumentsMutation,
   useLazyGetVdclDocumentLinkQuery,
 } = dialectivaApi;
 

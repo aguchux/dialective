@@ -1,6 +1,16 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { VdclVersionStatus } from '@dialectiva/db';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
+import { OtpPurpose, VdclVersionStatus } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
+import { OtpService } from '../../otp/otp.service';
+import { PlatformSettingsService } from '../../settings/platform-settings.service';
+import { resolveOtpDestination } from '../../otp/otp.util';
+import { adminActionContextHash } from '../../wallet/otp-context.util';
 import { CoverageNotifierService } from '../rights/coverage-notifier.service';
 import { VdclDocumentsService } from '../documents/vdcl-documents.service';
 
@@ -14,11 +24,11 @@ import { VdclDocumentsService } from '../documents/vdcl-documents.service';
  * reinstate, withdraw -- so an admin can drive an agreement through its
  * states and watch enforcement respond.
  *
- * It is deliberately NOT the contributor-facing maker (Phase 3), and it
- * does not compile manifests (Phase 2). An agreement activated here covers
- * whatever its manifest already contains, which until Phase 2 means an
- * admin must seed one explicitly. That is the intended shape: this exists
- * for operating and testing the gate, not for issuing licences at scale.
+ * It is deliberately NOT the contributor-facing maker (Phase 3), which is
+ * where a contributor drafts, reviews and signs. This is the Dialect
+ * Library side of the same document: countersignature is what actually
+ * grants rights, and it carries an OTP step-up for the same reason every
+ * other consequential admin action in this codebase does.
  */
 @Injectable()
 export class VdclAdminService {
@@ -28,6 +38,8 @@ export class VdclAdminService {
     private readonly prisma: PrismaService,
     private readonly coverageNotifier: CoverageNotifierService,
     private readonly documents: VdclDocumentsService,
+    private readonly otp: OtpService,
+    private readonly settings: PlatformSettingsService,
   ) {}
 
   async listAgreements(params: { status?: VdclVersionStatus; take?: number }) {
@@ -88,14 +100,13 @@ export class VdclAdminService {
   }
 
   /**
-   * Countersign a version and make it the agreement's active one.
+   * Every condition a version must meet to be countersigned.
    *
-   * This is the moment a licence starts granting rights, so it is the most
-   * consequential write in the module. A version may only be activated from
-   * PENDING_COUNTERSIGNATURE -- activating a draft would mean granting
-   * rights over a dataset the contributor never signed for.
+   * Shared by the OTP-request and activate paths so the two can never
+   * disagree -- an admin must never be handed a code for an action that
+   * will then refuse.
    */
-  async activateVersion(versionId: string, adminUserId: string) {
+  private async assertActivatable(versionId: string) {
     const version = await this.prisma.vdclVersion.findUnique({
       where: { id: versionId },
       include: { agreement: true, manifest: { select: { id: true } } },
@@ -117,6 +128,81 @@ export class VdclAdminService {
       throw new BadRequestException(
         'This version has no compiled manifest, so it would grant rights over nothing',
       );
+    }
+    if (!version.manifestHash) {
+      // The step-up binds the manifest hash, so a version without one could
+      // not be bound to anything.
+      throw new BadRequestException('This version has no manifest hash and cannot be signed');
+    }
+    return version;
+  }
+
+  /**
+   * Issue the step-up code for a countersignature.
+   *
+   * Sent to the admin's own verified destination, and bound to this exact
+   * version AND its manifest hash -- so a code issued while reviewing a
+   * licence over one dataset cannot complete a countersignature over a
+   * different one if the manifest changed in between.
+   */
+  async requestCountersignOtp(versionId: string, adminUserId: string) {
+    const version = await this.assertActivatable(versionId);
+    const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminUserId } });
+    const { destination, channel } = await resolveOtpDestination(admin, this.settings);
+
+    return this.otp.issueForUser(
+      adminUserId,
+      OtpPurpose.ADMIN_PAYOUT,
+      destination,
+      adminActionContextHash({
+        action: 'vdcl-countersign',
+        versionId,
+        manifestHash: version.manifestHash!,
+      }),
+      channel,
+    );
+  }
+
+  /**
+   * Countersign a version and make it the agreement's active one.
+   *
+   * This is the moment a licence starts granting rights, so it is the most
+   * consequential write in the module -- and the reason it carries a
+   * step-up, the same as every other consequential admin action in this
+   * codebase. A version may only be activated from
+   * PENDING_COUNTERSIGNATURE -- activating a draft would mean granting
+   * rights over a dataset the contributor never signed for.
+   */
+  async activateVersion(
+    versionId: string,
+    adminUserId: string,
+    step?: { otpRequestId?: string; code?: string },
+  ) {
+    const version = await this.assertActivatable(versionId);
+
+    // Gated on the same setting as every other admin step-up, so an admin
+    // turning admin OTP off does not leave this one route demanding a code
+    // they can no longer receive.
+    if (await this.settings.isAdminPayoutOtpEnabled()) {
+      if (!step?.otpRequestId || !step.code) {
+        throw new UnprocessableEntityException(
+          'OTP verification is required to countersign a VDCL',
+        );
+      }
+      await this.otp.verify({
+        otpRequestId: step.otpRequestId,
+        userId: adminUserId,
+        purpose: OtpPurpose.ADMIN_PAYOUT,
+        code: step.code,
+        // Re-derived from the row as it stands NOW. If the manifest changed
+        // since the code was issued, this differs and verification fails
+        // closed rather than countersigning a dataset nobody reviewed.
+        contextHash: adminActionContextHash({
+          action: 'vdcl-countersign',
+          versionId,
+          manifestHash: version.manifestHash!,
+        }),
+      });
     }
 
     const now = new Date();

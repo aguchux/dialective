@@ -13,6 +13,7 @@ describe('VdclAdminService', () => {
   function makeService(overrides: {
     version?: Record<string, unknown> | null;
     agreement?: Record<string, unknown> | null;
+    otpEnabled?: boolean;
   } = {}) {
     const tx = {
       vdclVersion: { update: jest.fn().mockResolvedValue({ id: 'v1' }) },
@@ -36,6 +37,14 @@ describe('VdclAdminService', () => {
       },
       vdclSignatureEvent: { create: jest.fn().mockResolvedValue({}) },
       vdclAuditEvent: { create: jest.fn().mockResolvedValue({}) },
+      user: {
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'admin-1',
+          email: 'admin@example.com',
+          phoneNumber: null,
+          phoneVerifiedAt: null,
+        }),
+      },
       $transaction: jest.fn((arg: unknown) =>
         typeof arg === 'function'
           ? (arg as (t: unknown) => Promise<unknown>)(tx)
@@ -44,16 +53,29 @@ describe('VdclAdminService', () => {
     };
     const coverageNotifier = { notifyForAgreement: jest.fn().mockResolvedValue(undefined) };
     const documents = { issueDocuments: jest.fn().mockResolvedValue({ pdfHash: 'p' }) };
+    const otp = {
+      issueForUser: jest.fn().mockResolvedValue({ otpRequestId: 'otp-1', expiresInSeconds: 600 }),
+      verify: jest.fn().mockResolvedValue({ id: 'otp-row' }),
+    };
+    const settings = {
+      isAdminPayoutOtpEnabled: jest.fn().mockResolvedValue(overrides.otpEnabled ?? false),
+      getOtpChannel: jest.fn().mockResolvedValue('EMAIL'),
+      isWhatsappOtpEnabled: jest.fn().mockResolvedValue(false),
+    };
     return {
       service: new VdclAdminService(
         prisma as never,
         coverageNotifier as never,
         documents as never,
+        otp as never,
+        settings as never,
       ),
       prisma,
       tx,
       coverageNotifier,
       documents,
+      otp,
+      settings,
     };
   }
 
@@ -64,6 +86,7 @@ describe('VdclAdminService', () => {
       status: VdclVersionStatus.PENDING_COUNTERSIGNATURE,
       agreement: { id: 'a1', withdrawnAt: null, activeVersionId: null },
       manifest: { id: 'm1' },
+      manifestHash: 'hash-abc',
     };
 
     it('activates a version awaiting countersignature and points the agreement at it', async () => {
@@ -144,6 +167,96 @@ describe('VdclAdminService', () => {
       await service.activateVersion('v1', 'admin-1');
 
       expect(documents.issueDocuments).toHaveBeenCalledWith('v1');
+    });
+
+    describe('OTP step-up', () => {
+      it('refuses to countersign without a code when admin OTP is on', async () => {
+        // Countersignature grants commercial rights over a real person's
+        // voice, so it joins the same step-up set as payouts and account
+        // deletion.
+        const { service } = makeService({ version: pending, otpEnabled: true });
+
+        await expect(service.activateVersion('v1', 'admin-1')).rejects.toThrow(
+          /OTP verification is required/i,
+        );
+      });
+
+      it('verifies the code against the manifest hash, not just the version id', async () => {
+        // An admin confirming a licence over one dataset must not have that
+        // code complete a countersignature over a different one.
+        const { service, otp } = makeService({ version: pending, otpEnabled: true });
+
+        await service.activateVersion('v1', 'admin-1', {
+          otpRequestId: 'otp-1',
+          code: '123456',
+        });
+
+        expect(otp.verify).toHaveBeenCalledWith(
+          expect.objectContaining({
+            userId: 'admin-1',
+            purpose: 'ADMIN_PAYOUT',
+            contextHash: expect.any(String),
+          }),
+        );
+      });
+
+      it('derives a different binding when the manifest changed', async () => {
+        const a = makeService({ version: pending, otpEnabled: true });
+        await a.service.activateVersion('v1', 'admin-1', {
+          otpRequestId: 'otp-1',
+          code: '123456',
+        });
+        const b = makeService({
+          version: { ...pending, manifestHash: 'hash-CHANGED' },
+          otpEnabled: true,
+        });
+        await b.service.activateVersion('v1', 'admin-1', {
+          otpRequestId: 'otp-1',
+          code: '123456',
+        });
+
+        expect(a.otp.verify.mock.calls[0][0].contextHash).not.toBe(
+          b.otp.verify.mock.calls[0][0].contextHash,
+        );
+      });
+
+      it('skips the step-up when admin OTP is turned off', async () => {
+        // The gate follows the same setting as every other admin step-up,
+        // so turning it off does not leave this one route demanding a code
+        // nobody can receive.
+        const { service, otp } = makeService({ version: pending, otpEnabled: false });
+
+        await service.activateVersion('v1', 'admin-1');
+
+        expect(otp.verify).not.toHaveBeenCalled();
+      });
+
+      it('refuses to issue a code for a version that cannot be countersigned', async () => {
+        // An admin must never be handed a code for an action that will then
+        // refuse.
+        const { service, otp } = makeService({
+          version: { ...pending, status: VdclVersionStatus.DRAFT },
+        });
+
+        await expect(service.requestCountersignOtp('v1', 'admin-1')).rejects.toThrow(
+          BadRequestException,
+        );
+        expect(otp.issueForUser).not.toHaveBeenCalled();
+      });
+
+      it('sends the code to the admin, bound to this version', async () => {
+        const { service, otp } = makeService({ version: pending });
+
+        await service.requestCountersignOtp('v1', 'admin-1');
+
+        expect(otp.issueForUser).toHaveBeenCalledWith(
+          'admin-1',
+          'ADMIN_PAYOUT',
+          'admin@example.com',
+          expect.any(String),
+          'EMAIL',
+        );
+      });
     });
 
     it('does not roll back an activation when document rendering fails', async () => {

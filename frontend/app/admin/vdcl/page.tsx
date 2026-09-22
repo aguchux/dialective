@@ -5,6 +5,7 @@ import { AdminShell } from '@/components/admin/AdminShell';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { cardClass } from '@/components/dashboard/shared';
 import { alertTone, primaryButton, secondaryButton } from '@/components/vdcl/vdcl-ui';
+import { VdclAgreementsPanel } from './VdclAgreementsPanel';
 import {
   normalizeErrorMessage,
   useCompileVdclVersionMutation,
@@ -70,11 +71,21 @@ export default function AdminVdclPage() {
     <AdminShell>
       <div className="grid gap-6">
         <div className="grid gap-2">
-          <h1 className="text-3xl font-black">VDCL manifests</h1>
+          <h1 className="text-3xl font-black">VDCL licences</h1>
           <p className="leading-relaxed text-muted">
-            What a contributor licence covers, and why every other recording was left out. A
-            manifest is frozen at compilation — recordings made afterwards are picked up by a new
-            version, never added to this one.
+            Countersign, suspend and inspect contributor licences. A manifest is frozen at
+            compilation — recordings made afterwards are picked up by a new version, never added
+            to this one.
+          </p>
+        </div>
+
+        <VdclAgreementsPanel />
+
+        <div className="grid gap-2">
+          <h2 className="text-xl font-black">Manifest inspector</h2>
+          <p className="text-sm leading-relaxed text-muted">
+            Paste a version id to see exactly what its licence covers and why every other
+            recording was left out.
           </p>
         </div>
 

@@ -151,7 +151,14 @@ export function adminActionContextHash(
         tokenAmount: number;
       }
     | { action: 'audit-hold-release'; userId: string }
-    | { action: 'phone-verification-revoke'; userId: string },
+    | { action: 'phone-verification-revoke'; userId: string }
+    // Countersigning a VDCL grants commercial rights over a real person's
+    // voice, which is why it joins the step-up set. It binds the MANIFEST
+    // HASH, not just the version id: an admin confirming a licence over
+    // 4,000 clips must not have that code complete a countersignature over
+    // a different dataset if the manifest changed between issuing the code
+    // and using it.
+    | { action: 'vdcl-countersign'; versionId: string; manifestHash: string },
 ): string {
   return hashContext(input);
 }

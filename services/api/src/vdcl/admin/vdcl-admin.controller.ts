@@ -4,7 +4,11 @@ import { JwtAuthGuard } from '../../auth/strategies/jwt-auth.guard';
 import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { VdclAdminService } from './vdcl-admin.service';
-import { ListVdclAgreementsDto, VdclReasonDto } from './dto/vdcl-lifecycle.dto';
+import {
+  CountersignVdclDto,
+  ListVdclAgreementsDto,
+  VdclReasonDto,
+} from './dto/vdcl-lifecycle.dto';
 import { VdclDocumentsService } from '../documents/vdcl-documents.service';
 
 interface AuthedRequest {
@@ -38,10 +42,29 @@ export class VdclAdminController {
     return this.vdclAdmin.getAgreement(id);
   }
 
-  /** Countersign a version and make it the agreement's active one. */
+  /**
+   * Issue the step-up code for a countersignature, to the admin's own
+   * verified destination. Bound to this version AND its manifest hash.
+   */
+  @Post('versions/:id/countersign-otp')
+  requestCountersignOtp(@Param('id') id: string, @Req() req: AuthedRequest) {
+    return this.vdclAdmin.requestCountersignOtp(id, req.user.sub);
+  }
+
+  /**
+   * Countersign a version and make it the agreement's active one.
+   *
+   * This is the moment a licence starts granting rights over a real
+   * person's voice, so it carries an OTP step-up like every other
+   * consequential admin action here.
+   */
   @Post('versions/:id/activate')
-  activateVersion(@Param('id') id: string, @Req() req: AuthedRequest) {
-    return this.vdclAdmin.activateVersion(id, req.user.sub);
+  activateVersion(
+    @Param('id') id: string,
+    @Body() dto: CountersignVdclDto,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.vdclAdmin.activateVersion(id, req.user.sub, dto);
   }
 
   @Post('versions/:id/suspend')
