@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { RedisStreamsService, StreamMessage } from '../../redis-streams/redis-streams.service';
 import { CatalogueService } from '../catalogue/catalogue.service';
 import { StreamDeckVersioningService } from './stream-deck-versioning.service';
+import { DeckCoverageService } from '../../vdcl/rights/deck-coverage.service';
 
 const SMART_DECK_STREAM = process.env.SMART_DECK_STREAM ?? 'smart-deck-jobs';
 const CONSUMER_GROUP = process.env.SMART_DECK_CONSUMER_GROUP ?? 'smart-deck-evaluators';
@@ -31,6 +32,7 @@ export class SmartDeckEvaluatorService implements OnModuleInit {
     private readonly streams: RedisStreamsService,
     private readonly catalogue: CatalogueService,
     private readonly versioning: StreamDeckVersioningService,
+    private readonly deckCoverage: DeckCoverageService,
   ) {}
 
   onModuleInit() {
@@ -103,6 +105,56 @@ export class SmartDeckEvaluatorService implements OnModuleInit {
     ]);
 
     await this.versioning.writeNewVersionIfMaterial(deckId, 'smart_rule_match');
+
+    // A Smart Deck refills itself by rule, with no interactive caller to
+    // report licence coverage back to -- so unlike addItem and
+    // copyToOwnDeck, there is nobody to hand a coverage figure. Without
+    // this, a rule-driven deck would be the one path that quietly
+    // accumulates unlicensed recordings, laundering around the guardrail
+    // the manual paths enforce.
+    //
+    // The rule is NOT narrowed to licensed recordings: a contributor who
+    // has not signed yet is a legitimate pending state, and silently
+    // dropping their work would make a Smart Deck's membership disagree
+    // with its own rule. The shortfall is logged instead, and the deck's
+    // coverage endpoint reports it on demand.
+    if (toAdd.length > 0) {
+      void this.logCoverageShortfall(deck.organizationId, deckId, toAdd);
+    }
+  }
+
+  /** Best-effort: a coverage lookup must never fail a rule evaluation. */
+  private async logCoverageShortfall(
+    organizationId: string,
+    deckId: string,
+    addedRecordingIds: string[],
+  ): Promise<void> {
+    try {
+      const [keys, clients] = await Promise.all([
+        this.prisma.streamApiKey.findMany({
+          where: { organizationId, revokedAt: null },
+          select: { purposes: true },
+        }),
+        this.prisma.oAuthClient.findMany({
+          where: { organizationId, revokedAt: null },
+          select: { purposes: true },
+        }),
+      ]);
+      const purposes = [...new Set([...keys, ...clients].flatMap((r) => r.purposes))];
+      const coverage = await this.deckCoverage.forRecordings(addedRecordingIds, purposes);
+      if (coverage.breakdown.licensed < addedRecordingIds.length) {
+        this.logger.warn(
+          `Smart Deck ${deckId} added ${addedRecordingIds.length} recordings, ` +
+            `${coverage.breakdown.licensed} licensed for this org's declared purposes ` +
+            `(pending=${coverage.breakdown.pending} withdrawn=${coverage.breakdown.withdrawn} ` +
+            `suspended=${coverage.breakdown.suspended} purposeNotGranted=${coverage.breakdown.purposeNotGranted})`,
+        );
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Coverage check failed for Smart Deck ${deckId}: ${err instanceof Error ? err.message : err}`,
+      );
+    }
   }
 
   /**

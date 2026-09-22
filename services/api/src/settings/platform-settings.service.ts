@@ -1259,6 +1259,8 @@ export class PlatformSettingsService {
       keyboardLayoutMaxLength: row.keyboardLayoutMaxLength,
       submissionRateLimitEnabled: row.submissionRateLimitEnabled,
       submissionRateLimitPerHour: row.submissionRateLimitPerHour,
+      vdclEnforcementEnabled: row.vdclEnforcementEnabled,
+      vdclRetentionExemptionEnabled: row.vdclRetentionExemptionEnabled,
       submissionDailyLimitEnabled: row.submissionDailyLimitEnabled,
       submissionDailyLimitPerDay: row.submissionDailyLimitPerDay,
       qracEnabled: row.qracEnabled,
@@ -1511,6 +1513,8 @@ export class PlatformSettingsService {
     keyboardLayoutMaxLength?: number;
     submissionRateLimitEnabled?: boolean;
     submissionRateLimitPerHour?: number;
+    vdclEnforcementEnabled?: boolean;
+    vdclRetentionExemptionEnabled?: boolean;
     submissionDailyLimitEnabled?: boolean;
     submissionDailyLimitPerDay?: number;
     qracEnabled?: boolean;
@@ -2263,6 +2267,8 @@ export class PlatformSettingsService {
       keyboardLayoutMaxLength: row.keyboardLayoutMaxLength,
       submissionRateLimitEnabled: row.submissionRateLimitEnabled,
       submissionRateLimitPerHour: row.submissionRateLimitPerHour,
+      vdclEnforcementEnabled: row.vdclEnforcementEnabled,
+      vdclRetentionExemptionEnabled: row.vdclRetentionExemptionEnabled,
       submissionDailyLimitEnabled: row.submissionDailyLimitEnabled,
       submissionDailyLimitPerDay: row.submissionDailyLimitPerDay,
       qracEnabled: row.qracEnabled,

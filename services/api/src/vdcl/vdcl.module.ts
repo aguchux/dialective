@@ -3,6 +3,8 @@ import { WebhooksModule } from '../voice-stream/webhooks/webhooks.module';
 import { RightsService } from './rights/rights.service';
 import { DeckCoverageService } from './rights/deck-coverage.service';
 import { CoverageNotifierService } from './rights/coverage-notifier.service';
+import { VdclAdminController } from './admin/vdcl-admin.controller';
+import { VdclAdminService } from './admin/vdcl-admin.service';
 
 /**
  * Voice Dataset Contributor Licence (VDCL).
@@ -18,7 +20,8 @@ import { CoverageNotifierService } from './rights/coverage-notifier.service';
  */
 @Module({
   imports: [WebhooksModule],
-  providers: [RightsService, DeckCoverageService, CoverageNotifierService],
+  controllers: [VdclAdminController],
+  providers: [RightsService, DeckCoverageService, CoverageNotifierService, VdclAdminService],
   exports: [RightsService, DeckCoverageService, CoverageNotifierService],
 })
 export class VdclModule {}

@@ -10,18 +10,32 @@ function setup() {
       deleteMany: jest.fn().mockResolvedValue({}),
     },
     wordRecording: { findUnique: jest.fn() },
+    streamApiKey: { findMany: jest.fn().mockResolvedValue([]) },
+    oAuthClient: { findMany: jest.fn().mockResolvedValue([]) },
   };
   prisma.$transaction = jest.fn((ops: unknown[]) => Promise.all(ops as Promise<unknown>[]));
   const streams = { consume: jest.fn().mockResolvedValue(undefined) };
   const catalogue = { matchingRecordingIdsForRule: jest.fn(), getEligibleRecording: jest.fn() };
   const versioning = { writeNewVersionIfMaterial: jest.fn().mockResolvedValue(undefined) };
+  // VDCL coverage -- logged, never used to narrow a rule's membership.
+  const deckCoverage = {
+    forRecordings: jest.fn().mockResolvedValue({
+      totalItems: 0,
+      breakdown: { licensed: 0, pending: 0, purposeNotGranted: 0, withdrawn: 0, suspended: 0 },
+      coveragePercent: 100,
+      contributingAgreements: null,
+      advisory: false,
+      purposes: [],
+    }),
+  };
   const service = new SmartDeckEvaluatorService(
     prisma as never,
     streams as never,
     catalogue as never,
     versioning as never,
+    deckCoverage as never,
   );
-  return { service, prisma, catalogue, versioning };
+  return { service, prisma, catalogue, versioning, deckCoverage };
 }
 
 describe('SmartDeckEvaluatorService.evaluateRule', () => {

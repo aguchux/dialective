@@ -431,6 +431,27 @@ export class UpdatePlatformSettingsDto {
   @Max(100000)
   submissionRateLimitPerHour?: number;
 
+  /**
+   * VDCL commercial lock. Turning this ON denies any subscriber stream of a
+   * recording not covered by an ACTIVE VDCL granting the requested purpose.
+   * It is a HARD gate: with no manifests in existence it denies everything,
+   * so it must not be enabled before VDCL compilation is producing
+   * manifests. Default off.
+   */
+  @IsOptional()
+  @IsBoolean()
+  vdclEnforcementEnabled?: boolean;
+
+  /**
+   * Whether audio covered by an ACTIVE VDCL is exempt from
+   * audio-retention-job. ON by default -- a signed manifest asserting "these
+   * clips, verify by hash" is incompatible with the audio behind them being
+   * purged. Turning it off breaks the provenance claim of any issued licence.
+   */
+  @IsOptional()
+  @IsBoolean()
+  vdclRetentionExemptionEnabled?: boolean;
+
   @IsOptional()
   @IsBoolean()
   submissionDailyLimitEnabled?: boolean;

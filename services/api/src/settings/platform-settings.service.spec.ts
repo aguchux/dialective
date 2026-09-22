@@ -896,3 +896,50 @@ describe('PlatformSettingsService Domain Conversation settings', () => {
     );
   });
 });
+
+describe('PlatformSettingsService.update -- VDCL flags', () => {
+  // Same write-only harness as the WhatsApp tests above: upsert rejects to
+  // short-circuit before the return-path row construction.
+  function setupWriteOnly() {
+    const prisma = {
+      platformSettings: {
+        upsert: jest.fn().mockRejectedValue(new Error('stop before return construction')),
+      },
+    };
+    const service = new PlatformSettingsService(prisma as never, {} as never);
+    return { service, prisma };
+  }
+
+  it('persists vdclEnforcementEnabled so an admin can actually turn the lock on', async () => {
+    // Without this the flag existed in the schema and in the read helper but
+    // was absent from the update signature -- only a direct DB write could
+    // change it, leaving no operational control over a hard deny gate.
+    const { service, prisma } = setupWriteOnly();
+
+    await service.update({ vdclEnforcementEnabled: true }).catch(() => {});
+
+    const writeCall = prisma.platformSettings.upsert.mock.calls[0][0];
+    expect(writeCall.update.vdclEnforcementEnabled).toBe(true);
+  });
+
+  it('persists vdclRetentionExemptionEnabled, including turning it OFF', async () => {
+    // The off case matters: it is the escape hatch if the exemption ever
+    // misfires and starts protecting audio it should not.
+    const { service, prisma } = setupWriteOnly();
+
+    await service.update({ vdclRetentionExemptionEnabled: false }).catch(() => {});
+
+    const writeCall = prisma.platformSettings.upsert.mock.calls[0][0];
+    expect(writeCall.update.vdclRetentionExemptionEnabled).toBe(false);
+  });
+
+  it('leaves both flags untouched when neither is supplied', async () => {
+    const { service, prisma } = setupWriteOnly();
+
+    await service.update({ minWalletBalanceTokens: 5 }).catch(() => {});
+
+    const writeCall = prisma.platformSettings.upsert.mock.calls[0][0];
+    expect(writeCall.update.vdclEnforcementEnabled).toBeUndefined();
+    expect(writeCall.update.vdclRetentionExemptionEnabled).toBeUndefined();
+  });
+});

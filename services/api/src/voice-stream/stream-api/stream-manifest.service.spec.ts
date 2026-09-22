@@ -38,7 +38,10 @@ describe('StreamManifestService.getDeck', () => {
     prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-2', organizationId: 'org-1' });
 
     await expect(service.getDeck(deckScopedKey, 'deck-2')).rejects.toThrow(NotFoundException);
-    expect(prisma.streamDeck.findUnique).not.toHaveBeenCalled();
+    // The deck IS looked up first now, because a caller may address it by
+    // deckKey while streamKey.deckId is always a uuid -- the scope check
+    // needs the resolved uuid to compare against. The rejection is what
+    // matters, and it still happens before the deck is returned.
   });
 
   it('allows a deck-scoped key to read its own deck', async () => {
@@ -105,6 +108,66 @@ describe('StreamManifestService.listEligibleItems', () => {
     await service.listEligibleItems(orgWideKey, 'deck-1');
 
     expect(catalogue.getEligibleRecording).toHaveBeenCalledWith('rec-1', 'HIGH');
+  });
+});
+
+describe('StreamManifestService -- addressing a deck by deckKey', () => {
+  // The manifest advertises audio_endpoint and deck_id using deckKey, so a
+  // client following the API as documented sends a deckKey. That used to
+  // 404 before the handler body ran, which also meant the VDCL rights check
+  // never executed on exactly those requests -- enforcement would have
+  // looked healthy while being entirely dead.
+  it('resolves a deck addressed by its deckKey, not just its uuid', async () => {
+    const { service, prisma } = setup();
+    prisma.streamDeck.findUnique.mockImplementation(({ where }: never) => {
+      const w = where as { id?: string; deckKey?: string };
+      if (w.deckKey === 'DLSD-NG-IGB-NSK-A1B2C3') {
+        return Promise.resolve({
+          id: 'deck-1',
+          organizationId: 'org-1',
+          deckKey: 'DLSD-NG-IGB-NSK-A1B2C3',
+        });
+      }
+      return Promise.resolve(null);
+    });
+
+    const deck = await service.getDeck(orgWideKey, 'DLSD-NG-IGB-NSK-A1B2C3');
+
+    expect(deck.id).toBe('deck-1');
+  });
+
+  it('still resolves a deck addressed by its uuid', async () => {
+    const { service, prisma } = setup();
+    prisma.streamDeck.findUnique.mockResolvedValue({
+      id: 'deck-1',
+      organizationId: 'org-1',
+      deckKey: 'DLSD-NG-IGB-NSK-A1B2C3',
+    });
+
+    const deck = await service.getDeck(orgWideKey, 'deck-1');
+
+    expect(deck.id).toBe('deck-1');
+  });
+
+  it('lets a deck-scoped key follow the deckKey URL its own manifest advertises', async () => {
+    // streamKey.deckId is always a uuid; the advertised URL is a deckKey.
+    // Comparing the raw parameter would reject the key's own deck.
+    const { service, prisma } = setup();
+    prisma.streamDeck.findUnique.mockImplementation(({ where }: never) => {
+      const w = where as { id?: string; deckKey?: string };
+      if (w.deckKey === 'DLSD-NG-IGB-NSK-A1B2C3') {
+        return Promise.resolve({
+          id: 'deck-1',
+          organizationId: 'org-1',
+          deckKey: 'DLSD-NG-IGB-NSK-A1B2C3',
+        });
+      }
+      return Promise.resolve(null);
+    });
+
+    const deck = await service.getDeck(deckScopedKey, 'DLSD-NG-IGB-NSK-A1B2C3');
+
+    expect(deck.id).toBe('deck-1');
   });
 });
 

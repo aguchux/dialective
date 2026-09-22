@@ -28,10 +28,41 @@ export class StreamManifestService {
     private readonly rights: RightsService,
   ) {}
 
-  private assertKeyCanAccessDeck(streamKey: AuthenticatedStreamKey, deckId: string): void {
-    if (streamKey.deckId && streamKey.deckId !== deckId) {
+  /**
+   * Deck-scoped key check, run AFTER the deck is resolved.
+   *
+   * Takes the resolved deck rather than the raw path parameter because a
+   * caller may legitimately address a deck by either its uuid or its
+   * deckKey (see resolveDeck), while `streamKey.deckId` is always a uuid.
+   * Comparing the raw parameter would wrongly reject a deck-scoped key
+   * whose holder followed the deckKey URL the manifest itself advertises.
+   */
+  private assertKeyCanAccessDeck(
+    streamKey: AuthenticatedStreamKey,
+    deck: { id: string },
+  ): void {
+    if (streamKey.deckId && streamKey.deckId !== deck.id) {
       throw new NotFoundException('Stream Deck not found');
     }
+  }
+
+  /**
+   * Resolves a deck addressed by EITHER its uuid or its deckKey.
+   *
+   * The manifest advertises `audio_endpoint` and `deck_id` using deckKey
+   * (see getManifest), so a client following the API as documented sends a
+   * deckKey where this used to accept only a uuid -- every such request
+   * 404'd before reaching the handler body. Accepting both keeps the
+   * advertised contract working without breaking callers already passing a
+   * uuid.
+   *
+   * deckKey is @unique and uuid-shaped ids never collide with the
+   * "DLSD-..." format, so there is no ambiguity between the two.
+   */
+  private async resolveDeck(deckIdOrKey: string) {
+    const deck = await this.prisma.streamDeck.findUnique({ where: { id: deckIdOrKey } });
+    if (deck) return deck;
+    return this.prisma.streamDeck.findUnique({ where: { deckKey: deckIdOrKey } });
   }
 
   /** Phase 5 tier gating -- resolves the streamKey's organization's plan floor, if any. Null plan/subscription (shouldn't happen past StreamKeySubscriptionGuard, but defensive) means no floor. */
@@ -53,12 +84,12 @@ export class StreamManifestService {
     });
   }
 
-  async getDeck(streamKey: AuthenticatedStreamKey, deckId: string) {
-    this.assertKeyCanAccessDeck(streamKey, deckId);
-    const deck = await this.prisma.streamDeck.findUnique({ where: { id: deckId } });
+  async getDeck(streamKey: AuthenticatedStreamKey, deckIdOrKey: string) {
+    const deck = await this.resolveDeck(deckIdOrKey);
     if (!deck || deck.organizationId !== streamKey.organizationId) {
       throw new NotFoundException('Stream Deck not found');
     }
+    this.assertKeyCanAccessDeck(streamKey, deck);
     return deck;
   }
 
@@ -68,8 +99,9 @@ export class StreamManifestService {
    * so ineligible items are silently excluded here rather than surfaced as
    * errors, matching the loose-coupling this table was designed around.
    */
-  async listEligibleItems(streamKey: AuthenticatedStreamKey, deckId: string) {
-    await this.getDeck(streamKey, deckId);
+  async listEligibleItems(streamKey: AuthenticatedStreamKey, deckIdOrKey: string) {
+    const deck = await this.getDeck(streamKey, deckIdOrKey);
+    const deckId = deck.id;
     const items = await this.prisma.streamDeckItem.findMany({
       where: { deckId },
       orderBy: { addedAt: 'desc' },
@@ -92,10 +124,11 @@ export class StreamManifestService {
 
   async getEligibleItemMetadata(
     streamKey: AuthenticatedStreamKey,
-    deckId: string,
+    deckIdOrKey: string,
     recordingId: string,
   ) {
-    await this.getDeck(streamKey, deckId);
+    const deck = await this.getDeck(streamKey, deckIdOrKey);
+    const deckId = deck.id;
     const membership = await this.prisma.streamDeckItem.findUnique({
       where: { deckId_recordingId: { deckId, recordingId } },
     });
@@ -119,14 +152,15 @@ export class StreamManifestService {
    * eligibility re-check, since the snapshot already captured eligibility
    * at that point in time (doc section 12's reproducibility guarantee).
    */
-  async getManifest(streamKey: AuthenticatedStreamKey, deckId: string, version?: number) {
-    const deck = await this.getDeck(streamKey, deckId);
+  async getManifest(streamKey: AuthenticatedStreamKey, deckIdOrKey: string, version?: number) {
+    const deck = await this.getDeck(streamKey, deckIdOrKey);
+    const deckId = deck.id;
 
     if (version !== undefined) {
       return this.getPinnedManifest(deck, version, streamKey);
     }
 
-    const allEligible = await this.listEligibleItems(streamKey, deckId);
+    const allEligible = await this.listEligibleItems(streamKey, deck.id);
 
     // VDCL coverage filter. A deck is normally only PARTIALLY licensed for
     // any given purpose -- its recordings come from different contributors
@@ -154,7 +188,13 @@ export class StreamManifestService {
     });
 
     return {
+      // deck_id is the deckKey, which is what audio_endpoint below uses and
+      // what external clients have always been given. deck_key repeats it
+      // explicitly because DECK_COVERAGE_CHANGED's payload uses deck_id for
+      // the internal uuid -- naming both here removes the ambiguity without
+      // breaking the published field.
       deck_id: deck.deckKey,
+      deck_key: deck.deckKey,
       version: current?.version.version ?? 0,
       items: eligible.length,
       audio_hours: Number((totalDurationMs / 1000 / 60 / 60).toFixed(2)),
@@ -210,6 +250,7 @@ export class StreamManifestService {
 
     return {
       deck_id: deck.deckKey,
+      deck_key: deck.deckKey,
       version: versionRow.version,
       items: items.length,
       audio_hours: Number((totalDurationMs / 1000 / 60 / 60).toFixed(2)),
@@ -231,8 +272,9 @@ export class StreamManifestService {
   }
 
   /** Doc section 29's `GET .../versions` -- newest first. */
-  async listVersions(streamKey: AuthenticatedStreamKey, deckId: string) {
-    await this.getDeck(streamKey, deckId);
+  async listVersions(streamKey: AuthenticatedStreamKey, deckIdOrKey: string) {
+    const deck = await this.getDeck(streamKey, deckIdOrKey);
+    const deckId = deck.id;
     return this.prisma.streamDeckVersion.findMany({
       where: { deckId },
       orderBy: { version: 'desc' },
@@ -246,8 +288,9 @@ export class StreamManifestService {
    * set differences; `updated` counts recordings present in both versions
    * whose denormalized fields (score/ISVS/etc.) differ between them.
    */
-  async getChanges(streamKey: AuthenticatedStreamKey, deckId: string, afterVersion: number) {
-    const deck = await this.getDeck(streamKey, deckId);
+  async getChanges(streamKey: AuthenticatedStreamKey, deckIdOrKey: string, afterVersion: number) {
+    const deck = await this.getDeck(streamKey, deckIdOrKey);
+    const deckId = deck.id;
 
     const current = await this.prisma.streamDeckCurrentVersion.findUnique({
       where: { deckId },
@@ -303,10 +346,17 @@ export class StreamManifestService {
     return { from_version: afterVersion, to_version: toVersion, added, removed, updated };
   }
 
-  async getUsageSummary(streamKey: AuthenticatedStreamKey, deckId?: string) {
-    if (deckId) {
-      this.assertKeyCanAccessDeck(streamKey, deckId);
+  async getUsageSummary(streamKey: AuthenticatedStreamKey, deckIdOrKey?: string) {
+    // Resolve so a deckKey-addressed request scopes to the right deck, and
+    // so a deck-scoped key is compared against a uuid on both sides.
+    const resolved = deckIdOrKey ? await this.resolveDeck(deckIdOrKey) : null;
+    if (deckIdOrKey && !resolved) {
+      throw new NotFoundException('Stream Deck not found');
     }
+    if (resolved) {
+      this.assertKeyCanAccessDeck(streamKey, resolved);
+    }
+    const deckId = resolved?.id;
     const where = {
       organizationId: streamKey.organizationId,
       ...(deckId ? { deckId } : {}),
