@@ -123,6 +123,35 @@ export class StorageService {
   }
 
   /**
+   * Uploads a buffer the API itself produced, rather than presigning for a
+   * client to upload. Used for documents `api` renders (VDCL licence PDFs
+   * and certificates) where there is no client to hand a presigned URL to
+   * and the bytes must not be client-supplied -- a licence document a
+   * contributor could overwrite would be worthless as evidence.
+   *
+   * Defaults to private. A VDCL PDF names a real person and must never be
+   * public-read.
+   */
+  async putObject(params: {
+    bucket: string;
+    key: string;
+    body: Buffer;
+    contentType: string;
+    publicRead?: boolean;
+  }): Promise<{ bucket: string; key: string }> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: params.bucket,
+        Key: params.key,
+        Body: params.body,
+        ContentType: params.contentType,
+        ...(params.publicRead ? { ACL: 'public-read' as const } : {}),
+      }),
+    );
+    return { bucket: params.bucket, key: params.key };
+  }
+
+  /**
    * Permanently deletes a Spaces object -- used by audio-retention-job's
    * scheduled purge and by admin account deletion. Never call this for a
    * bucket/key still referenced by a row that hasn't reached a terminal

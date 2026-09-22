@@ -43,11 +43,17 @@ describe('VdclAdminService', () => {
       ),
     };
     const coverageNotifier = { notifyForAgreement: jest.fn().mockResolvedValue(undefined) };
+    const documents = { issueDocuments: jest.fn().mockResolvedValue({ pdfHash: 'p' }) };
     return {
-      service: new VdclAdminService(prisma as never, coverageNotifier as never),
+      service: new VdclAdminService(
+        prisma as never,
+        coverageNotifier as never,
+        documents as never,
+      ),
       prisma,
       tx,
       coverageNotifier,
+      documents,
     };
   }
 
@@ -127,6 +133,28 @@ describe('VdclAdminService', () => {
     it('throws NotFound for an unknown version', async () => {
       const { service } = makeService({ version: null });
       await expect(service.activateVersion('nope', 'admin-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('issues the licence documents at countersignature', async () => {
+      // Countersignature is when a licence starts granting rights, so it is
+      // also when its documents become true. A contributor told their
+      // licence is active must never find nothing to download.
+      const { service, documents } = makeService({ version: pending });
+
+      await service.activateVersion('v1', 'admin-1');
+
+      expect(documents.issueDocuments).toHaveBeenCalledWith('v1');
+    });
+
+    it('does not roll back an activation when document rendering fails', async () => {
+      // Rendering and uploading are slow and can fail on a network blip.
+      // The activation has already been decided; a failed render leaves
+      // pdfKey null, which the download route reports honestly.
+      const { service, documents, prisma } = makeService({ version: pending });
+      documents.issueDocuments.mockRejectedValue(new Error('Spaces unreachable'));
+
+      await expect(service.activateVersion('v1', 'admin-1')).resolves.toBeDefined();
+      expect(prisma.vdclAgreement.update).toHaveBeenCalled();
     });
   });
 

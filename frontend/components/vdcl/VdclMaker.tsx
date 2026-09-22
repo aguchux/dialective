@@ -6,6 +6,7 @@ import { ActionButton } from '@/components/ui/ActionButton';
 import { ConsentCards, CONSENT_WORDING_VERSION } from '@/components/vdcl/ConsentCards';
 import { VdclSignPanel } from '@/components/vdcl/VdclSignPanel';
 import { VdclTracker } from '@/components/vdcl/VdclTracker';
+import { VdclDocuments } from '@/components/vdcl/VdclDocuments';
 import {
   normalizeErrorMessage,
   useGetMyVdclVersionsQuery,
@@ -154,12 +155,15 @@ export function VdclMaker() {
         ) : null}
 
         {activeLicence ? (
-          <div className={`${cardClass} space-y-2`}>
-            <h2 className="text-base font-bold text-ink">Your licence is active</h2>
-            <p className="text-sm text-muted">
-              {activeLicence.licenceKey} covers {activeLicence.recordingCount ?? 0} recordings.
-            </p>
-          </div>
+          <>
+            <div className={`${cardClass} space-y-2`}>
+              <h2 className="text-base font-bold text-ink">Your licence is active</h2>
+              <p className="text-sm text-muted">
+                {activeLicence.licenceKey} covers {activeLicence.recordingCount ?? 0} recordings.
+              </p>
+            </div>
+            <VdclDocuments versionId={activeLicence.versionId} />
+          </>
         ) : null}
 
         {/* Permissions before the signature, each one a separate choice --

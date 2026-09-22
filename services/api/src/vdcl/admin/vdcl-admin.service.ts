@@ -1,7 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { VdclVersionStatus } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CoverageNotifierService } from '../rights/coverage-notifier.service';
+import { VdclDocumentsService } from '../documents/vdcl-documents.service';
 
 /**
  * Admin lifecycle control over VDCL agreements.
@@ -21,9 +22,12 @@ import { CoverageNotifierService } from '../rights/coverage-notifier.service';
  */
 @Injectable()
 export class VdclAdminService {
+  private readonly logger = new Logger(VdclAdminService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly coverageNotifier: CoverageNotifierService,
+    private readonly documents: VdclDocumentsService,
   ) {}
 
   async listAgreements(params: { status?: VdclVersionStatus; take?: number }) {
@@ -163,6 +167,28 @@ export class VdclAdminService {
 
     // Newly-covered recordings mean decks may have GAINED coverage.
     await this.coverageNotifier.notifyForAgreement(version.agreementId, 'reinstated');
+
+    // Countersignature is the moment the licence starts granting rights, so
+    // it is also when its documents become true. Issuing them here rather
+    // than leaving it to a separate admin step means a countersigned
+    // licence always HAS a certificate -- a contributor should never be
+    // told their licence is active and then find nothing to download.
+    //
+    // Deliberately not inside the transaction above: rendering and uploading
+    // are slow and can fail on a network blip, and a failed render must not
+    // roll back an activation that has already been decided. A failure here
+    // leaves pdfKey null, which the download route reports honestly and
+    // re-issuing fixes.
+    try {
+      await this.documents.issueDocuments(versionId);
+    } catch (err) {
+      this.logger.error(
+        `Activated version ${versionId} but failed to issue its documents: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    }
+
     return updated;
   }
 

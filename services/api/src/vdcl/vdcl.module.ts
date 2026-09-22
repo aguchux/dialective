@@ -15,24 +15,37 @@ import { VdclMakerService } from './maker/vdcl-maker.service';
 import { VdclReadinessService } from './maker/readiness.service';
 import { VdclSigningService } from './maker/vdcl-signing.service';
 import { CompilationTrackerService } from './maker/compilation-tracker.service';
+import { VdclDocumentsService } from './documents/vdcl-documents.service';
+import { VdclVerificationService } from './documents/verification.service';
+import { VdclVerificationController } from './documents/verification.controller';
+import { StorageModule } from '../storage/storage.module';
 
 /**
  * Voice Dataset Contributor Licence (VDCL).
  *
- * Phase 0 shipped the rights check -- the one question the whole product
- * reduces to: may recording X be used for purpose Y? Phase 2 adds
- * compilation/, which produces the manifests that question is answered
- * against. The maker UI, documents and verification views (Phases 3-4)
- * layer on top and will arrive as sibling sub-modules here, mirroring
- * voice-stream/'s shape.
+ * Phase 0 shipped rights/ -- the one question the whole product reduces
+ * to: may recording X be used for purpose Y? compilation/ (Phase 2)
+ * produces the manifests that question is answered against, maker/
+ * (Phase 3) is how a contributor signs one, and documents/ (Phase 4)
+ * issues the PDF, certificate and public QR verification.
  *
- * Deliberately NOT a new service. Compilation will run as a queue-driven job
- * inside the api image, the same shape as reserve-balance-poll and
- * tokenomics-valuation.
+ * One boundary runs through all of it: documents/verification is the only
+ * unauthenticated surface, and it is the most exposed point of the mutual
+ * anonymity guarantee. It answers "is this licence real and in force?" and
+ * deliberately never "whose licence is it?".
+ *
+ * Deliberately NOT a new service. Compilation runs inline today and the
+ * job row exists to move it to a worker inside the api image later, the
+ * same shape as reserve-balance-poll and tokenomics-valuation.
  */
 @Module({
-  imports: [WebhooksModule, OtpModule],
-  controllers: [VdclAdminController, VdclCompilationController, VdclMakerController],
+  imports: [WebhooksModule, OtpModule, StorageModule],
+  controllers: [
+    VdclAdminController,
+    VdclCompilationController,
+    VdclMakerController,
+    VdclVerificationController,
+  ],
   providers: [
     RightsService,
     DeckCoverageService,
@@ -45,6 +58,8 @@ import { CompilationTrackerService } from './maker/compilation-tracker.service';
     VdclReadinessService,
     VdclSigningService,
     CompilationTrackerService,
+    VdclDocumentsService,
+    VdclVerificationService,
   ],
   exports: [
     RightsService,

@@ -2965,6 +2965,34 @@ export interface StartVdclDraftResult {
   manifestHash: string | null;
 }
 
+export interface VdclPublicVerification {
+  outcome:
+    | 'valid'
+    | 'suspended'
+    | 'withdrawn'
+    | 'superseded'
+    | 'not_yet_active'
+    | 'hash_mismatch'
+    | 'unknown';
+  licenceKey: string | null;
+  version: number | null;
+  issuedAt: string | null;
+  dialectTag: string | null;
+  country: string | null;
+  contributorLabel: string | null;
+  recordingCount: number | null;
+  totalDurationMs: string | null;
+  transcriptCount: number | null;
+  purposes: VdclPurpose[];
+  hashMatches: boolean;
+}
+
+export interface VdclDocumentLink {
+  url: string;
+  expiresInSeconds: number;
+  hash: string | null;
+}
+
 export interface VdclCompilationResult {
   versionId: string;
   manifestId: string;
@@ -6501,6 +6529,12 @@ export const dialectivaApi = createApi({
     getVdclReceipt: builder.query<VdclSigningReceipt, string>({
       query: (id) => `/vdcl/versions/${id}/receipt`,
     }),
+    verifyVdclLicence: builder.query<VdclPublicVerification, string>({
+      query: (token) => `/verify/${token}`,
+    }),
+    getVdclDocumentLink: builder.query<VdclDocumentLink, { id: string; kind: 'pdf' | 'png' }>({
+      query: ({ id, kind }) => `/vdcl/versions/${id}/documents/${kind}`,
+    }),
     discardVdclDraft: builder.mutation<{ versionId: string; status: string }, string>({
       query: (id) => ({ url: `/vdcl/versions/${id}`, method: 'DELETE' }),
       invalidatesTags: ['VdclMaker'],
@@ -6921,6 +6955,8 @@ export const {
   useSignVdclVersionMutation,
   useGetVdclReceiptQuery,
   useDiscardVdclDraftMutation,
+  useVerifyVdclLicenceQuery,
+  useLazyGetVdclDocumentLinkQuery,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };

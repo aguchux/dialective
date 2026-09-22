@@ -5,6 +5,7 @@
 **Phase 0:** shipped 2026-09-22 (`be77c991`) — see §5
 **Phase 2:** shipped 2026-09-22 — compilation, manifests, hashing, inspector
 **Phase 3:** shipped 2026-09-22 — maker, consent, signing, tracker
+**Phase 4:** shipped 2026-09-22 — PDF, certificate, QR verification
 **Audience:** Engineering and product
 
 ---
@@ -350,9 +351,60 @@ real result instead of a pending state, which is what the plan asks for. The
 `VdclCompilationJob` row and the tracker already exist, so moving it to a
 worker later needs no change to the contributor-facing shape.
 
-### Phase 4 — Documents and verification
+### Phase 4 — Documents and verification ✅ SHIPPED 2026-09-22
 
-- PDF, PNG, QR verification, public and authenticated views.
+- ~~PDF~~ — `vdcl-pdf.util.ts`, all twelve sections in the product plan's
+  section 6 order. Sections 7-10 (compensation, privacy, amendments,
+  governing law) render the settled substance; the clauses still under
+  Phase 1 legal review say so **on the document** rather than presenting
+  placeholder wording as settled terms.
+- ~~PNG~~ — `vdcl-png.util.ts`. Carries the privacy-safe label only; the
+  contributor's name is nulled by the caller before the renderer is
+  invoked, so no code path inside it could print a name.
+- ~~QR verification, public and authenticated views~~ — HMAC-signed
+  tokens, a public `/verify/:token` endpoint and page, and
+  contributor/staff-only document downloads.
+
+**What the QR does NOT carry is the security property.** The payload is
+four fields: version id, version number, a truncated manifest hash and a
+nonce. No photo, no signature image, no KYC reference, no profile — a QR is
+trivially decoded by anyone who photographs the certificate, so everything
+else is looked up server-side by an endpoint that decides what to disclose.
+
+**The HMAC is what makes verification mean anything.** Without it, anyone
+could print a certificate whose QR pointed at a licence id they invented,
+or edit the metrics on a real one and re-encode it, and the page would
+confirm whatever it was handed. `readVerificationToken` returns null on
+every failure mode rather than distinguishing forgery from gibberish — the
+difference tells a forger which half to fix — and compares in constant
+time.
+
+**Public verification is the most exposed point of the mutual anonymity
+guarantee.** A certificate is printed, photographed and attached to
+datasets sold onward, so anything the endpoint returns should be assumed
+permanently public. It answers "is this licence real and in force?" and
+never "whose licence is it?". Scans are logged **without** the scanner's
+IP: counting scans is useful, but a record of who examined whose licence
+is surveillance of subscribers rather than protection of contributors.
+
+**Documents are issued at countersignature**, automatically, from inside
+`activateVersion` — a contributor told their licence is active must never
+find nothing to download. It runs outside the activation transaction, so a
+failed render cannot roll back an activation that has already been decided;
+it leaves `pdfKey` null, which the download route reports honestly and
+`reissue-documents` fixes.
+
+**`pdfHash` answers "is this the exact file we sent?", not "could this be
+re-derived?"** The document content is deterministic (pdfkit's
+`CreationDate` is pinned to the countersignature, not the clock), but every
+issue mints a fresh QR nonce — so a re-issue is visible as a changed hash
+rather than a silent swap. A test initially asserted byte-identical
+re-renders; that claim was wrong about the design, not a bug in it.
+
+**New secret.** `VDCL_VERIFICATION_SECRET` signs the QR tokens. Rotating it
+invalidates every certificate already in the world, since their printed QR
+codes were signed with the old key — treat a rotation as a re-issue of
+every active licence, not a routine credential change.
 
 ### Phase 5 — Commercial packaging
 

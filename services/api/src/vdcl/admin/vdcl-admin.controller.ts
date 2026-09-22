@@ -5,6 +5,7 @@ import { RolesGuard } from '../../auth/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { VdclAdminService } from './vdcl-admin.service';
 import { ListVdclAgreementsDto, VdclReasonDto } from './dto/vdcl-lifecycle.dto';
+import { VdclDocumentsService } from '../documents/vdcl-documents.service';
 
 interface AuthedRequest {
   user: { sub: string };
@@ -22,7 +23,10 @@ interface AuthedRequest {
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.ADMIN)
 export class VdclAdminController {
-  constructor(private readonly vdclAdmin: VdclAdminService) {}
+  constructor(
+    private readonly vdclAdmin: VdclAdminService,
+    private readonly documents: VdclDocumentsService,
+  ) {}
 
   @Get('agreements')
   listAgreements(@Query() query: ListVdclAgreementsDto) {
@@ -60,6 +64,35 @@ export class VdclAdminController {
    * off-platform until the contributor control ships in Phase 3. To revoke
    * a licence on Dialect Library's own initiative, use suspend.
    */
+  /**
+   * Re-render and re-store a version's documents.
+   *
+   * Documents are issued automatically at countersignature; this exists for
+   * the case where that render failed (a network blip during upload leaves
+   * pdfKey null) or where a template fix needs applying to an already-issued
+   * licence. It rewrites the stored hashes, so a re-issue is visible as a
+   * changed hash rather than a silent swap.
+   */
+  @Post('versions/:id/reissue-documents')
+  reissueDocuments(@Param('id') id: string) {
+    return this.documents.issueDocuments(id);
+  }
+
+  /** Staff copy of a licence document, for support and compliance. */
+  @Get('versions/:id/documents/:kind')
+  downloadDocument(
+    @Param('id') id: string,
+    @Param('kind') kind: 'pdf' | 'png',
+    @Req() req: AuthedRequest,
+  ) {
+    return this.documents.getDownloadUrl({
+      versionId: id,
+      kind: kind === 'png' ? 'png' : 'pdf',
+      requesterId: req.user.sub,
+      isStaff: true,
+    });
+  }
+
   @Post('agreements/:id/withdraw')
   withdrawAgreement(
     @Param('id') id: string,

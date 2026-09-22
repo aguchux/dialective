@@ -4,6 +4,7 @@ import { VdclReadinessService } from './readiness.service';
 import { VdclMakerService } from './vdcl-maker.service';
 import { VdclSigningService } from './vdcl-signing.service';
 import { CompilationTrackerService } from './compilation-tracker.service';
+import { VdclDocumentsService } from '../documents/vdcl-documents.service';
 import { SignVdclVersionDto, StartVdclDraftDto } from './dto/maker.dto';
 
 interface AuthedRequest {
@@ -40,6 +41,7 @@ export class VdclMakerController {
     private readonly maker: VdclMakerService,
     private readonly signing: VdclSigningService,
     private readonly tracker: CompilationTrackerService,
+    private readonly documents: VdclDocumentsService,
   ) {}
 
   /** Stage 1: can this contributor sign, and what would a licence cover? */
@@ -103,6 +105,43 @@ export class VdclMakerController {
   @Get('versions/:id/receipt')
   receipt(@Param('id') id: string, @Req() req: AuthedRequest) {
     return this.signing.getReceipt(id, req.user.sub);
+  }
+
+  /**
+   * A short-lived download link for the signed licence PDF.
+   *
+   * Contributor-only. A subscriber wanting provenance gets the public
+   * verification view, never the contributor's own licence.
+   */
+  @Get('versions/:id/documents/pdf')
+  downloadPdf(@Param('id') id: string, @Req() req: AuthedRequest) {
+    return this.documents.getDownloadUrl({
+      versionId: id,
+      kind: 'pdf',
+      requesterId: req.user.sub,
+      isStaff: false,
+    });
+  }
+
+  /** The PNG certificate -- a portable summary, not the contract. */
+  @Get('versions/:id/documents/png')
+  downloadPng(@Param('id') id: string, @Req() req: AuthedRequest) {
+    return this.documents.getDownloadUrl({
+      versionId: id,
+      kind: 'png',
+      requesterId: req.user.sub,
+      isStaff: false,
+    });
+  }
+
+  /** The machine-readable manifest of exactly what this licence covers. */
+  @Get('versions/:id/manifest.json')
+  jsonManifest(@Param('id') id: string, @Req() req: AuthedRequest) {
+    return this.documents.getJsonManifest({
+      versionId: id,
+      requesterId: req.user.sub,
+      isStaff: false,
+    });
   }
 
   /** Abandon an unsigned draft. Once signed, the route out is withdrawal. */

@@ -49,6 +49,9 @@ secretGenerator:
   - name: whatsapp-crypto-creds
     envs:
       - secrets/whatsapp-crypto.env
+  - name: vdcl-creds
+    envs:
+      - secrets/vdcl.env
   - name: llm-creds
     envs:
       - secrets/llm.env

@@ -128,6 +128,14 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: spaces_community_bucket
+            # VDCL licence PDFs and certificates. Must be a PRIVATE bucket:
+            # a licence PDF names a real contributor, and the certificate is
+            # served through short-lived presigned URLs, never public-read.
+            - name: SPACES_VDCL_DOCUMENTS_BUCKET
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: spaces_vdcl_documents_bucket
             # Without this the code falls back to a 'dialectiva-testimonials'
             # default that does not exist in Spaces, so every video-testimony
             # upload PUT 404s and the browser reports a bare "Failed to fetch".
@@ -357,6 +365,11 @@ spec:
                 secretKeyRef:
                   name: whatsapp-crypto-creds
                   key: whatsapp_settings_encryption_key
+            - name: VDCL_VERIFICATION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: vdcl-creds
+                  key: vdcl_verification_secret
             - name: OPENAI_API_KEY
               valueFrom:
                 secretKeyRef:
