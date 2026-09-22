@@ -666,6 +666,7 @@ enum OtpPurpose {
   SUBSCRIBER_EMAIL_VERIFY // Voice Stream subscriber auth -- shares this enum only for MailService.sendOtpEmail's copy lookup; SubscriberOtpCode is its own table (OtpCode's FK to User can't reference SubscriberUser)
   SUBSCRIBER_LOGIN
   ACCOUNT_CLOSE
+  VDCL_SIGN // step-up confirming a contributor's signature on a VDCL version; bound to the exact manifest hash and granted purposes being signed (see vdcl-signing-context.util.ts)
 }
 
 enum ManualPhoneVerificationStatus {

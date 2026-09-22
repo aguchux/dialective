@@ -2866,6 +2866,105 @@ export interface VdclHashVerification {
   matches: boolean;
 }
 
+export interface VdclReadiness {
+  ready: boolean;
+  blockers: { requirement: string; detail: string; actionable: boolean }[];
+  inventory: VdclInventoryPreview | null;
+  dialectTag: string | null;
+  existingAgreement: {
+    id: string;
+    licenceKey: string;
+    withdrawnAt: string | null;
+    activeVersionId: string | null;
+  } | null;
+}
+
+export interface VdclVersionSummary {
+  versionId: string;
+  version: number;
+  status: VdclVersionStatus;
+  licenceKey: string;
+  dialectTag: string;
+  withdrawn: boolean;
+  recordingCount: number | null;
+  blockerMessage: string | null;
+  signedAt: string | null;
+  countersignedAt: string | null;
+  createdAt: string;
+}
+
+export interface VdclReviewPayload {
+  versionId: string;
+  version: number;
+  status: VdclVersionStatus;
+  licenceKey: string;
+  dialectTag: string;
+  termsVersion: string | null;
+  manifestHash: string | null;
+  signedAt: string | null;
+  countersignedAt: string | null;
+  purposes: { purpose: VdclPurpose; wordingVersion: string }[];
+  manifest: {
+    manifestKey: string;
+    recordingCount: number;
+    totalDurationMs: string;
+    transcriptCount: number;
+    excludedCount: number;
+    meanCompositeScore: string | null;
+    asrPipelineVersion: string | null;
+    scoreDefinitions: Record<string, string> | null;
+    compiledAt: string;
+  } | null;
+}
+
+export interface VdclTrackerStatus {
+  versionId: string;
+  licenceKey: string;
+  status: VdclVersionStatus;
+  stages: { stage: string; label: string; state: 'done' | 'current' | 'pending' | 'failed' }[];
+  progressPercent: number;
+  waitingOn: 'you' | 'dialect_library' | 'nobody';
+  nextAction: string | null;
+  blockerMessage: string | null;
+  failureReason: string | null;
+  estimatedCompletionAt: string | null;
+  compiledAt: string | null;
+  recordingCount: number | null;
+  signedAt: string | null;
+  countersignedAt: string | null;
+}
+
+export interface VdclSigningReceipt {
+  versionId: string;
+  licenceKey: string;
+  signedAt: string;
+  signatureKind: string | null;
+  stepUpMethod: string | null;
+  manifestHash: string | null;
+  purposes: VdclPurpose[];
+  status: VdclVersionStatus;
+}
+
+export interface StartVdclDraftInput {
+  purposes: VdclPurpose[];
+  wordingVersion: string;
+  termsVersion?: string;
+  locale?: string;
+}
+
+export interface StartVdclDraftResult {
+  agreementId: string;
+  licenceKey: string;
+  versionId: string;
+  version: number;
+  dialectTag: string;
+  compiled: boolean;
+  compilationError: string | null;
+  recordingCount: number | null;
+  excludedCount: number | null;
+  manifestHash: string | null;
+}
+
 export interface VdclCompilationResult {
   versionId: string;
   manifestId: string;
@@ -3390,6 +3489,7 @@ export const dialectivaApi = createApi({
     'WhatsAppValidator',
     'VdclAgreements',
     'VdclManifest',
+    'VdclMaker',
   ],
   endpoints: (builder) => ({
     register: builder.mutation<
@@ -6355,6 +6455,56 @@ export const dialectivaApi = createApi({
     verifyVdclManifestHash: builder.query<VdclHashVerification, string>({
       query: (id) => `/admin/vdcl/versions/${id}/verify-hash`,
     }),
+    getVdclReadiness: builder.query<VdclReadiness, void>({
+      query: () => '/vdcl/readiness',
+      providesTags: ['VdclMaker'],
+    }),
+    getMyVdclVersions: builder.query<VdclVersionSummary[], void>({
+      query: () => '/vdcl/versions',
+      providesTags: ['VdclMaker'],
+    }),
+    startVdclDraft: builder.mutation<StartVdclDraftResult, StartVdclDraftInput>({
+      query: (body) => ({ url: '/vdcl/drafts', method: 'POST', body }),
+      invalidatesTags: ['VdclMaker'],
+    }),
+    getVdclReview: builder.query<VdclReviewPayload, string>({
+      query: (id) => `/vdcl/versions/${id}/review`,
+      providesTags: (_r, _e, id) => [{ type: 'VdclMaker', id }],
+    }),
+    getVdclVersionStatus: builder.query<VdclTrackerStatus, string>({
+      query: (id) => `/vdcl/versions/${id}/status`,
+      providesTags: (_r, _e, id) => [{ type: 'VdclMaker', id: `${id}-status` }],
+    }),
+    requestVdclSigningOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number; manifestHash: string | null },
+      string
+    >({
+      query: (id) => ({ url: `/vdcl/versions/${id}/signing-otp`, method: 'POST' }),
+    }),
+    signVdclVersion: builder.mutation<
+      { versionId: string; status: VdclVersionStatus; signedAt: string | null },
+      {
+        id: string;
+        otpRequestId: string;
+        code: string;
+        signatureKind: 'drawn' | 'typed' | 'digital';
+        signatureLabel?: string;
+      }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/vdcl/versions/${id}/sign`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['VdclMaker'],
+    }),
+    getVdclReceipt: builder.query<VdclSigningReceipt, string>({
+      query: (id) => `/vdcl/versions/${id}/receipt`,
+    }),
+    discardVdclDraft: builder.mutation<{ versionId: string; status: string }, string>({
+      query: (id) => ({ url: `/vdcl/versions/${id}`, method: 'DELETE' }),
+      invalidatesTags: ['VdclMaker'],
+    }),
   }),
 });
 
@@ -6762,6 +6912,15 @@ export const {
   useGetVdclManifestQuery,
   useGetVdclExclusionsQuery,
   useVerifyVdclManifestHashQuery,
+  useGetVdclReadinessQuery,
+  useGetMyVdclVersionsQuery,
+  useStartVdclDraftMutation,
+  useGetVdclReviewQuery,
+  useGetVdclVersionStatusQuery,
+  useRequestVdclSigningOtpMutation,
+  useSignVdclVersionMutation,
+  useGetVdclReceiptQuery,
+  useDiscardVdclDraftMutation,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };

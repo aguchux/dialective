@@ -4,6 +4,7 @@
 **Status:** Engineering design review, grounded in the codebase and production data as of 2026-09-22
 **Phase 0:** shipped 2026-09-22 (`be77c991`) — see §5
 **Phase 2:** shipped 2026-09-22 — compilation, manifests, hashing, inspector
+**Phase 3:** shipped 2026-09-22 — maker, consent, signing, tracker
 **Audience:** Engineering and product
 
 ---
@@ -303,11 +304,51 @@ recording whose state changed since compilation reports today's reason, not
 the one that applied on the day, which the response marks with
 `recomputedAt`.
 
-### Phase 3 — Maker and signing
+### Phase 3 — Maker and signing ✅ SHIPPED 2026-09-22
 
-- Readiness check, rights checklist, review, sign, countersign.
-- Compilation tracker with real status, not a spinner.
-- **Acceptance:** material changes require a new signed version.
+- ~~Readiness check~~ — `readiness.service.ts` gates on verified email,
+  account standing, **live** KYC approval, an active dialect profile and at
+  least one eligible recording. It reports every unmet requirement at once
+  (a checklist revealing one problem at a time turns one conversation into
+  several) and marks each as actionable or not, so nobody is told to "go
+  do" something they are already waiting on.
+- ~~Rights checklist~~ — `ConsentCards.tsx`. Each use is its own checkbox;
+  there is no "accept all" control, because one box covering several uses
+  is not informed consent to any of them. The three sensitive purposes
+  (redistribution, promotion, biometric) are visually separated with their
+  own plain-language explanations. VOICE_CLONING is refused **server-side**
+  in both `VdclMakerService` and `VdclDraftService` — a policy that exists
+  only in the UI is not a policy.
+- ~~Review, sign~~ — `vdcl-signing.service.ts`. Signing moves a version to
+  `PENDING_COUNTERSIGNATURE`, never to ACTIVE.
+- ~~Compilation tracker with real status, not a spinner~~ —
+  `compilation-tracker.service.ts`. Every response names the stage, whose
+  move it is (`waitingOn: 'you' | 'dialect_library' | 'nobody'`) and the
+  next action. The version's status outranks the job's stage, or an issued
+  licence would display "compliance review" forever.
+- **Acceptance met, and enforced rather than documented:** the signing
+  step-up OTP is bound via `vdclSigningContextHash` to the manifest hash
+  **and** the granted purposes. The binding is re-derived from the row at
+  signing time, so a dataset or a purpose set that changed after the code
+  was issued produces a different hash and verification fails closed. A
+  material change cannot have a signature land on it.
+
+**Why the OTP binds purposes as well as the manifest.** Binding the dataset
+alone would still let a code issued while reviewing an ASR-training-only
+licence complete a signature on one that also granted redistribution. The
+contributor's consent is to a *pair* — this data, these uses — so both are
+in the hash.
+
+**KYC is re-checked at signature time, not trusted from the draft.**
+Identity can lapse between compilation and signing, and a licence signed on
+stale evidence is precisely what referencing the DLKYC record is meant to
+prevent.
+
+**One deliberate limit.** Compilation runs inline in the contributor's
+request rather than on a queue. At current inventory sizes that returns a
+real result instead of a pending state, which is what the plan asks for. The
+`VdclCompilationJob` row and the tracker already exist, so moving it to a
+worker later needs no change to the contributor-facing shape.
 
 ### Phase 4 — Documents and verification
 

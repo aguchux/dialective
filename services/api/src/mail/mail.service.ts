@@ -805,6 +805,16 @@ function otpCopyForPurpose(purpose: OtpPurpose): { subject: string; intro: strin
         subject: 'Confirm closing your account',
         intro: 'Enter this code to confirm closing your Dialect Library account.',
       };
+    case 'VDCL_SIGN':
+      // Names the act rather than the code. Signing a licence is the most
+      // consequential thing a contributor does on the platform, and an
+      // email saying only "here is your code" would not tell someone
+      // receiving one unexpectedly what is being authorised in their name.
+      return {
+        subject: 'Confirm signing your Voice Dataset Contributor Licence',
+        intro:
+          'Enter this code to sign your Voice Dataset Contributor Licence. Only use it if you are signing your licence right now.',
+      };
   }
 }
 

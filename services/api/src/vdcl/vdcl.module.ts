@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { WebhooksModule } from '../voice-stream/webhooks/webhooks.module';
+import { OtpModule } from '../otp/otp.module';
 import { RightsService } from './rights/rights.service';
 import { DeckCoverageService } from './rights/deck-coverage.service';
 import { CoverageNotifierService } from './rights/coverage-notifier.service';
@@ -9,6 +10,11 @@ import { VdclCompilationController } from './compilation/vdcl-compilation.contro
 import { VdclCompilationService } from './compilation/vdcl-compilation.service';
 import { VdclDraftService } from './compilation/vdcl-draft.service';
 import { ManifestInspectorService } from './compilation/manifest-inspector.service';
+import { VdclMakerController } from './maker/vdcl-maker.controller';
+import { VdclMakerService } from './maker/vdcl-maker.service';
+import { VdclReadinessService } from './maker/readiness.service';
+import { VdclSigningService } from './maker/vdcl-signing.service';
+import { CompilationTrackerService } from './maker/compilation-tracker.service';
 
 /**
  * Voice Dataset Contributor Licence (VDCL).
@@ -25,8 +31,8 @@ import { ManifestInspectorService } from './compilation/manifest-inspector.servi
  * tokenomics-valuation.
  */
 @Module({
-  imports: [WebhooksModule],
-  controllers: [VdclAdminController, VdclCompilationController],
+  imports: [WebhooksModule, OtpModule],
+  controllers: [VdclAdminController, VdclCompilationController, VdclMakerController],
   providers: [
     RightsService,
     DeckCoverageService,
@@ -35,6 +41,10 @@ import { ManifestInspectorService } from './compilation/manifest-inspector.servi
     VdclCompilationService,
     VdclDraftService,
     ManifestInspectorService,
+    VdclMakerService,
+    VdclReadinessService,
+    VdclSigningService,
+    CompilationTrackerService,
   ],
   exports: [
     RightsService,

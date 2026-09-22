@@ -15,6 +15,7 @@ import {
   Landmark,
   LogOut,
   Megaphone,
+  FileSignature,
   MessageSquareQuote,
   Mic2,
   Plug,
@@ -178,6 +179,9 @@ export function DashboardHeader({
                     {p2pPendingCount > 9 ? '9+' : p2pPendingCount}
                   </span>
                 )}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => router.push('/dashboard/licence')}>
+                <FileSignature className="size-4" aria-hidden="true" /> My Licence
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => router.push('/dashboard?view=testimonials')}>
                 <MessageSquareQuote className="size-4" aria-hidden="true" /> Testimonials
