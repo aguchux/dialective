@@ -67,6 +67,23 @@ export class StreamDecksController {
     return this.decks.remove(subscriber.organizationId, id, subscriber.sub);
   }
 
+  /**
+   * Licence coverage for this deck, per contributor VDCL.
+   *
+   * A deck holds recordings from many contributors, so it is covered by many
+   * licences, never one. This reports how much of it the org may actually
+   * stream for the purposes their credentials declare -- the number that
+   * decides whether a deck is a sellable bundle or a partially usable one.
+   */
+  @Get(':id/coverage')
+  @UseGuards(RequireActiveSubscriptionGuard)
+  coverage(
+    @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,
+    @Param('id') id: string,
+  ) {
+    return this.decks.coverage(subscriber.organizationId, id);
+  }
+
   @Post(':id/items')
   @UseGuards(SubscriberRolesGuard, RequireActiveSubscriptionGuard)
   @SubscriberRoles(...CAN_MANAGE_DECKS)

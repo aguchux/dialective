@@ -4405,6 +4405,11 @@ enum WebhookEventType {
   AUDIO_STREAM_COMPLETED
   AUDIO_STREAM_DENIED
   ANOMALY_DETECTED
+  /// A contributor withdrew or had a VDCL suspended, so every deck holding
+  /// their recordings just lost coverage. Emitted per affected deck with the
+  /// count of items that became unstreamable, so an org learns from a
+  /// notification rather than from 403s appearing mid-pipeline.
+  DECK_COVERAGE_CHANGED
 }
 
 /// A subscriber-configured HTTP callback endpoint. One organization may

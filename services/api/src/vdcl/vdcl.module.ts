@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
+import { WebhooksModule } from '../voice-stream/webhooks/webhooks.module';
 import { RightsService } from './rights/rights.service';
+import { DeckCoverageService } from './rights/deck-coverage.service';
+import { CoverageNotifierService } from './rights/coverage-notifier.service';
 
 /**
  * Voice Dataset Contributor Licence (VDCL).
@@ -14,7 +17,8 @@ import { RightsService } from './rights/rights.service';
  * tokenomics-valuation.
  */
 @Module({
-  providers: [RightsService],
-  exports: [RightsService],
+  imports: [WebhooksModule],
+  providers: [RightsService, DeckCoverageService, CoverageNotifierService],
+  exports: [RightsService, DeckCoverageService, CoverageNotifierService],
 })
 export class VdclModule {}

@@ -25,21 +25,40 @@ function setup() {
     },
     streamDeckRule: { upsert: jest.fn() },
     streamDeckVersion: { findMany: jest.fn() },
+    // Credentials the org holds -- their declared purposes are what deck
+    // coverage is measured against.
+    streamApiKey: { findMany: jest.fn().mockResolvedValue([]) },
+    oAuthClient: { findMany: jest.fn().mockResolvedValue([]) },
   };
   const catalogue = { isEligible: jest.fn().mockResolvedValue(true) };
   const versioning = { writeNewVersionIfMaterial: jest.fn().mockResolvedValue(undefined) };
   const smartDeckEvaluator = { evaluateRule: jest.fn().mockResolvedValue(undefined) };
   const webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
   const orgActivity = { record: jest.fn().mockResolvedValue(undefined) };
+  // VDCL coverage -- reports licence status, never blocks an add.
+  const deckCoverage = {
+    forRecording: jest.fn().mockResolvedValue({ status: 'licensed', advisory: false }),
+    forDeck: jest.fn(),
+  };
   const service = new StreamDecksService(
     prisma as any,
     catalogue as any,
+    deckCoverage as any,
     versioning as any,
     smartDeckEvaluator as any,
     webhookEvents as any,
     orgActivity as any,
   );
-  return { prisma, catalogue, versioning, smartDeckEvaluator, webhookEvents, orgActivity, service };
+  return {
+    prisma,
+    catalogue,
+    deckCoverage,
+    versioning,
+    smartDeckEvaluator,
+    webhookEvents,
+    orgActivity,
+    service,
+  };
 }
 
 describe('StreamDecksService', () => {
@@ -211,7 +230,29 @@ describe('StreamDecksService', () => {
       expect(prisma.streamDeckItem.create).toHaveBeenCalledWith({
         data: { deckId: 'deck-1', recordingId: 'rec-1', addedByUserId: 'user-1' },
       });
-      expect(result).toEqual({ id: 'item-1' });
+      // The add now reports where this clip stands licence-wise, so an org
+      // never accumulates unlicensed items blind.
+      expect(result).toEqual({ id: 'item-1', licence: { status: 'licensed', advisory: false } });
+    });
+
+    it('allows adding an unlicensed recording but reports it as pending', async () => {
+      // Not a block: a contributor who has not signed yet is a legitimate
+      // pending state, and refusing would make decks unbuildable during
+      // rollout. The org just must not add blind.
+      const { prisma, service, deckCoverage } = setup();
+      prisma.streamDeck.findUnique.mockResolvedValue({
+        id: 'deck-1',
+        organizationId: 'org-1',
+        items: [],
+      });
+      prisma.streamDeckItem.findUnique.mockResolvedValue(null);
+      prisma.streamDeckItem.create.mockResolvedValue({ id: 'item-2' });
+      deckCoverage.forRecording.mockResolvedValue({ status: 'pending', advisory: false });
+
+      const result = await service.addItem('org-1', 'deck-1', 'user-1', 'rec-2');
+
+      expect(prisma.streamDeckItem.create).toHaveBeenCalled();
+      expect(result.licence.status).toBe('pending');
     });
 
     it('rejects operating on a deck belonging to a different organization', async () => {
