@@ -3,7 +3,7 @@
 **Companion to:** `VDCL-Design-Plan-And-Recommendations.md`, `Dialect-Library-VDCL-Product-and-Implementation-Plan.md`
 **Supersedes:** the royalty sections of `VDCL-Contributor-Decks-And-Royalties-Design.md`
 **Status:** Design proposal. Not built. Written 2026-09-22 against live production data.
-**Audience:** Product and engineering; §7 is for legal
+**Audience:** Product and engineering; §10 is for legal
 
 ---
 
@@ -109,7 +109,7 @@ never per agreement.
 | **Stream access log rows** | **0** |
 
 Royalties would be built against **zero usage history**. Good for avoiding
-a retrofit; bad for validating a split rule. See §8.
+a retrofit; bad for validating a split rule. See §11.
 
 ---
 
@@ -189,100 +189,289 @@ accounting is fixed. Count is exact and not gameable the same way.
 
 ---
 
-## 5. Settlement
+## 5. Royalties are real money, not DL
 
-### 5.1 Shape
+**This is the single most important property of the programme.**
+
+Royalties are denominated and held in **fiat**, accrued against real
+subscription revenue, and paid out to a **bank account**. They never touch
+the DL token wallet, never mint DL, and never interact with the reserve.
+
+| | Per-recording payout (today) | Royalty (this programme) |
+|---|---|---|
+| Unit | DL token | Fiat (USD, paid in local currency) |
+| Held in | `Wallet.balance` | `RoyaltyBalance` — separate |
+| Backed by | Tokenomics reserve | Actual collected subscription revenue |
+| Paid out via | Wallet withdrawal → payout rails | Royalty payout → payout rails |
+| Ledger | `LedgerEntry` | `RoyaltyLedgerEntry` — separate |
+
+This removes the largest risk in the previous draft. A DL-denominated
+royalty would have been a **reserve-backed mint** against subscription
+revenue, requiring `TokenomicsService` integration and carrying a real
+danger of silently diluting token backing if the reserve transaction ever
+diverged from the credit. Fiat royalties have no such coupling: money in
+from Stripe, money out to a bank, with an auditable balance between.
+
+**The two economies stay separate and must not be bridged.** No conversion
+between a royalty balance and DL in either direction, unless that is
+explicitly designed later as its own feature with its own reserve
+accounting.
+
+### 5.1 Balance and ledger
+
+```prisma
+/// A contributor's accrued, unpaid royalty balance, in fiat minor units
+/// (cents). Deliberately NOT the DL Wallet: royalties are real money from
+/// real subscription revenue, and mixing them with a reserve-backed token
+/// balance would make both harder to audit and risk implying convertibility
+/// that does not exist.
+model RoyaltyBalance {
+  id            String   @id @default(uuid())
+  contributorId String   @unique
+  contributor   User     @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  /// Minor units (cents). Integer, never float -- money.
+  accruedMinor  BigInt   @default(0)
+  paidMinor     BigInt   @default(0)
+  currency      String   @default("USD")
+  updatedAt     DateTime @updatedAt
+
+  entries RoyaltyLedgerEntry[]
+  @@map("royalty_balances")
+}
+
+/// Append-only, one row per balance change. Same discipline as LedgerEntry:
+/// never updated, never deleted, a correction is a compensating entry.
+model RoyaltyLedgerEntry {
+  id            String             @id @default(uuid())
+  balanceId     String
+  balance       RoyaltyBalance     @relation(fields: [balanceId], references: [id], onDelete: Cascade)
+  type          RoyaltyEntryType
+  /// Signed minor units: positive accrual, negative payout.
+  amountMinor   BigInt
+  currency      String             @default("USD")
+  /// Which month this accrual is for. Null on payouts.
+  periodStart   DateTime?
+  /// Which subscriber's pool it came from. Null on payouts, which aggregate.
+  organizationId String?
+  reference     String?
+  createdAt     DateTime           @default(now())
+
+  @@index([balanceId, createdAt])
+  @@index([periodStart])
+  @@map("royalty_ledger_entries")
+}
+
+enum RoyaltyEntryType {
+  ACCRUAL // monthly earning from one subscriber's pool
+  PAYOUT // paid out to a bank account
+  PAYOUT_REVERSED // a failed payout returned to the balance
+  ADJUSTMENT // admin correction, always compensating
+}
+```
+
+### 5.2 Estimated on the go
+
+> "they hold real money calculated by subscription end, and estimated on
+> the go at any time"
+
+Two distinct numbers, and the UI must never confuse them:
+
+- **Accrued** — settled, final, owed. Written at period end from collected
+  revenue.
+- **Estimated** — the current month in progress. Computed live from
+  `RecordingUsageMonth` so far, against the subscriber's *expected* revenue
+  for the period.
+
+An estimate is **not a liability**. It moves as other contributors' usage
+accumulates: a contributor holding 60% of usage on day 3 may hold 20% by
+day 30 without their own streams changing at all, because the denominator
+grew. The dashboard must label it as provisional and say plainly that it
+can go down as well as up.
+
+Estimates are computed on read, never stored — a stored estimate becomes a
+stale promise.
+
+---
+
+## 6. Settlement
+
+### 6.1 Shape
 
 A monthly job following the established standalone-script pattern
 (`reserve-balance-poll`, `tokenomics-valuation`) — runs inside the `api`
 image as a CronJob, not a new service.
 
 ```
-month ends
+subscription period ends
   → aggregate StreamAccessLog → RecordingUsageMonth (allowed rows only)
-  → FOR EACH subscriber with a paid period in the month:
-      pool = that subscriber's revenue × royaltySharePercent
+  → FOR EACH subscriber with COLLECTED revenue in the period:
+      pool = that subscriber's collected revenue × royaltySharePercent
       FOR EACH contributor that subscriber streamed:
         share = pool × (their streams ÷ that subscriber's total streams)
-  → sum each contributor's shares across all subscribers
-  → write ONE LedgerEntry per contributor, in a transaction
-  → mark the period settled (idempotency guard)
+        → RoyaltyLedgerEntry(ACCRUAL, +share, period, organizationId)
+  → each contributor's RoyaltyBalance.accruedMinor increases by their total
 ```
 
-A contributor gets **one credit per month**, aggregating what they earned
-from every subscriber — not one credit per subscriber.
+One `ACCRUAL` row **per contributor per subscriber pool**, so the
+contributor can see exactly where the money came from — not one opaque
+monthly figure.
 
-### 5.2 Settings
+### 6.2 Rounding
 
-| Setting | Default | Purpose |
-|---|---|---|
-| `royaltiesEnabled` | `false` | Master switch |
-| `royaltySharePercent` | `30.00` | Contributor share, `Decimal(5,2)` |
+Money in minor units, integer arithmetic. A pool rarely divides evenly, so
+the remainder must go somewhere deterministic rather than vanishing.
+**Recommendation:** allocate the remainder to the largest-share contributor,
+and assert that the sum of allocations equals the pool exactly. A
+settlement that does not balance should fail loudly, not silently lose
+cents.
 
-Global and current — the rate that applies is the rate set at settlement
-time, not one snapshotted per agreement. The VDCL states that a rate
-exists and is platform-set; it does not guarantee a number.
+### 6.3 Revenue basis: collected, not billed
 
-### 5.3 Revenue basis
+Pool is computed from **collected** revenue. A failed, refunded or
+charged-back payment must never generate a royalty — the platform would be
+paying out money it never received. Stripe payment state is the source, not
+`SubscriptionPlan.monthlyUsdAmount` alone.
 
-Pool is computed from **collected** subscription revenue, not billed. A
-failed or refunded payment must not generate a royalty — the platform
-would be paying out money it never received. `Subscription.currentPeriodStart`
-/ `currentPeriodEnd` and Stripe's payment state are the source.
+**A refund after accrual is the hard case.** Recommendation: a negative
+`ADJUSTMENT` against the next period rather than clawing back a paid
+balance, with a floor at zero so a contributor is never driven negative by
+someone else's chargeback.
 
-### 5.4 Ledger discipline
+### 6.4 Settlement discipline
 
-Royalties are a balance mutation, held to the same invariants as every
-other one in this repo:
-
-- New `LedgerEntryType.ROYALTY_PAYOUT`.
-- Wallet credit and `LedgerEntry` written in **one** `$transaction`.
-- **Idempotency is mandatory.** A settlement row per period, claimed
-  atomically before any credit is written, so a re-run cannot double-pay.
-  **This is the highest-risk detail in the design.**
-- Append-only. A correction is a compensating entry, never an update.
-
-### 5.5 Tokenomics
-
-Royalties **mint DL against real subscription revenue**. That makes them a
-reserve-backed mint, not a transfer: they must flow through
-`TokenomicsService` the way a confirmed deposit does, and the incoming
-subscription revenue must land in the reserve.
-
-Crediting wallets without a matching reserve transaction would silently
-dilute backing. **This needs review before implementation.**
+- **Idempotency is mandatory.** A settlement row per (period, subscriber),
+  claimed atomically before any accrual is written, so a re-run cannot
+  double-accrue. **The highest-risk detail in the design.**
+- Balance update and ledger entry in **one** `$transaction`.
+- Append-only; corrections are compensating entries.
+- These are the same invariants the wallet ledger already enforces — the
+  currency differs, the discipline does not.
 
 ---
 
-## 6. Worked example
+## 7. Payout
+
+### 7.1 Rails already exist
+
+`PayoutAccount` (bank via Flutterwave, mobile money, Stripe Connect) is
+already built, keyed to `User`, with encrypted account numbers, provider
+recipient ids, and verification state. **A contributor receiving royalties
+is the same `User` who already withdraws DL**, so the same payout account
+serves both.
+
+What must **not** happen is royalties borrowing the DL withdrawal path.
+`WithdrawalRequest` debits `Wallet.balance` and writes a `LedgerEntry`;
+a royalty payout debits `RoyaltyBalance` and writes a
+`RoyaltyLedgerEntry`. Separate request model, same rails underneath.
+
+### 7.2 Gating
+
+- **KYC** — the existing threshold gate applies. A royalty payout is a
+  fiat payout like any other.
+- **Minimum payout** — a `royaltyMinimumPayoutMinor` setting, below which
+  the balance rolls forward. Necessary: a $0.40 bank transfer costs more to
+  send than it is worth.
+- **OTP** — same step-up as wallet withdrawals. Fund-moving is fund-moving.
+
+### 7.3 Currency
+
+Balances accrue in **USD** (subscription revenue's currency). Payout
+converts at the existing `Country.usdExchangeRate` used elsewhere, so a
+contributor sees a local-currency amount at the point of withdrawal.
+
+---
+
+## 8. Contributor access to Stream
+
+> "We will integrate the dashboard for contributors access in stream
+> platform not trainer dashboard. On VDCL success, user receives account
+> invite"
+
+Royalties are a **Voice Stream** surface, not a trainer-dashboard one.
+Contributors see their published decks, usage and royalty balance at
+`stream.dialectlibrary.com`.
+
+### 8.1 The identity problem
+
+This is the substantive new work, and it does not fit the current model.
+
+- `User` — trainers/contributors. `JwtAuthGuard`, `Role`.
+- `SubscriberUser` — Voice Stream. **Always org-scoped** via
+  `SubscriberMembership`; every route assumes an `organizationId`.
+
+A contributor is **neither**: not a trainer in Voice Stream's terms, and
+not a member of any subscriber organisation. There is no existing shape for
+"a person with a Stream login who belongs to no org."
+
+Three options:
+
+**A. Contributor as an org of one.** Auto-create a `SubscriberOrganization`
+per contributor on VDCL success. Everything org-scoped keeps working
+unchanged. But it pollutes the org table with thousands of non-subscriber
+rows, and every org-facing query, count and billing assumption has to learn
+to exclude them. **Not recommended** — it buys compatibility by corrupting
+the meaning of "organisation."
+
+**B. Nullable membership.** Allow a `SubscriberUser` with no membership,
+and gate contributor routes on that. Honest about what a contributor is,
+but every existing guard assuming `organizationId` must be audited —
+the risk being a route that silently treats a missing org as "all orgs."
+
+**C. Separate contributor session on the Stream domain (recommended).**
+Contributors authenticate as their existing `User` — same identity that
+owns the recordings and the payout account — with a Stream-hosted surface
+scoped to `contributorId`. No new identity, no org fiction. Voice Stream
+becomes two audiences on one domain, which it arguably already is.
+
+**C keeps the invariant that matters:** a contributor's royalty balance,
+payout account and recordings all hang off one `User`. A and B would split
+that across two identity systems and require reconciliation.
+
+**This needs a decision before Phase A.**
+
+### 8.2 The invite
+
+On VDCL countersignature (status → ACTIVE), the contributor receives an
+invite to the Stream contributor surface. Mechanically this is an email via
+the existing `MailService` plus whatever access-grant option C settles on —
+not a `SubscriberMembership`, since there is no org to belong to.
+
+The invite is the moment the VDCL becomes visibly worth something: the
+contributor signs, and gains a place to watch their work earn.
+
+---
+
+## 9. Worked example
 
 One subscriber on the $39 plan, `royaltySharePercent = 30`:
 
 | | |
 |---|---|
-| Subscriber revenue | $39.00 |
+| Collected revenue | $39.00 |
 | Platform (70%) | $27.30 |
 | **Contributor pool (30%)** | **$11.70** |
 
-That subscriber streamed 10,000 times in the month, across 3 contributors:
+That subscriber streamed 10,000 times across 3 contributors:
 
-| Contributor | Streams | Share | Earns |
+| Contributor | Streams | Share | Accrues |
 |---|---|---|---|
 | A | 6,000 | 60% | $7.02 |
 | B | 3,000 | 30% | $3.51 |
 | C | 1,000 | 10% | $1.17 |
 
-A contributor streamed by a second subscriber draws from that subscriber's
-pool too, independently, and receives the sum as one monthly credit.
+A contributor streamed by a second subscriber accrues from that pool too,
+independently. Their `RoyaltyBalance` is the sum, carried forward until it
+clears the minimum payout.
 
-**Note on scale.** With one subscriber the pool is small. The programme
-becomes meaningful as subscriber count grows — which is the correct
-behaviour for a revenue share, but means launch-period amounts will be
-modest and the product messaging should not overpromise.
+**On scale.** With one subscriber the pool is small, and the programme only
+becomes meaningful as subscriber count grows. That is correct behaviour for
+a revenue share, but launch-period amounts will be modest and the product
+messaging must not overpromise. The minimum-payout threshold (§7.2) exists
+partly so contributors are not sent trivial transfers.
 
 ---
 
-## 7. For legal
+## 10. For legal
 
 The VDCL needs a **policy provision** covering the programme. It is a
 clause in a licence, not a change to what the licence is:
@@ -291,30 +480,41 @@ clause in a licence, not a change to what the licence is:
    earn a share of subscription revenue from subscribers who stream them.
 2. **Nature of the payment** — consideration for the distribution right
    granted by the licence. **Not** additional payment for the recording,
-   which is separately and already compensated.
-3. **Rate** — platform-set, applies as at settlement, may change. The
+   which is separately and already compensated in DL.
+3. **Currency** — royalties are **real money**, accrued in USD and paid to
+   a bank account. They are not DL and are not convertible to DL.
+4. **Rate** — platform-set, applies as at settlement, may change. The
    licence states that a rate exists, not what it is.
-4. **Measure** — by streams, per subscriber, pro-rata. Deck membership
+5. **Measure** — by streams, per subscriber, pro-rata. Deck membership
    alone earns nothing.
-5. **Optionality** — the programme is an incentive and may be varied or
-   discontinued; signing a VDCL is not conditional on it, and it is not a
+6. **Estimates are not liabilities** — in-period figures are provisional
+   and may decrease.
+7. **Optionality** — the programme is an incentive and may be varied or
+   discontinued; signing a VDCL is not conditional on it, and it is not
    guaranteed income.
-6. **Withdrawal** — stops future earning; amounts already earned remain
+8. **Withdrawal** — stops future earning; amounts already accrued remain
    payable.
 
-**Open question for legal:** whether the programme's optionality and
-platform-set rate are compatible with the VDCL being consideration-bearing
-in the relevant jurisdiction, given contributors are separately paid.
+**Open questions for legal:**
+
+- Does holding accrued fiat on behalf of contributors create a
+  money-transmission or safeguarding obligation in the operating
+  jurisdiction? This is a materially different question from holding DL,
+  and it is the main new legal exposure the fiat model introduces.
+- Tax treatment and reporting for contributor royalty income across
+  jurisdictions.
 
 ---
 
-## 8. Phasing
+## 11. Phasing
 
 | Phase | Content | Depends on |
 |---|---|---|
 | **A** | Contributor decks + publishing to market | VDCL Phase 2 (manifests) |
-| **B** | `RecordingUsageMonth` aggregation job | Real streaming traffic |
-| **C** | Settlement + tokenomics integration | §7 settled; B has run |
+| **B** | `RecordingUsageMonth` aggregation + live estimates | Real streaming traffic |
+| **C** | Accrual settlement (fiat balance + ledger) | §10 settled; B has run a month |
+| **D** | Royalty payout to bank | C; KYC gate; minimum threshold |
+| **E** | Contributor Stream dashboard + VDCL invite | §8.1 decided |
 
 **A is safe to build now** once Phase 2 lands — product work, no financial
 surface.
@@ -323,5 +523,10 @@ surface.
 numbers nobody is paid from. A split rule that has never been computed
 against real usage should not first be computed with money attached.
 
-**C is financial infrastructure** and should not begin until the legal
-wording is settled — the licence has to promise what the code pays.
+**C and D are financial infrastructure.** Lower risk than the DL-minting
+design they replace — no reserve coupling — but still held to full ledger
+discipline.
+
+**E's identity decision (§8.1) should be made before A**, because
+contributor deck ownership and contributor Stream access are the same
+question asked twice.
