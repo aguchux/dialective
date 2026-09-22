@@ -4,6 +4,15 @@
 **Status:** Design proposal. Not built. Written 2026-09-22 against live production data.
 **Audience:** Product, engineering, and — for §6 — legal
 
+> **The royalty sections (§4, §6) are SUPERSEDED by
+> `Dialect-Library-Royalty-Programme.md`.** This document proposed a single
+> platform-wide pool; the confirmed model is **per-subscriber pools** —
+> each subscriber's payment is shared only among the contributors *that
+> subscriber* streamed. It also framed royalties as changing what a VDCL
+> is; they do not. A VDCL stays a licence and gains a policy provision
+> establishing eligibility. **§2 (contributor-owned decks) and §3 (usage
+> attribution) remain current.**
+
 ---
 
 ## Summary
