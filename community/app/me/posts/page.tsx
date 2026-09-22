@@ -15,6 +15,7 @@ import {
 } from '@/components/ui';
 import { PostCard } from '@/components/community-content';
 import { usePostOverflow } from '@/lib/use-post-overflow';
+import { usePostActions } from '@/lib/use-post-actions';
 
 type MyPostsTab = 'published' | 'drafts';
 
@@ -23,6 +24,7 @@ export default function MyPostsPage() {
   const [tab, setTab] = useState<MyPostsTab>('published');
   const { data, isLoading, isError, refetch } = useListMyPostsQuery();
   const { overflowItemsFor, dialogs } = usePostOverflow();
+  const { postActions } = usePostActions();
   const [updatePost] = useUpdatePostMutation();
   const [publishError, setPublishError] = useState<string | null>(null);
   const items = useMemo(
@@ -72,10 +74,11 @@ export default function MyPostsPage() {
       ) : isError ? (
         <ErrorState onRetry={() => void refetch()} retryLabel="Retry loading posts" />
       ) : items.length ? (
-        <div className="grid gap-3">
+        <div className="grid gap-2.5">
           {items.map((post) => (
             <PostCard
               key={post.id}
+              {...postActions(post)}
               overflowItems={[
                 ...(post.status === 'DRAFT'
                   ? [{ label: 'Publish', onSelect: () => void publish(post.id) }]

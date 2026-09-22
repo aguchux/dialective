@@ -129,7 +129,7 @@ export default function SpacePage({ params }: { params: { slug: string } }) {
               title="No posts in this space yet"
             />
           ) : (
-            <div className="grid gap-3">
+            <div className="grid gap-2.5">
               {posts!.items.map((post) => (
                 <PostCard
                   key={post.id}

@@ -83,7 +83,7 @@ export default function HomePage() {
           title="No posts yet"
         />
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-2.5">
           {data!.items.map((post) => (
             <PostCard
               key={post.id}

@@ -9,6 +9,7 @@ import {
   useUpdateMyProfileMutation,
 } from '@/store/api';
 import { useListCountriesQuery } from '@/store/geo-api';
+import { usePostActions } from '@/lib/use-post-actions';
 import { ProfileHero, PostCard } from '@/components/community-content';
 import { TagInput } from '@/components/community-form';
 import {
@@ -40,6 +41,7 @@ export default function ProfilePage() {
   } = useListMyPostsQuery();
   const [updateProfile, { isLoading }] = useUpdateMyProfileMutation();
   const { data: countries } = useListCountriesQuery();
+  const { postActions } = usePostActions();
   const [editOpen, setEditOpen] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
@@ -211,9 +213,9 @@ export default function ProfilePage() {
         ) : postsError ? (
           <ErrorState onRetry={() => void refetchPosts()} retryLabel="Retry loading posts" />
         ) : posts?.items.length ? (
-          <div className="grid gap-3">
+          <div className="grid gap-2.5">
             {posts.items.map((post) => (
-              <PostCard key={post.id} post={post} showSpace />
+              <PostCard key={post.id} {...postActions(post)} post={post} showSpace />
             ))}
           </div>
         ) : (

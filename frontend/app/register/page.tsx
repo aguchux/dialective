@@ -13,7 +13,7 @@ import {
 import { Alert, AuthPage, AuthPanel, Notice } from '@/components/AuthShell';
 import { AuthMaintenanceNotice } from '@/components/AuthMaintenanceNotice';
 import { Breadcrumbs } from '@/components/Breadcrumbs';
-import { roleHomePath } from '@/lib/role-home';
+import { postAuthPath } from '@/lib/role-home';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { PasswordRequirementsList } from '@/components/ui/PasswordRequirementsList';
 import { isStrongPassword } from '@/lib/password-strength';
@@ -64,9 +64,22 @@ function RegisterContent() {
 
   useEffect(() => {
     if (status === 'authenticated') {
-      router.replace(roleHomePath(session.user?.role, session.user?.onboardingComplete));
+      // postAuthPath may return an absolute URL (community.dialectlibrary
+      // .com sends people here to sign up and expects them back), and
+      // router.replace cannot leave this origin -- so hand those to the
+      // browser instead.
+      const destination = postAuthPath(
+        session.user?.role,
+        session.user?.onboardingComplete,
+        searchParams.get('callbackUrl'),
+      );
+      if (/^https?:\/\//i.test(destination)) {
+        window.location.href = destination;
+      } else {
+        router.replace(destination);
+      }
     }
-  }, [status, session, router]);
+  }, [status, session, router, searchParams]);
 
   useEffect(() => {
     if (!referralCode) return;
@@ -125,9 +138,10 @@ function RegisterContent() {
         clearReferralCookie();
         clearMarketingCampaignCookie();
         const freshSession = await getSession();
-        window.location.href = roleHomePath(
+        window.location.href = postAuthPath(
           freshSession?.user?.role,
           freshSession?.user?.onboardingComplete,
+          searchParams.get('callbackUrl'),
         );
       }
     } finally {

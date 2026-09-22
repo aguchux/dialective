@@ -303,7 +303,21 @@ export const communityApi = createApi({
 
     getPost: builder.query<CommunityPostCard, string>({
       query: (idOrSlug) => `/posts/${idOrSlug}`,
-      providesTags: (_result, _error, idOrSlug) => [{ type: 'Post', id: idOrSlug }],
+      // Provides BOTH the argument tag and the resolved post's id. Post
+      // links are built from post.slug, so the detail page is almost
+      // always cached under a slug -- while every mutation below
+      // (reaction, like, bookmark, update) can only invalidate by id,
+      // since that is all they are given. Without the id tag here those
+      // invalidations miss this cache entry entirely: the write succeeds
+      // server-side but the page never refetches, so reacting to a post
+      // looked like it silently did nothing.
+      providesTags: (result, _error, idOrSlug) =>
+        result && result.id !== idOrSlug
+          ? [
+              { type: 'Post' as const, id: idOrSlug },
+              { type: 'Post' as const, id: result.id },
+            ]
+          : [{ type: 'Post' as const, id: idOrSlug }],
     }),
 
     createPost: builder.mutation<

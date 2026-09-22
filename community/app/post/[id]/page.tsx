@@ -593,7 +593,7 @@ function ReplyEditForm({
   const [saving, setSaving] = useState(false);
 
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-2.5">
       <TextArea
         maxLength={5000}
         onChange={(event) => setBody(event.target.value)}

@@ -107,7 +107,7 @@ export default function NotificationsPage() {
       ) : isError ? (
         <ErrorState onRetry={() => void refetch()} retryLabel="Retry loading notifications" />
       ) : items.length ? (
-        <div className="grid gap-3">
+        <div className="grid gap-2.5">
           {items.map((notification) => (
             <NotificationCard
               key={notification.id}

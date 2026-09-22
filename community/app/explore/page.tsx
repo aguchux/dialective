@@ -140,7 +140,7 @@ export default function ExplorePage() {
               {(results?.posts.length ?? 0) > 0 && (
                 <section>
                   <SectionHeading title="Discussions" />
-                  <div className="grid gap-3">
+                  <div className="grid gap-2.5">
                     {results!.posts.map((post) => (
                       <PostCard
                         key={post.id}

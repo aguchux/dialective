@@ -6,11 +6,13 @@ import { useListBookmarksQuery } from '@/store/api';
 import { EmptyState, ErrorState, LoadingState, PageFrame, PageHeading } from '@/components/ui';
 import { PostCard } from '@/components/community-content';
 import { usePostOverflow } from '@/lib/use-post-overflow';
+import { usePostActions } from '@/lib/use-post-actions';
 
 export default function SavedPage() {
   const router = useRouter();
   const { data, isLoading, isError, refetch } = useListBookmarksQuery();
   const { overflowItemsFor, dialogs } = usePostOverflow();
+  const { postActions } = usePostActions();
 
   return (
     <PageFrame className="max-w-[1040px]">
@@ -24,10 +26,11 @@ export default function SavedPage() {
       ) : isError ? (
         <ErrorState onRetry={() => void refetch()} retryLabel="Retry loading bookmarks" />
       ) : data?.length ? (
-        <div className="grid gap-3">
+        <div className="grid gap-2.5">
           {data.map((post) => (
             <PostCard
               key={post.id}
+              {...postActions(post)}
               overflowItems={overflowItemsFor(post, () => router.push(`/post/${post.slug}`))}
               post={post}
               showBookmarkFooter

@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { signIn, signOut, useSession } from 'next-auth/react';
+import { signOut, useSession } from 'next-auth/react';
 import {
   ArrowLeft,
   Bell,
@@ -20,6 +20,7 @@ import {
 import { BrandLogo } from './BrandLogo';
 import { ConnectHeroBanner } from './ConnectHeroBanner';
 import { IconButton } from './ui';
+import { joinUrl, loginUrl } from '@/lib/auth-links';
 import { getInitials, getSpaceTone } from '@/lib/community-format';
 import { useListNotificationsQuery, useListSpacesQuery } from '@/store/api';
 
@@ -67,7 +68,7 @@ export function CommunityShell({ children }: { children: ReactNode }) {
           unreadCount={unreadCount}
         />
         <ConnectHeroBanner />
-        <main className="min-w-0 flex-1 pb-[calc(76px+env(safe-area-inset-bottom))] lg:pb-0">
+        <main className="min-w-0 flex-1 pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0">
           {children}
         </main>
       </div>
@@ -107,7 +108,7 @@ function CommunityTopbar({
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur-md">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-2 px-3 sm:px-5 lg:px-8">
         <div className="flex shrink-0 items-center gap-2 lg:hidden">
           <BrandLogo href="/" showText={false} size={30} />
         </div>
@@ -120,7 +121,7 @@ function CommunityTopbar({
             />
             <input
               aria-label="Search community"
-              className="h-11 w-full rounded-lg border border-line bg-bg px-12 text-sm text-ink transition-colors placeholder:text-muted/75 focus:border-accent focus:bg-surface focus:outline-none focus:ring-2 focus:ring-accent/15"
+              className="h-10 w-full rounded-lg border border-line bg-bg px-11 text-sm text-ink transition-colors placeholder:text-muted/75 focus:border-accent focus:bg-surface focus:outline-none focus:ring-2 focus:ring-accent/15"
               onChange={(event) => setSearchValue(event.target.value)}
               placeholder="Search discussions, topics, people..."
               value={searchValue}
@@ -136,37 +137,62 @@ function CommunityTopbar({
           )}
           <Link
             aria-label="Search community"
-            className="inline-flex size-11 items-center justify-center rounded-lg text-ink transition-colors hover:bg-surface-muted lg:hidden"
+            className="inline-flex size-10 items-center justify-center rounded-lg text-ink transition-colors hover:bg-surface-muted lg:hidden"
             href="/explore"
           >
             <Search aria-hidden="true" className="size-5" />
           </Link>
-          <Link
-            aria-current={pathname === '/notifications' ? 'page' : undefined}
-            aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
-            className="relative inline-flex size-11 items-center justify-center rounded-lg text-ink transition-colors hover:bg-surface-muted"
-            href="/notifications"
-          >
-            <Bell aria-hidden="true" className="size-5" />
-            {unreadCount > 0 && (
-              <span className="absolute right-2 top-2 size-2.5 rounded-full bg-danger ring-2 ring-surface" />
-            )}
-          </Link>
-          <Link
-            aria-label="Open profile"
-            className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface px-1.5 py-1.5 transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 lg:pl-1.5 lg:pr-3"
-            href="/profile"
-          >
-            <span className="grid size-9 place-items-center rounded-full bg-accent text-sm font-black text-white">
-              {initials}
-            </span>
-            <span className="hidden max-w-36 truncate text-sm font-extrabold lg:block">
-              {displayName}
-            </span>
-            <span className="sr-only">
-              {sessionStatus === 'authenticated' ? displayName : 'Member profile'}
-            </span>
-          </Link>
+          {sessionStatus === 'authenticated' && (
+            <Link
+              aria-current={pathname === '/notifications' ? 'page' : undefined}
+              aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
+              className="relative inline-flex size-10 items-center justify-center rounded-lg text-ink transition-colors hover:bg-surface-muted"
+              href="/notifications"
+            >
+              <Bell aria-hidden="true" className="size-5" />
+              {unreadCount > 0 && (
+                <span className="absolute right-1.5 top-1.5 size-2.5 rounded-full bg-danger ring-2 ring-surface" />
+              )}
+            </Link>
+          )}
+          {sessionStatus === 'authenticated' ? (
+            <Link
+              aria-label="Open profile"
+              className="inline-flex items-center gap-2 rounded-lg border border-line bg-surface p-1 transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 lg:pl-1 lg:pr-2.5"
+              href="/profile"
+            >
+              <span className="grid size-8 place-items-center rounded-full bg-accent text-xs font-black text-white">
+                {initials}
+              </span>
+              <span className="hidden max-w-32 truncate text-sm font-extrabold lg:block">
+                {displayName}
+              </span>
+              <span className="sr-only">{displayName}</span>
+            </Link>
+          ) : sessionStatus === 'loading' ? (
+            // Placeholder of the same width as the buttons below, so the
+            // header doesn't visibly reflow once the session resolves.
+            <span aria-hidden="true" className="h-9 w-[124px] rounded-lg bg-surface-muted" />
+          ) : (
+            // No avatar and no "Member" label for a signed-out visitor --
+            // that read as though they had an account. Auth lives on the
+            // main site; both links carry a callbackUrl back to the page
+            // being viewed.
+            <div className="flex items-center gap-1.5">
+              <a
+                className="inline-flex h-9 items-center rounded-lg px-2.5 text-sm font-extrabold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                href={loginUrl()}
+              >
+                Login
+              </a>
+              <a
+                className="inline-flex h-9 items-center rounded-lg bg-accent px-3 text-sm font-extrabold text-white transition-colors hover:bg-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                href={joinUrl()}
+              >
+                Join
+              </a>
+            </div>
+          )}
         </div>
       </div>
     </header>
@@ -187,13 +213,13 @@ function CommunitySidebar({
 
   return (
     <aside className="fixed inset-y-0 left-0 z-20 hidden w-[288px] min-w-0 max-w-[288px] flex-col border-r border-line bg-surface lg:flex">
-      <div className="border-b border-line px-5 py-4">
+      <div className="border-b border-line px-4 py-3">
         <BrandLogo textClassName="text-base" size={32} />
       </div>
 
       <nav
         aria-label="Community"
-        className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4"
+        className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-2.5 py-3"
       >
         <div className="grid gap-1">
           {PRIMARY_NAV.map((item) => (
@@ -226,7 +252,7 @@ function CommunitySidebar({
             const active = pathname.startsWith(`/spaces/${space.slug}`);
             return (
               <Link
-                className={`flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
+                className={`flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
                   active
                     ? 'bg-accent-soft text-accent'
                     : 'text-muted hover:bg-surface-muted hover:text-ink'
@@ -246,7 +272,7 @@ function CommunitySidebar({
         </div>
       </nav>
 
-      <div className="border-t border-line p-3">
+      <div className="border-t border-line p-2.5">
         {status === 'authenticated' ? (
           <div className="flex items-center gap-1.5 rounded-lg bg-bg px-2 py-2">
             <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-sm font-black text-white">
@@ -276,13 +302,24 @@ function CommunitySidebar({
             </button>
           </div>
         ) : (
-          <button
-            className="flex min-h-11 w-full items-center justify-center rounded-lg bg-accent px-3 py-2.5 text-sm font-extrabold text-white transition-colors hover:bg-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
-            onClick={() => void signIn()}
-            type="button"
-          >
-            Sign in
-          </button>
+          // signIn() used to be called here, but this app registers no
+          // NextAuth providers of its own (it only reads the shared
+          // cookie), so that led to an empty provider page. Auth lives on
+          // the main site; both links return here afterwards.
+          <div className="grid grid-cols-2 gap-1.5">
+            <a
+              className="flex min-h-10 items-center justify-center rounded-lg border border-line px-3 text-sm font-extrabold text-ink transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+              href={loginUrl()}
+            >
+              Login
+            </a>
+            <a
+              className="flex min-h-10 items-center justify-center rounded-lg bg-accent px-3 text-sm font-extrabold text-white transition-colors hover:bg-accent-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+              href={joinUrl()}
+            >
+              Join
+            </a>
+          </div>
         )}
       </div>
     </aside>
@@ -306,7 +343,7 @@ function SidebarNavLink({
   return (
     <Link
       aria-current={active ? 'page' : undefined}
-      className={`relative flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-extrabold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
+      className={`relative flex min-h-10 items-center gap-2.5 rounded-lg px-2.5 text-sm font-extrabold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${
         active
           ? 'bg-accent-soft text-accent before:absolute before:inset-y-2 before:left-0 before:w-1 before:rounded-r-full before:bg-accent'
           : 'text-muted hover:bg-surface-muted hover:text-ink'
@@ -337,7 +374,7 @@ function CommunityMobileNav({ pathname, unreadCount }: { pathname: string; unrea
           <Link
             aria-current={active ? 'page' : undefined}
             aria-label={item.label}
-            className={`relative flex min-h-[64px] min-w-0 flex-col items-center justify-center gap-1 px-0.5 text-[10px] font-extrabold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/35 ${active ? 'text-accent' : 'text-muted'}`}
+            className={`relative flex min-h-[56px] min-w-0 flex-col items-center justify-center gap-0.5 px-0.5 text-[10px] font-extrabold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/35 ${active ? 'text-accent' : 'text-muted'}`}
             href={item.href}
             key={item.href}
           >

@@ -190,7 +190,7 @@ export function PageFrame({
   className?: string;
 }) {
   return (
-    <div className={`mx-auto w-full max-w-6xl px-4 py-7 sm:px-6 lg:px-8 lg:py-8 ${className}`}>
+    <div className={`mx-auto w-full max-w-6xl px-3 py-4 sm:px-5 sm:py-5 lg:px-8 lg:py-6 ${className}`}>
       {children}
     </div>
   );
@@ -208,19 +208,19 @@ export function PageHeading({
   icon?: ReactNode;
 }) {
   return (
-    <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
-      <div className="flex min-w-0 items-start gap-3">
+    <div className="mb-4 flex flex-col gap-2.5 sm:mb-5 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      <div className="flex min-w-0 items-start gap-2.5">
         {icon && (
-          <span className="hidden size-11 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent sm:grid">
+          <span className="hidden size-9 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent sm:grid">
             {icon}
           </span>
         )}
         <div className="min-w-0">
-          <h1 className="text-[28px] font-black tracking-tight text-ink sm:text-3xl lg:text-[34px]">
+          <h1 className="text-xl font-black tracking-tight text-ink sm:text-2xl lg:text-[28px]">
             {title}
           </h1>
           {subtitle && (
-            <p className="mt-1 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">
+            <p className="mt-0.5 max-w-2xl text-sm leading-snug text-muted sm:text-base">
               {subtitle}
             </p>
           )}
@@ -344,7 +344,7 @@ export function LoadingState({ label = 'Loading' }: { label?: string }) {
     <div className="grid gap-3" role="status" aria-label={label}>
       {[0, 1, 2].map((item) => (
         <div
-          className="animate-pulse rounded-lg border border-line bg-surface p-5 shadow-community-card"
+          className="animate-pulse rounded-lg border border-line bg-surface p-4 shadow-community-card"
           key={item}
         >
           <div className="h-4 w-32 rounded bg-surface-muted" />
@@ -370,8 +370,8 @@ export function EmptyState({
   icon?: ReactNode;
 }) {
   return (
-    <Card className="grid min-h-52 place-items-center p-6 text-center">
-      <div className="grid max-w-md justify-items-center gap-3">
+    <Card className="grid min-h-40 place-items-center p-5 text-center">
+      <div className="grid max-w-md justify-items-center gap-2.5">
         <span className="grid size-11 place-items-center rounded-lg bg-surface-muted text-muted">
           {icon ?? <Inbox aria-hidden="true" className="size-5" />}
         </span>

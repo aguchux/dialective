@@ -64,7 +64,7 @@ export function CommunityAvatar({
 }) {
   const sizes = {
     sm: 'size-9 text-xs',
-    md: 'size-11 text-sm',
+    md: 'size-10 text-sm',
     lg: 'size-14 text-lg',
     xl: 'size-24 text-3xl sm:size-28 sm:text-4xl',
   };
@@ -327,7 +327,7 @@ export function PostCard({
   overflowItems?: OverflowMenuItem[];
 }) {
   return (
-    <Card className={`overflow-hidden ${compact ? 'p-4' : 'p-4 sm:p-5'}`}>
+    <Card className={`overflow-hidden ${compact ? 'p-3' : 'p-3 sm:p-4'}`}>
       <div className="flex items-start gap-3">
         <PostMeta author={post.author} createdAt={post.createdAt} showSpace={false} />
         {overflowItems && (
@@ -336,7 +336,7 @@ export function PostCard({
           </div>
         )}
       </div>
-      <Link className="mt-4 block sm:ml-[58px]" href={`/post/${post.slug}`}>
+      <Link className="mt-2.5 block sm:ml-[48px]" href={`/post/${post.slug}`}>
         <div className="mb-2 flex flex-wrap items-center gap-2">
           {showSpace && <Badge tone="muted">{post.space.name}</Badge>}
           {status && <StatusChip status={status} />}
@@ -351,11 +351,11 @@ export function PostCard({
         >
           {getPostExcerpt(post.body, compact ? 150 : 220)}
         </p>
-        <div className="mt-4">
+        <div className="mt-2.5">
           <PostTags tags={post.tags} />
         </div>
       </Link>
-      <div className="mt-4 border-t border-line pt-2 sm:ml-[58px]">
+      <div className="mt-2.5 border-t border-line pt-1.5 sm:ml-[48px]">
         {showBookmarkFooter ? (
           <div className="flex min-h-11 items-center gap-2 text-sm font-bold text-muted">
             <Bookmark aria-hidden="true" className="size-5 fill-accent text-accent" />
@@ -396,7 +396,7 @@ export function ReplyCard({
   overflowItems?: OverflowMenuItem[];
 }) {
   return (
-    <Card className="p-4 sm:p-5">
+    <Card className="p-3 sm:p-4">
       <div className="flex items-start gap-3">
         <CommunityAvatar name={reply.author.displayName} size="md" tone="blue" />
         <div className="min-w-0 flex-1">
@@ -538,7 +538,7 @@ export function SpaceCard({
   joining?: boolean;
 }) {
   return (
-    <Card className="flex items-center gap-3 p-3 sm:p-4">
+    <Card className="flex items-center gap-2.5 p-2.5 sm:p-3">
       <SpaceIcon slug={space.slug} />
       <Link className="min-w-0 flex-1" href={`/spaces/${space.slug}`}>
         <p className="truncate font-black text-ink">{space.name}</p>
@@ -621,8 +621,8 @@ export function ProfileHero({
   onEdit?: () => void;
 }) {
   return (
-    <Card className="p-5 sm:p-6">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+    <Card className="p-4 sm:p-5">
+      <div className="flex flex-col gap-3.5 sm:flex-row sm:items-start">
         <CommunityAvatar name={profile.displayName} size="xl" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -643,7 +643,7 @@ export function ProfileHero({
           {profile.bio && (
             <p className="mt-3 max-w-2xl text-base leading-relaxed text-muted">{profile.bio}</p>
           )}
-          <div className="mt-5 grid gap-3 border-t border-line pt-4 text-sm sm:grid-cols-3">
+          <div className="mt-3.5 grid gap-2.5 border-t border-line pt-3 text-sm sm:grid-cols-3">
             <ProfileMeta icon={MapPin} label="Country" value={profile.country?.name ?? 'Not set'} />
             <ProfileMeta
               icon={Globe2}
@@ -658,7 +658,7 @@ export function ProfileHero({
           </div>
         </div>
       </div>
-      <div className="mt-5 border-t border-line pt-4">
+      <div className="mt-3.5 border-t border-line pt-3">
         <ProfileStats profile={profile} />
       </div>
     </Card>

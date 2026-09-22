@@ -128,7 +128,7 @@ export function SpaceHero({
 }) {
   return (
     <Card className="relative overflow-hidden border-accent/20 bg-accent-soft/30 p-5 sm:p-7">
-      <div className="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-start">
+      <div className="relative z-10 flex flex-col gap-3.5 sm:flex-row sm:items-start">
         <SpaceIcon icon={getSpaceIcon(space.slug)} size="lg" slug={space.slug} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -174,7 +174,7 @@ export function SpaceHero({
 export function TrendingList({ posts }: { posts: CommunityPostCard[] }) {
   if (!posts.length)
     return (
-      <Card className="p-5 text-sm leading-relaxed text-muted">
+      <Card className="p-4 text-sm leading-relaxed text-muted">
         Trending discussions will appear as members start conversations.
       </Card>
     );
@@ -210,7 +210,7 @@ export function TrendingList({ posts }: { posts: CommunityPostCard[] }) {
 export function PopularTags({ tags }: { tags: { id: string; name: string; slug: string }[] }) {
   if (!tags.length)
     return (
-      <Card className="p-5 text-sm leading-relaxed text-muted">
+      <Card className="p-4 text-sm leading-relaxed text-muted">
         Popular tags will appear as the community grows.
       </Card>
     );
