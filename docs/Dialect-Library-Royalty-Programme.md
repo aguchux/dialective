@@ -426,55 +426,108 @@ is platform-set; it does not guarantee a number.
 > "We will integrate the dashboard for contributors access in stream
 > platform not trainer dashboard. On VDCL success, user receives account
 > invite"
+>
+> "contributor membership will be Dialect Library Org'ed — the system will
+> seed first Org as Dialect Library... All contributors work for Dialect
+> Library"
 
 Royalties are a **Voice Stream** surface, not a trainer-dashboard one.
 Contributors see their published decks, usage and royalty balance at
 `stream.dialectlibrary.com`.
 
-### 8.1 The identity problem
+### 8.1 Resolved: contributors are members of the Dialect Library org
 
-This is the substantive new work, and it does not fit the current model.
+Every contributor gets a `SubscriberMembership` in one **house
+organisation** — Dialect Library itself. They are not an org of one, and
+not a membership-less special case; they are members of the platform's own
+org.
 
-- `User` — trainers/contributors. `JwtAuthGuard`, `Role`.
-- `SubscriberUser` — Voice Stream. **Always org-scoped** via
-  `SubscriberMembership`; every route assumes an `organizationId`.
+This resolves what was the design's largest open question, and it does so
+**without new identity infrastructure**:
 
-A contributor is **neither**: not a trainer in Voice Stream's terms, and
-not a member of any subscriber organisation. There is no existing shape for
-"a person with a Stream login who belongs to no org."
+- Every org-scoped route, guard and query keeps working unchanged. There is
+  no "missing `organizationId`" case to audit for, which was the specific
+  risk of allowing membership-less `SubscriberUser`s.
+- The org table is not polluted with thousands of one-person rows, which
+  was the cost of the org-per-contributor approach.
+- Contributors get a real Stream login through the existing
+  `SubscriberUser` / `SubscriberMembership` / `SubscriberAuthGuard` stack.
 
-Three options:
+### 8.2 The org already exists
 
-**A. Contributor as an org of one.** Auto-create a `SubscriberOrganization`
-per contributor on VDCL success. Everything org-scoped keeps working
-unchanged. But it pollutes the org table with thousands of non-subscriber
-rows, and every org-facing query, count and billing assumption has to learn
-to exclude them. **Not recommended** — it buys compatibility by corrupting
-the meaning of "organisation."
+**This is not new infrastructure.** `SubscriberOrganization` id
+`dialect-library-platform` is already seeded in production by the
+`20260908160000_add_validator_payouts_and_publish` migration, and already
+used: `ValidatorDecksService.DIALECT_LIBRARY_PLATFORM_ORG_ID` bridges every
+published `ValidatorDeck` into a `StreamDeck` owned by it.
 
-**B. Nullable membership.** Allow a `SubscriberUser` with no membership,
-and gate contributor routes on that. Honest about what a contributor is,
-but every existing guard assuming `organizationId` must be audited —
-the risk being a route that silently treats a missing org as "all orgs."
+So the house-org pattern is established and proven in this codebase. The
+Royalty Programme extends an existing arrangement rather than inventing
+one.
 
-**C. Separate contributor session on the Stream domain (recommended).**
-Contributors authenticate as their existing `User` — same identity that
-owns the recordings and the payout account — with a Stream-hosted surface
-scoped to `contributorId`. No new identity, no org fiction. Voice Stream
-becomes two audiences on one domain, which it arguably already is.
+| | Today |
+|---|---|
+| Org row | Exists, id `dialect-library-platform`, slug `dialect-library` |
+| Memberships | **0** |
+| Decks owned | 0 |
+| Subscription | **None** |
+| Stream keys | **0** |
 
-**C keeps the invariant that matters:** a contributor's royalty balance,
-payout account and recordings all hang off one `User`. A and B would split
-that across two identity systems and require reconciliation.
+The id should move from a hardcoded constant in `validator-decks` to a
+shared setting — **`PlatformSettings.platformOrganizationId`, with an env
+override**, as specified — so both subsystems read one value rather than
+duplicating a literal.
 
-**This needs a decision before Phase A.**
+### 8.3 What this makes possible — and what it must not
 
-### 8.2 The invite
+Making contributors members of a real org is the right call, but it grants
+them a membership in an organisation that, structurally, *can do
+subscriber things*. Three guardrails follow directly:
+
+**A contributor role, not an existing one.** `SubscriberOrgRole` has
+`OWNER`, `ADMIN`, `DATASET_MANAGER`, `API_DEVELOPER` and others — every one
+of which would grant a contributor powers over the platform's own org
+(minting Stream Keys, managing decks, reading billing). A new
+`CONTRIBUTOR` role is required, scoped to: see my own recordings, my own
+published decks, my own usage and royalty balance.
+
+**Contributor routes must scope by `userId`, not `organizationId`.** This
+is the sharpest consequence. Elsewhere in Voice Stream, `organizationId`
+*is* the tenancy boundary — it is what stops org A reading org B's data.
+Inside the house org that boundary vanishes: every contributor shares one
+`organizationId`, so a query scoped only by org returns **every
+contributor's data**. Contributor-facing queries must filter by the
+membership's own user, and a route that forgets is a cross-contributor data
+leak, not a harmless bug.
+
+**The house org must never stream.** It holds no subscription, no Stream
+Keys, and must not acquire them: it is an identity container, not a
+customer. A subscription on the platform's own org would put it in its own
+royalty pool — the platform paying itself, diluting every real
+contributor's share. Worth an explicit guard rather than a convention.
+
+### 8.4 The invite
 
 On VDCL countersignature (status → ACTIVE), the contributor receives an
-invite to the Stream contributor surface. Mechanically this is an email via
-the existing `MailService` plus whatever access-grant option C settles on —
-not a `SubscriberMembership`, since there is no org to belong to.
+invite to the Stream contributor surface. Mechanically:
+
+1. Create (or find) a `SubscriberUser` for the contributor's email.
+2. Create a `SubscriberMembership` in the platform org with role
+   `CONTRIBUTOR`.
+3. Send the invite via the existing `MailService`; the contributor sets a
+   password and lands on their contributor dashboard.
+
+`SubscriberInvite` already exists for org invitations, so this follows the
+established path rather than a bespoke one.
+
+**One identity caveat to settle in implementation.** A contributor's
+`User` and their new `SubscriberUser` are separate rows in separate tables
+that happen to share an email. Nothing links them structurally today, yet
+the contributor dashboard must join across both — recordings and payout
+account hang off `User`, while the Stream session authenticates as
+`SubscriberUser`. A durable link (a `contributorUserId` on
+`SubscriberUser`, set at invite time) is cleaner than matching on email,
+which breaks the moment either side changes address.
 
 The invite is the moment the VDCL becomes visibly worth something: the
 contributor signs, and gains a place to watch their work earn.
@@ -563,7 +616,7 @@ revenue in the reserve, avoids that while keeping the payout fully backed.
 | **B** | `RecordingUsageMonth` aggregation + live estimates | Real streaming traffic |
 | **C** | Accrual settlement (royaltyBalance + mint + reserve) | §10 settled; B has run a month |
 | **D** | Royalty withdrawal (own request model, existing rails) | C; KYC gate; minimum threshold |
-| **E** | Contributor Stream dashboard + VDCL invite | §8.1 decided |
+| **E** | Contributor Stream dashboard + VDCL invite | CONTRIBUTOR role; platformOrganizationId setting |
 
 **A is safe to build now** once Phase 2 lands — product work, no financial
 surface.
@@ -577,6 +630,9 @@ discipline as withdrawals and P2P escrow. C carries the reserve coupling
 (§5.3) and is the part most needing review: a royalty mint whose reserve
 inflow is missing or wrong dilutes token backing silently.
 
-**E's identity decision (§8.1) should be made before A**, because
-contributor deck ownership and contributor Stream access are the same
-question asked twice.
+**E's identity question is settled** (§8.1): contributors are members of
+the Dialect Library house org, which already exists and is already used by
+validator-deck publishing. What E still needs is the `CONTRIBUTOR` role,
+the `platformOrganizationId` setting, and — most importantly — the
+`userId`-scoped query discipline in §8.3, since inside the house org
+`organizationId` no longer separates one contributor from another.
