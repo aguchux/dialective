@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { IsvcConfidence, Prisma, SubmissionStatus } from '@dialectiva/db';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { IsvcConfidence, Prisma, SubmissionStatus, VdclPurpose } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
+import { RightsService } from '../../vdcl/rights/rights.service';
 
 const CONFIDENCE_RANK: Record<IsvcConfidence, number> = {
   EMERGING: 0,
@@ -76,6 +77,7 @@ export class CatalogueService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly rights: RightsService,
   ) {}
 
   private eligibleWhere(params: {
@@ -369,6 +371,25 @@ export class CatalogueService {
     }
     if (planMinConfidence && !(await this.meetsConfidenceFloor(recordingId, planMinConfidence))) {
       throw new NotFoundException('Recording not found or not available for preview');
+    }
+
+    // VDCL commercial lock. This route is the SECOND way audio leaves for a
+    // subscriber: it hands out a presigned Spaces URL directly, bypassing the
+    // stream API's guard chain, byte metering and StreamAccessLog entirely.
+    // A rights check wired only into the streaming chokepoint would therefore
+    // be trivially sidesteppable, so it has to be enforced here too.
+    const decision = await this.rights.mayUse(recordingId, VdclPurpose.ASR_TRAINING);
+    if (!decision.allowed) {
+      void this.rights.recordDecision({
+        recordingId,
+        purpose: VdclPurpose.ASR_TRAINING,
+        decision,
+        actorId: userId,
+        detail: `catalogue_preview org=${organizationId}`,
+      });
+      throw new ForbiddenException(
+        'This recording is not licensed for preview under an active contributor licence',
+      );
     }
 
     await this.prisma.cataloguePreviewLog.create({

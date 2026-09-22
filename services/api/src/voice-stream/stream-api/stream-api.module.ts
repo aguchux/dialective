@@ -7,6 +7,7 @@ import { WebhooksModule } from '../webhooks/webhooks.module';
 import { OAuthModule } from '../oauth/oauth.module';
 import { OrgActivityModule } from '../org-activity/org-activity.module';
 import { SecurityPolicyModule } from '../security-policy/security-policy.module';
+import { VdclModule } from '../../vdcl/vdcl.module';
 import { StreamKeysController } from './stream-keys.controller';
 import { StreamKeysService } from './stream-keys.service';
 import { StreamManifestController } from './stream-manifest.controller';
@@ -40,6 +41,7 @@ import { OAuthJwtAuthGuard } from '../oauth/oauth-jwt-auth.guard';
     OrgActivityModule,
     UsageCounterModule,
     SecurityPolicyModule,
+    VdclModule,
   ],
   controllers: [StreamKeysController, StreamManifestController, StreamAudioController],
   providers: [

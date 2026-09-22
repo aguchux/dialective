@@ -496,6 +496,24 @@ export class PlatformSettingsService {
     return row.adminPayoutOtpEnabled;
   }
 
+  /**
+   * The VDCL commercial lock. Off by default so the enforcement code ships
+   * dark -- see the column doc comment in schema.prisma.
+   */
+  async isVdclEnforcementEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.vdclEnforcementEnabled;
+  }
+
+  /**
+   * Whether audio covered by an ACTIVE VDCL is exempt from retention purging.
+   * On by default: a signed manifest and a silent purge cannot both be true.
+   */
+  async isVdclRetentionExemptionEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.vdclRetentionExemptionEnabled;
+  }
+
   async isWalletSmsWithdrawalPaidEnabled(): Promise<boolean> {
     const row = await this.getRow();
     return row.walletSmsWithdrawalPaidEnabled;

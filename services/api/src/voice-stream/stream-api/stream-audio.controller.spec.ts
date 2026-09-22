@@ -16,6 +16,7 @@ import { StreamKeyAuthGuard } from './stream-key-auth.guard';
 import { OAuthJwtAuthGuard } from '../oauth/oauth-jwt-auth.guard';
 import { EitherStreamCredentialGuard } from '../oauth/either-stream-credential.guard';
 import { WebhookEventService } from '../webhooks/webhook-event.service';
+import { RightsService } from '../../vdcl/rights/rights.service';
 import { StorageService } from '../../storage/storage.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -77,6 +78,7 @@ describe('StreamAudioController (HTTP layer)', () => {
   let storage: { getObject: jest.Mock };
   let accessLog: { record: jest.Mock };
   let webhookEvents: { emit: jest.Mock };
+  let rights: { mayUse: jest.Mock; recordDecision: jest.Mock };
 
   beforeEach(async () => {
     Object.values(mockRedisInstance).forEach((fn) => {
@@ -94,6 +96,12 @@ describe('StreamAudioController (HTTP layer)', () => {
     storage = { getObject: jest.fn() };
     accessLog = { record: jest.fn().mockResolvedValue(undefined) };
     webhookEvents = { emit: jest.fn().mockResolvedValue(undefined) };
+    // VDCL rights check -- allowed by default so existing assertions stay
+    // about the streaming layer; the licence-denial case has its own test.
+    rights = {
+      mayUse: jest.fn().mockResolvedValue({ allowed: true, entitlementDecision: 'allowed' }),
+      recordDecision: jest.fn().mockResolvedValue(undefined),
+    };
 
     const moduleRef = await Test.createTestingModule({
       controllers: [StreamAudioController],
@@ -103,6 +111,7 @@ describe('StreamAudioController (HTTP layer)', () => {
         { provide: StorageService, useValue: storage },
         { provide: StreamAccessLogService, useValue: accessLog },
         { provide: WebhookEventService, useValue: webhookEvents },
+        { provide: RightsService, useValue: rights },
         {
           provide: UsageCounterService,
           useValue: { getCurrentUsage: jest.fn(), tryReserveRequest: jest.fn() },
@@ -261,5 +270,41 @@ describe('StreamAudioController (HTTP layer)', () => {
       .set('Authorization', `Bearer ${PLAIN_KEY}`);
 
     expect(res.status).toBe(404);
+  });
+
+  it('returns 403 and streams no bytes when no active VDCL covers the recording', async () => {
+    // The commercial lock: "no VDCL, no commercial use". It must refuse
+    // BEFORE any byte moves, so an unlicensed clip is never partially served.
+    prisma.streamApiKey.findUnique.mockResolvedValue({
+      id: STREAM_KEY_ID,
+      organizationId: ORG_ID,
+      deckId: null,
+      scopes: [StreamKeyScope.AUDIO_STREAM],
+      revokedAt: null,
+      expiresAt: null,
+      allowedIps: [],
+    });
+    manifest.getEligibleItemMetadata.mockResolvedValue({
+      audioBucket: 'bucket',
+      audioKey: 'path/to/audio.wav',
+      durationMs: 1234,
+    });
+    rights.mayUse.mockResolvedValue({
+      allowed: false,
+      reason: 'no_vdcl',
+      entitlementDecision: 'denied:no_vdcl',
+    });
+
+    const res = await request(app.getHttpServer())
+      .get(`/stream/v1/decks/${DECK_ID}/items/${RECORDING_ID}/audio`)
+      .set('Authorization', `Bearer ${PLAIN_KEY}`);
+
+    expect(res.status).toBe(403);
+    expect(storage.getObject).not.toHaveBeenCalled();
+    // The denial reason has to reach StreamAccessLog verbatim, so an
+    // enforcement decision stays explainable after the fact.
+    expect(accessLog.record).toHaveBeenCalledWith(
+      expect.objectContaining({ entitlementDecision: 'denied:no_vdcl', resultCode: 403 }),
+    );
   });
 });

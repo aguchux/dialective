@@ -1,4 +1,4 @@
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { CatalogueService } from './catalogue.service';
 
 function setup() {
@@ -19,8 +19,15 @@ function setup() {
       .fn()
       .mockResolvedValue({ url: 'https://signed-url', expiresInSeconds: 900 }),
   };
-  const service = new CatalogueService(prisma as any, storage as any);
-  return { prisma, storage, service };
+  // VDCL rights check -- allowed by default here so the existing catalogue
+  // assertions stay about catalogue behaviour; the licence-denial case has
+  // its own test below.
+  const rights = {
+    mayUse: jest.fn().mockResolvedValue({ allowed: true, entitlementDecision: 'allowed' }),
+    recordDecision: jest.fn().mockResolvedValue(undefined),
+  };
+  const service = new CatalogueService(prisma as any, storage as any, rights as any);
+  return { prisma, storage, rights, service };
 }
 
 describe('CatalogueService', () => {
@@ -332,6 +339,30 @@ describe('CatalogueService', () => {
       });
       expect(storage.createPresignedDownloadUrl).toHaveBeenCalledWith('bucket', 'key.wav');
       expect(result).toEqual({ url: 'https://signed-url', expiresInSeconds: 900 });
+    });
+
+    it('refuses to hand out a signed URL for a recording with no active licence', async () => {
+      // This route is the second way audio leaves for a subscriber -- it
+      // returns a presigned Spaces URL directly, bypassing the stream API's
+      // guard chain and metering entirely. A VDCL check wired only into the
+      // streaming chokepoint would therefore be trivially sidesteppable.
+      const { prisma, storage, rights, service } = setup();
+      prisma.wordRecording.findFirst.mockResolvedValue({
+        audioBucket: 'bucket',
+        audioKey: 'key.wav',
+      });
+      rights.mayUse.mockResolvedValue({
+        allowed: false,
+        reason: 'no_vdcl',
+        entitlementDecision: 'denied:no_vdcl',
+      });
+
+      await expect(service.preview('org-1', 'user-1', 'rec-1')).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(storage.createPresignedDownloadUrl).not.toHaveBeenCalled();
+      expect(prisma.cataloguePreviewLog.create).not.toHaveBeenCalled();
+      expect(rights.recordDecision).toHaveBeenCalled();
     });
 
     it('rejects a recording below the plan confidence floor even though it is otherwise eligible', async () => {

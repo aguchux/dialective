@@ -1,6 +1,6 @@
 import { BadRequestException, Controller, Get, Param, Req, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
-import { StreamKeyScope, WebhookEventType } from '@dialectiva/db';
+import { StreamKeyScope, VdclPurpose, WebhookEventType } from '@dialectiva/db';
 import { StorageService } from '../../storage/storage.service';
 import { AuthenticatedStreamKeyRequest } from './stream-key-auth.guard';
 import { StreamKeyScopesGuard } from './stream-key-scopes.guard';
@@ -15,6 +15,7 @@ import { StreamAccessLogService } from './stream-access-log.service';
 import { contentTypeForAudioKey } from './audio-content-type.util';
 import { WebhookEventService } from '../webhooks/webhook-event.service';
 import { EitherStreamCredentialGuard } from '../oauth/either-stream-credential.guard';
+import { RightsService } from '../../vdcl/rights/rights.service';
 
 /**
  * Doc section 35's full authorization order for an audio stream request,
@@ -45,6 +46,7 @@ export class StreamAudioController {
     private readonly concurrentStream: ConcurrentStreamGuard,
     private readonly dedicatedCapacity: DedicatedCapacityGuard,
     private readonly webhookEvents: WebhookEventService,
+    private readonly rights: RightsService,
   ) {}
 
   @Get('decks/:deckId/items/:recordingId/audio')
@@ -73,6 +75,27 @@ export class StreamAudioController {
         entitlementDecision = 'denied:no_audio';
         resultCode = 404;
         res.status(404).json({ message: 'Recording not found or not available for Voice Stream' });
+        return;
+      }
+
+      // VDCL commercial lock -- "no VDCL, no commercial use". Runs after
+      // eligibility and before a single byte moves, so an unlicensed clip is
+      // never partially streamed. Fails closed; returns allowed unconditionally
+      // while PlatformSettings.vdclEnforcementEnabled is off, which is the
+      // default. Streaming a deck is model-training use, hence ASR_TRAINING.
+      const rightsDecision = await this.rights.mayUse(recordingId, VdclPurpose.ASR_TRAINING);
+      if (!rightsDecision.allowed) {
+        entitlementDecision = rightsDecision.entitlementDecision;
+        resultCode = 403;
+        void this.rights.recordDecision({
+          recordingId,
+          purpose: VdclPurpose.ASR_TRAINING,
+          decision: rightsDecision,
+          detail: `stream_audio org=${req.streamKey.organizationId} deck=${deckId}`,
+        });
+        res.status(403).json({
+          message: 'This recording is not licensed for streaming under an active contributor licence',
+        });
         return;
       }
 

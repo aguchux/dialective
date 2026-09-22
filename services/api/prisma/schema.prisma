@@ -247,6 +247,8 @@ model User {
   adminSmsReceived                  AdminSmsMessage[]                @relation("AdminSmsRecipient")
   apiAccessTokensUpdated            ApiAccessToken[]                 @relation("ApiAccessTokenUpdatedBy")
   payoutAccounts                    PayoutAccount[]
+  vdclAgreements                    VdclAgreement[]                  @relation("VdclContributor")
+  vdclSignatureEvents               VdclSignatureEvent[]             @relation("VdclSignatureActor")
   kycVerifications                  KycVerification[]
   kycPeerReviews                    KycPeerReview[]                  @relation("KycPeerReviewer")
   kycPeerReviewClaims               KycPeerReviewClaim[]             @relation("KycPeerReviewClaimant")
@@ -486,6 +488,7 @@ model Country {
   audioRetentionRules     AudioRetentionRule[]
   dataAccessLeadInterests DataAccessLeadInterest[]
   communityProfiles       CommunityProfile[]
+  vdclAgreements          VdclAgreement[]
 
   @@map("countries")
 }
@@ -934,6 +937,7 @@ model KycVerification {
   captureEvidence       KycCaptureEvidence[]
   peerReviews           KycPeerReview[]
   peerReviewClaims      KycPeerReviewClaim[]
+  vdclVersions          VdclVersion[]
 
   @@index([userId, status])
   @@index([status, createdAt])
@@ -3113,6 +3117,23 @@ model PlatformSettings {
   submissionRateLimitPerHour                 Int       @default(120) // max word/sentence recordings a single trainer may submit per rolling hour while submissionRateLimitEnabled is on
   submissionDailyLimitEnabled                Boolean   @default(false) // master switch for the per-trainer DAILY submission cap, independent of submissionRateLimitEnabled: an admin can run the hourly burst limit, the daily total, both, or neither. Off by default so enabling it is always a deliberate act
   submissionDailyLimitPerDay                 Int       @default(200) // max recordings a single trainer may submit per rolling 24h while submissionDailyLimitEnabled is on. Counted from WordRecording rows rather than an in-memory throttler bucket, so the cap survives a restart or Redis eviction and an admin can always explain a refusal from the data. 200 is deliberately between the observed p90 (~109/day) and p99 (~272/day): it leaves ordinary contributors untouched while constraining the long tail that drives minting -- see SubmissionDailyLimitGuard
+  /// Master switch for the VDCL commercial lock ("no VDCL, no commercial
+  /// use"). OFF by default: the enforcement code ships dark so it can sit in
+  /// production being exercised before it starts refusing anything. While off,
+  /// RightsService.mayUse returns allowed unconditionally.
+  ///
+  /// Turning it ON denies any subscriber stream of a recording not covered by
+  /// an ACTIVE VDCL granting the requested purpose. That is currently a no-op
+  /// -- there are 0 Stream Decks in production -- which is precisely why the
+  /// lock is being built now rather than after the first deck ships.
+  vdclEnforcementEnabled                     Boolean   @default(false)
+  /// Whether audio covered by an ACTIVE VDCL is exempt from audio-retention-job.
+  /// ON by default, because a signed licence asserting "this manifest covers
+  /// these clips, verify by hash" is incompatible with the audio behind those
+  /// clips being silently purged afterwards. Turning it off restores pure
+  /// retention behaviour and will break the provenance claim of any already
+  /// issued licence -- see docs/VDCL-Design-Plan-And-Recommendations.md section 4.
+  vdclRetentionExemptionEnabled              Boolean   @default(true)
   qracEnabled                                Boolean   @default(false) // master switch for the Quality Recordings Affirmation Check (QRAC); when false, WordsService.nextAssignment never blocks on it regardless of mode or interval
   qracRequiredAtSessionStart                 Boolean   @default(false) // when true, QRAC must be signed before the first assignment in every new training session; when false, QRAC uses the periodic qracIntervalMinutes mode instead
   qracIntervalMinutes                        Int       @default(30) // trainer must re-sign the QRAC checklist this often during an open word-training session when qracRequiredAtSessionStart is false; checked against TrainingSession.lastQracAt (or startedAt if never signed) on every nextAssignment call
@@ -4938,4 +4959,326 @@ model CommunityModeratorAction {
   @@index([targetType, targetId])
   @@index([moderatorId, createdAt])
   @@map("community_moderator_actions")
+}
+
+// ---------------------------------------------------------------------------
+// Voice Dataset Contributor Licence (VDCL) -- Phase 0
+//
+// See docs/VDCL-Design-Plan-And-Recommendations.md. A VDCL is a contributor's
+// non-exclusive, itemised grant of defined commercial rights over a frozen
+// snapshot of their own recordings. It is NOT an assignment of ownership:
+// contributors are already paid per recording through the wallet ledger, and
+// an ownership transfer would sit incoherently with that.
+//
+// Phase 0 ships the schema and the rights check only. Nothing here is
+// contributor-facing yet, and no agreement can reach ACTIVE until the maker
+// (Phase 3) and the legal review (Phase 1) land. The point of landing it now
+// is that with 0 Stream Decks in production the enforcement gate costs
+// nothing to impose -- a window that closes the moment the first deck ships.
+// ---------------------------------------------------------------------------
+
+/// What a contributor may grant. One enum value per distinct permission, and
+/// every value is granted individually via its own VdclConsentGrant row --
+/// never a bitmask, never a single "commercial use" catch-all. The product
+/// plan is explicit that sensitive processing, voice cloning, biometric use
+/// and public promotional use must never hide inside a general checkbox.
+///
+/// VOICE_CLONING is deliberately present but must not be offered in the UI
+/// until product and legal state where the line sits -- the plan prohibits
+/// "deceptive" cloning, treats cloning as grantable by amendment, and lists
+/// it among typically excluded rights. Those are reconcilable, but the
+/// rights service needs one unambiguous value either way, so it exists here
+/// and is simply never granted for now.
+enum VdclPurpose {
+  ASR_TRAINING // speech recognition model training/fine-tuning
+  TTS_TRAINING // speech synthesis model training
+  LLM_TRAINING // text/transcript use in language model training
+  LINGUISTIC_RESEARCH // academic and non-commercial research
+  DATASET_REDISTRIBUTION // onward licensing by the subscriber
+  PUBLIC_PROMOTION // use of clips in marketing/demo material
+  BIOMETRIC_PROCESSING // voiceprint/speaker-identification processing
+  VOICE_CLONING // see the enum doc comment -- never offered in v1
+}
+
+/// Lifecycle of one VdclVersion. A version is immutable once SIGNED: any
+/// material change (dataset membership, granted purposes, contributor
+/// identity) requires a NEW version rather than an edit, which is what makes
+/// a signed manifest hash meaningful.
+enum VdclVersionStatus {
+  DRAFT // contributor is still building it
+  PENDING_COMPILATION // submitted; compilation job queued or running
+  PENDING_REVIEW // compiled, awaiting DL compliance review
+  PENDING_COUNTERSIGNATURE // review passed, awaiting DL signature
+  ACTIVE // fully signed by both parties -- the only status that grants rights
+  SUPERSEDED // replaced by a later version
+  WITHDRAWN // contributor withdrew; prospective only, see VdclAgreement.withdrawnAt
+  SUSPENDED // DL suspended it (dispute, compliance)
+  REJECTED // failed compliance review
+  AMENDMENT_PENDING // an amendment to an ACTIVE version is in flight
+}
+
+/// Stage display for the compilation pipeline, matching the product plan's
+/// 8-stage tracker. Stored rather than derived so the contributor sees a real
+/// status and an honest estimate instead of an unexplained spinner.
+enum VdclCompilationStage {
+  SUBMITTED
+  INVENTORYING
+  TRANSCRIPT_CHECK
+  VALIDATION_CHECK
+  METRICS_CALCULATION
+  COMPLIANCE_REVIEW
+  COUNTERSIGNATURE
+  ISSUED
+  FAILED
+}
+
+/// One agreement per contributor per dialect. Holds the pointer to the
+/// currently-active version; the versions themselves carry the substance.
+/// Scoped by dialect because a contributor recording in two dialects may
+/// reasonably want different terms for each, and the plan's identifier
+/// convention (VDCL-{COUNTRY}-{DIALECT}-{CONTRIBUTOR}-{VERSION}) already
+/// assumes per-dialect scoping.
+model VdclAgreement {
+  id            String   @id @default(uuid())
+  licenceKey    String   @unique // "VDCL-{COUNTRY}-{DIALECT}-{CONTRIBUTOR_SHORT_ID}"
+  contributorId String
+  contributor   User     @relation("VdclContributor", fields: [contributorId], references: [id], onDelete: Cascade)
+  dialectTag    String // matches WordRecording.dialectTag convention -- not an FK, same as everywhere else
+  countryId     String?
+  country       Country? @relation(fields: [countryId], references: [id], onDelete: SetNull)
+
+  /// Points at the ACTIVE version, if any. Null means no rights are granted
+  /// -- a fresh agreement, a fully withdrawn one, or one whose only versions
+  /// are still in draft. The rights check treats null as deny.
+  activeVersionId String?      @unique
+  activeVersion   VdclVersion? @relation("VdclActiveVersion", fields: [activeVersionId], references: [id], onDelete: SetNull)
+
+  /// Withdrawal is PROSPECTIVE. Setting this stops new grants and revokes
+  /// streaming access going forward; it cannot retract a model already
+  /// trained or a dataset already delivered. The consent flow must say so in
+  /// plain words before signing, not bury it in a PDF clause.
+  withdrawnAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions VdclVersion[] @relation("VdclAgreementVersions")
+
+  @@unique([contributorId, dialectTag])
+  @@index([contributorId])
+  @@index([dialectTag])
+  @@map("vdcl_agreements")
+}
+
+/// An immutable, signed version of an agreement. Everything that makes the
+/// licence verifiable -- the manifest hash, the document hashes, the signing
+/// timestamps -- lives here and is never updated after ACTIVE.
+model VdclVersion {
+  id          String            @id @default(uuid())
+  agreementId String
+  agreement   VdclAgreement     @relation("VdclAgreementVersions", fields: [agreementId], references: [id], onDelete: Cascade)
+  version     Int
+  status      VdclVersionStatus @default(DRAFT)
+
+  /// FK to the KYC attempt that evidenced identity at signing time. The
+  /// licence references the verification record; it never embeds the raw
+  /// identity document.
+  kycVerificationId String?
+  kycVerification   KycVerification? @relation(fields: [kycVerificationId], references: [id], onDelete: SetNull)
+
+  /// SHA-256 over the manifest's canonical JSON. This is the value the QR
+  /// payload and the PDF both assert, so it must be stable for the life of
+  /// the version.
+  manifestHash String?
+  /// Hashes of the rendered documents, so a regenerated PDF/PNG can be
+  /// proven byte-identical to the one originally issued.
+  pdfHash String?
+  pngHash String?
+  pdfKey  String? // Spaces object key, null until rendered
+  pngKey  String?
+
+  /// Wording version of the licence text the contributor actually saw.
+  /// Distinct from `version` -- the legal text can change without the
+  /// dataset changing, and vice versa.
+  termsVersion String?
+
+  signedAt          DateTime? // contributor signature
+  countersignedAt   DateTime? // Dialect Library countersignature
+  countersignedById String?
+  effectiveFrom     DateTime?
+  effectiveUntil    DateTime? // null = open-ended until withdrawn/superseded
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  grants          VdclConsentGrant[]
+  manifest        VdclManifest?
+  signatureEvents VdclSignatureEvent[]
+  compilationJob  VdclCompilationJob?
+  activeFor       VdclAgreement?       @relation("VdclActiveVersion")
+
+  @@unique([agreementId, version])
+  @@index([agreementId, status])
+  @@index([status])
+  @@map("vdcl_versions")
+}
+
+/// One row per granted permission per version. Deliberately a row and not a
+/// boolean column or a bitmask: each grant carries the wording version the
+/// contributor read and the moment they agreed to it, which is exactly what
+/// an itemised consent record has to prove later.
+///
+/// Absence of a row means NOT granted. There is no "denied" row.
+model VdclConsentGrant {
+  id          String      @id @default(uuid())
+  versionId   String
+  vdclVersion VdclVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  purpose     VdclPurpose
+  /// Wording version of the specific consent card shown for this purpose.
+  wordingVersion String
+  grantedAt      DateTime @default(now())
+  /// Locale and coarse session evidence captured at grant time, per the
+  /// product plan's Stage 4 requirement. Never an IP-only record.
+  locale    String?
+  userAgent String?
+  ipAddress String?
+
+  @@unique([versionId, purpose])
+  @@index([versionId])
+  @@map("vdcl_consent_grants")
+}
+
+/// The frozen dataset snapshot a version covers. Created once by the
+/// compilation job and never mutated -- the hash on VdclVersion is computed
+/// over this plus its items.
+model VdclManifest {
+  id          String      @id @default(uuid())
+  versionId   String      @unique
+  vdclVersion VdclVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  manifestKey String      @unique // "VDM-{COUNTRY}-{DIALECT}-{CONTRIBUTOR_SHORT_ID}-{VERSION}"
+
+  recordingCount     Int
+  totalDurationMs    BigInt
+  transcriptCount    Int // how many covered items carry an ASR transcript
+  excludedCount      Int // eligible-but-rejected, with reasons on the items
+  meanCompositeScore Decimal? @db.Decimal(5, 2)
+
+  /// Pipeline versions in effect when the metrics were computed. A score
+  /// means nothing without knowing which scorer produced it.
+  asrPipelineVersion     String?
+  qualityPipelineVersion String?
+  scoreDefinitions       Json? // metric name -> one-line definition, shown inline at point of display
+
+  compiledAt DateTime @default(now())
+
+  items VdclManifestItem[]
+
+  @@map("vdcl_manifests")
+}
+
+/// One row per covered recording, snapshotting the metrics AS AT SIGNING.
+///
+/// The snapshot is the whole point: scores get recomputed as the ASR and
+/// quality pipelines improve, but a signed licence must keep asserting what
+/// the contributor actually saw and agreed to. Joining live would silently
+/// rewrite history.
+///
+/// recordingId has no FK, matching StreamDeckItem's established convention --
+/// the retention job may purge a recording's audio, and a licence must not
+/// block that with a referential constraint.
+model VdclManifestItem {
+  id          String       @id @default(uuid())
+  manifestId  String
+  manifest    VdclManifest @relation(fields: [manifestId], references: [id], onDelete: Cascade)
+  recordingId String
+
+  durationMs     Int?
+  dialectTag     String
+  compositeScore Decimal? @db.Decimal(5, 2)
+  score          Decimal? @db.Decimal(5, 2)
+  hasTranscript  Boolean  @default(false)
+
+  /// Set when audio-retention-job purges a covered recording despite the
+  /// licence. Under the recommended design that should not happen (licensed
+  /// audio is retention-exempt), so a non-null value here is an anomaly
+  /// worth surfacing rather than a routine state.
+  audioPurgedAt DateTime?
+
+  @@unique([manifestId, recordingId])
+  @@index([manifestId])
+  @@index([recordingId])
+  @@map("vdcl_manifest_items")
+}
+
+/// Append-only signing evidence, following the LedgerEntry convention: one
+/// row per event, never updated, never deleted.
+model VdclSignatureEvent {
+  id          String      @id @default(uuid())
+  versionId   String
+  vdclVersion VdclVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  /// Who acted. Null for system-generated events.
+  actorId String?
+  actor   User?   @relation("VdclSignatureActor", fields: [actorId], references: [id], onDelete: SetNull)
+  /// "contributor_sign" | "dl_countersign" | "withdraw" | "suspend" | "reinstate"
+  eventType String
+  /// How the actor was stepped up at the moment of signing (OTP purpose,
+  /// PIN, passkey). Evidence, not a credential -- never store the secret.
+  stepUpMethod  String?
+  signatureKind String? // "drawn" | "typed" | "digital"
+  ipAddress     String?
+  userAgent     String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  @@index([versionId, createdAt])
+  @@map("vdcl_signature_events")
+}
+
+/// Compilation pipeline state for one version, mapping to the 8-stage
+/// tracker the contributor sees. Driven by a queue worker running inside the
+/// api image (same shape as reserve-balance-poll/tokenomics-valuation), not
+/// a new deployable service.
+model VdclCompilationJob {
+  id              String               @id @default(uuid())
+  versionId       String               @unique
+  vdclVersion     VdclVersion          @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  stage           VdclCompilationStage @default(SUBMITTED)
+  progressPercent Int                  @default(0)
+  /// Contributor-facing blocker text when the pipeline stalls. The plan is
+  /// explicit that a request must never sit in an unexplained pending state.
+  blockerMessage        String?
+  estimatedCompletionAt DateTime?
+  startedAt             DateTime?
+  completedAt           DateTime?
+  failedAt              DateTime?
+  failureReason         String?
+  attempts              Int       @default(0)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([stage, createdAt])
+  @@map("vdcl_compilation_jobs")
+}
+
+/// Append-only audit of every VDCL lifecycle and access decision, including
+/// rights-check denials that never reach StreamAccessLog (guard rejections
+/// short-circuit before the audio handler's finally block runs).
+model VdclAuditEvent {
+  id          String  @id @default(uuid())
+  agreementId String?
+  versionId   String?
+  recordingId String?
+  actorId     String?
+  /// "rights_denied" | "rights_allowed" | "status_change" | "manifest_frozen"
+  /// | "document_issued" | "withdrawal" | "retention_conflict"
+  eventType String
+  purpose   VdclPurpose?
+  detail    String?
+  metadata  Json?
+  createdAt DateTime     @default(now())
+
+  @@index([agreementId, createdAt])
+  @@index([versionId, createdAt])
+  @@index([eventType, createdAt])
+  @@map("vdcl_audit_events")
 }

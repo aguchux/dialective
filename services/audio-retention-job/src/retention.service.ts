@@ -68,12 +68,63 @@ export class RetentionService {
     private readonly streams: RedisStreamsService,
   ) {}
 
+  /**
+   * Recording ids covered by an ACTIVE, non-withdrawn VDCL.
+   *
+   * A signed licence asserts "this manifest covers these clips, verify by
+   * hash". Purging the audio behind a covered clip would leave the licence
+   * asserting coverage of something that no longer exists, which breaks the
+   * one promise the whole VDCL product rests on. So licensed audio is exempt
+   * from retention, and the contributor's own withdrawal is what releases it
+   * for purging later.
+   *
+   * Loaded once per run rather than queried per row -- the retention scan is
+   * already an unpaginated pass over every terminal recording, and a
+   * per-row lookup would multiply that by the manifest-item table.
+   *
+   * Returns an empty set when the exemption is disabled, which restores pure
+   * retention behaviour.
+   */
+  private async loadLicensedRecordingIds(): Promise<Set<string>> {
+    const settings = await this.prisma.platformSettings.findFirst({
+      select: { vdclRetentionExemptionEnabled: true },
+    });
+    // Fail SAFE, not open: if the settings row cannot be read we keep the
+    // exemption on, because wrongly purging licensed audio is irreversible
+    // while wrongly retaining it merely costs storage.
+    if (settings && !settings.vdclRetentionExemptionEnabled) {
+      this.logger.warn(
+        'VDCL retention exemption is DISABLED -- licensed audio will be purged like any other',
+      );
+      return new Set();
+    }
+
+    const items = await this.prisma.vdclManifestItem.findMany({
+      where: {
+        manifest: {
+          vdclVersion: {
+            status: 'ACTIVE',
+            agreement: { withdrawnAt: null },
+          },
+        },
+      },
+      select: { recordingId: true },
+    });
+    const ids = new Set(items.map((i) => i.recordingId));
+    if (ids.size > 0) {
+      this.logger.log(`VDCL retention exemption active: ${ids.size} licensed recordings protected`);
+    }
+    return ids;
+  }
+
   async run(): Promise<void> {
     const rules = await this.prisma.audioRetentionRule.findMany();
     if (rules.length === 0) {
       this.logger.log('No retention rules configured -- nothing to purge');
       return;
     }
+
+    const licensedRecordingIds = await this.loadLicensedRecordingIds();
 
     const dialects = await this.prisma.dialect.findMany({ select: { tag: true, countryId: true } });
     const countryIdByDialectTag = new Map(dialects.map((d) => [d.tag, d.countryId] as const));
@@ -96,13 +147,20 @@ export class RetentionService {
 
     let purged = 0;
     let skipped = 0;
+    let licenceProtected = 0;
 
     for (const row of wordRecordings) {
+      if (licensedRecordingIds.has(row.id)) {
+        licenceProtected++;
+        continue;
+      }
       if (await this.maybePurge(row, rules, countryIdByDialectTag)) purged++;
       else skipped++;
     }
 
-    this.logger.log(`Retention run complete: purged=${purged} skipped=${skipped}`);
+    this.logger.log(
+      `Retention run complete: purged=${purged} skipped=${skipped} licenceProtected=${licenceProtected}`,
+    );
   }
 
   private async maybePurge(

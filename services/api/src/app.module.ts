@@ -36,6 +36,7 @@ import { TokenomicsModule } from './tokenomics/tokenomics.module';
 import { AssistantModule } from './assistant/assistant.module';
 import { SettlementAdminModule } from './settlement-admin/settlement-admin.module';
 import { VoiceStreamModule } from './voice-stream/voice-stream.module';
+import { VdclModule } from './vdcl/vdcl.module';
 import { FaqsModule } from './faqs/faqs.module';
 import { TrainerProfilesModule } from './trainer-profiles/trainer-profiles.module';
 import { CommunityModule } from './community/community.module';
@@ -81,6 +82,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     AssistantModule,
     SettlementAdminModule,
     VoiceStreamModule,
+    VdclModule,
     FaqsModule,
     TrainerProfilesModule,
     CommunityModule,
