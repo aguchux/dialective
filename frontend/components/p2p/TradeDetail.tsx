@@ -6,7 +6,7 @@ import { ActionButton } from '@/components/ui/ActionButton';
 import { cardClass, formatDateTime } from '@/components/dashboard/shared';
 import { WhatsAppContactLink } from '@/components/WhatsAppContactLink';
 import { PaymentCountdown } from '@/components/p2p/PaymentCountdown';
-import { STATUS_LABELS, statusBadgeClass } from '@/components/p2p/tradeStatus';
+import { statusBadgeClass, statusLabelForViewer } from '@/components/p2p/tradeStatus';
 import { formatCompactNumber } from '@/lib/format';
 import { P2PTrade, normalizeErrorMessage } from '@/store/api';
 
@@ -112,7 +112,7 @@ export function TradeDetail({
           <span
             className={`rounded-full px-2.5 py-1 text-xs font-black ${statusBadgeClass(trade.status)}`}
           >
-            {STATUS_LABELS[trade.status]}
+            {statusLabelForViewer(trade, viewerId)}
           </span>
           {/* The live clock belongs in the header, not buried below the
               payment details: on an unpaid trade it is the single most

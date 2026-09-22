@@ -13,7 +13,7 @@ import {
   SectionTitle,
 } from '@/components/dashboard/shared';
 import { PaymentCountdown } from '@/components/p2p/PaymentCountdown';
-import { STATUS_LABELS, statusBadgeClass } from '@/components/p2p/tradeStatus';
+import { statusBadgeClass, statusLabelForViewer } from '@/components/p2p/tradeStatus';
 import { formatCompactNumber } from '@/lib/format';
 import {
   P2POffer,
@@ -203,7 +203,7 @@ function MyTradeTable({
                       <span
                         className={`inline-block rounded-full px-2.5 py-1 text-xs font-black ${statusBadgeClass(trade.status)}`}
                       >
-                        {STATUS_LABELS[trade.status]}
+                        {statusLabelForViewer(trade, viewerId)}
                       </span>
                       {trade.status === 'AWAITING_PAYMENT' && (
                         <p className="mt-1">

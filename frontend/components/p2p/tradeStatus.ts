@@ -20,6 +20,33 @@ export const STATUS_LABELS: Record<P2PTrade['status'], string> = {
   SETTLING: 'Completing',
 };
 
+/**
+ * The status label, written from the viewer's point of view.
+ *
+ * "Released" alone does not say where the tokens went, which is the one
+ * thing a party to the trade actually wants to know. A release always
+ * credits the BUYER -- the seller's tokens were debited when the escrow
+ * locked -- so the label resolves to "Released to you" for the buyer and
+ * "Released to buyer" for the seller.
+ *
+ * Every other status reads the same for both sides, so they fall through
+ * to the shared map.
+ *
+ * `viewerId` may be undefined while the session is still loading; the
+ * neutral "Released to buyer" is correct for anyone who is not the buyer,
+ * including an admin or an unresolved viewer, so there is no misleading
+ * intermediate state.
+ */
+export function statusLabelForViewer(
+  trade: Pick<P2PTrade, 'status' | 'buyerId' | 'sellerId'>,
+  viewerId: string | undefined,
+): string {
+  if (trade.status !== 'RELEASED') return STATUS_LABELS[trade.status];
+  if (viewerId && viewerId === trade.buyerId) return 'Released to you';
+  if (viewerId && viewerId === trade.sellerId) return 'Released to buyer';
+  return 'Released to buyer';
+}
+
 export function statusBadgeClass(status: P2PTrade['status']): string {
   switch (status) {
     case 'RELEASED':
