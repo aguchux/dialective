@@ -3,7 +3,7 @@
 **Companion to:** `VDCL-Design-Plan-And-Recommendations.md`, `Dialect-Library-VDCL-Product-and-Implementation-Plan.md`
 **Supersedes:** the royalty sections of `VDCL-Contributor-Decks-And-Royalties-Design.md`
 **Status:** Design proposal. Not built. Written 2026-09-22 against live production data.
-**Audience:** Product and engineering; §10 is for legal
+**Audience:** Product and engineering; §11 is for legal
 
 ---
 
@@ -109,7 +109,7 @@ never per agreement.
 | **Stream access log rows** | **0** |
 
 Royalties would be built against **zero usage history**. Good for avoiding
-a retrofit; bad for validating a split rule. See §11.
+a retrofit; bad for validating a split rule. See §12.
 
 ---
 
@@ -136,9 +136,115 @@ already owed** and are paid in the next settlement. Earned is earned.
 
 ---
 
-## 4. Usage attribution
+## 4. Contributor anonymity is absolute
 
-### 4.1 The signal exists; the accounting does not
+> "Subscribers know no user/contributor, they only know recordings and
+> recordings belong to user/contributors — recording owners are hidden 100%
+> from subscribers. Only VDCL is verifiable by subscribers when they must"
+
+**A subscriber never learns who made a recording.** They see recordings,
+their metadata, their quality scores and their licence status. They never
+see a contributor's identity, and they must never be able to derive it.
+
+This is a hard boundary, not a default. Every feature in this programme is
+subject to it, and the royalty system is the one most likely to breach it
+by accident — because royalties are inherently about *who earned what*.
+
+### 4.1 What a subscriber may see
+
+| | Visible to subscriber |
+|---|---|
+| Recording id, duration, dialect, subdialect | Yes |
+| Quality scores (`compositeScore`, `noiseScore`, ISVS…) | Yes |
+| Transcript, expression metadata | Yes |
+| **That a recording is VDCL-certified** | **Yes** — this is the point of certification |
+| **VDCL verification when they must** | **Yes** — see §4.3 |
+| Contributor name, id, email, country of residence | **Never** |
+| Which recordings share a contributor | **Never** — see §4.2 |
+| Contributor royalty balance or earnings | **Never** |
+| Agreement id, licence key, manifest key | **Never** |
+
+The current catalogue already honours this: `RECORDING_SELECT` in
+`CatalogueService` selects no `userId`, and `RightsDecision.agreementId` is
+used only for internal audit — it is never returned in a subscriber
+response. **This section exists to keep it that way**, because the royalty
+work introduces several places where it would be natural to leak.
+
+### 4.2 Correlation is the real risk, not direct exposure
+
+Nobody is going to add `contributorName` to a manifest. The danger is
+**inference**: a subscriber who can tell that recordings A, B and C share
+an owner has learned something about a contributor even without a name, and
+combined with dialect and subdialect that can be narrowing in a small
+community.
+
+Three specific vectors this programme creates:
+
+**Agreement counts on small sets.** The deck-coverage roll-up reports
+`contributingAgreements`. On a 5,000-item deck that number is harmless. On
+a **3-item** deck, `contributingAgreements: 1` tells the subscriber all
+three recordings share one contributor. **Recommendation:** suppress the
+count below a floor (report `null` or a bucket) rather than reporting it
+exactly for small sets.
+
+**Per-agreement coverage breakdowns.** Any future "which licence covers
+what" view that groups recordings by agreement is a direct correlation
+oracle, even with the agreement id replaced by an opaque token. Coverage
+must be reported **in aggregate over the deck**, never grouped by licence.
+
+**Withdrawal notifications.** `DECK_COVERAGE_CHANGED` — already built —
+carries `affected_items` and deliberately does **not** name the
+contributor. That was the right call, and this section is why. But note
+the residual signal: an org watching which items disappeared together
+learns those items shared an owner. **Recommendation:** the payload stays
+as it is (a count, no ids), and the coverage endpoint reports totals rather
+than a per-item licence status, so the disappearance is visible in
+aggregate without an itemised diff.
+
+### 4.3 "Verifiable when they must"
+
+A subscriber sometimes has a legitimate need to verify that a recording is
+properly licensed — a compliance audit, a due-diligence request, a dispute.
+That need is satisfied by **verifying the licence, not identifying the
+licensor**.
+
+The VDCL product plan already specifies this split (§7, §8): a public
+verification view returns *whether a licence is valid and what it covers*,
+never the contributor's photo, signature or KYC data. The design review's
+§3.4 carries it into the QR payload — licence id, version, manifest hash,
+nonce, and nothing else.
+
+For subscribers specifically:
+
+- **Yes:** "recording X is covered by an active VDCL granting ASR training,
+  verified against manifest hash `abc…`."
+- **No:** who signed it, when they signed, what else they licensed, or any
+  identifier that links recording X to recording Y.
+
+A verification response must therefore be **per recording**, never per
+agreement — returning an agreement's full manifest to a subscriber would
+hand them the complete set of one contributor's recordings, which is the
+correlation leak in its purest form.
+
+### 4.4 Consequences for royalty features
+
+- **Usage reporting to subscribers** stays per-recording and per-deck.
+  Never "top earning contributors," never a breakdown by owner.
+- **`RecordingUsageMonth.contributorId`** (§5.2 below) is internal accounting
+  only. It exists so a royalty can be attributed and paid; it must never
+  reach a subscriber-facing endpoint, and the field's presence in the model
+  is not permission to select it in a subscriber query.
+- **The contributor dashboard** (§9) shows a contributor their own usage,
+  including which subscriber organisations streamed them. That direction is
+  fine — the contributor knowing their customer is not the same as the
+  customer knowing their supplier. If that asymmetry is itself unwanted,
+  it is a separate product decision, but it does not breach this boundary.
+
+---
+
+## 5. Usage attribution
+
+### 5.1 The signal exists; the accounting does not
 
 `StreamAccessLog` already carries `recordingId`, `organizationId`,
 `bytesStreamed`, `durationStreamedMs` and `entitlementDecision` per audio
@@ -148,7 +254,7 @@ What it is **not** is an accounting source: append-only, unbounded, no
 retention policy, no aggregation. Reading it directly at settlement would
 scan every stream request ever made.
 
-### 4.2 Monthly aggregate
+### 5.2 Monthly aggregate
 
 ```prisma
 /// One row per (recording, subscriber organisation, month). Written from
@@ -177,7 +283,7 @@ model RecordingUsageMonth {
 }
 ```
 
-### 4.3 Split by stream count, not duration
+### 5.3 Split by stream count, not duration
 
 `StreamAccessLog.durationStreamedMs` records the recording's **full**
 duration, not the bytes actually served for a range request — documented
@@ -189,7 +295,7 @@ accounting is fixed. Count is exact and not gameable the same way.
 
 ---
 
-## 5. Royalties are DL, on their own track
+## 6. Royalties are DL, on their own track
 
 Royalties are paid in **DL**, the same unit as every other payout on the
 platform — but they are held on a **separate, withdraw-only track** from
@@ -204,7 +310,7 @@ ordinary wallet DL.
 | Backed by | Tokenomics reserve | Tokenomics reserve, funded by subscription revenue |
 | Ledger | `LedgerEntry` | `LedgerEntry`, royalty-typed |
 
-### 5.1 Why a separate balance rather than a tag
+### 6.1 Why a separate balance rather than a tag
 
 A dedicated payout path needs a dedicated balance to pay *from*. If royalty
 DL merged into `balance`, "pay only royalties" would be unanswerable — the
@@ -239,7 +345,7 @@ model Wallet {
 }
 ```
 
-### 5.2 Ledger entries
+### 6.2 Ledger entries
 
 No separate ledger table — `LedgerEntry` is already the one honest record of
 every DL movement, and splitting it would mean two places to look for the
@@ -261,7 +367,7 @@ code assuming every entry affects the spendable balance would be wrong.
 **This is the main integration risk of reusing the table** and is worth the
 audit, because the alternative — a second ledger — is worse.
 
-### 5.3 The reserve question, and why this shape is right
+### 6.3 The reserve question, and why this shape is right
 
 Paying royalties in DL means **minting DL against subscription revenue**.
 That revenue is real money coming in, so it must land in the reserve
@@ -287,7 +393,7 @@ The mint must flow through `TokenomicsService`, never by writing a wallet
 balance directly. **This is the part that most needs review before
 implementation.**
 
-### 5.4 Estimated on the go
+### 6.4 Estimated on the go
 
 > "they hold real money calculated by subscription end, and estimated on
 > the go at any time"
@@ -310,9 +416,9 @@ stale promise.
 
 ---
 
-## 6. Settlement
+## 7. Settlement
 
-### 6.1 Shape
+### 7.1 Shape
 
 A monthly job following the established standalone-script pattern
 (`reserve-balance-poll`, `tokenomics-valuation`) — runs inside the `api`
@@ -336,7 +442,7 @@ One `ROYALTY_ACCRUAL` row **per contributor per subscriber pool**, so a
 contributor can see exactly which subscriber's usage earned them what —
 not one opaque monthly figure.
 
-### 6.2 Rounding
+### 7.2 Rounding
 
 DL is `Decimal(20,8)`, so rounding is far less lossy than fiat minor units
 — but a pool still rarely divides evenly. Allocate the remainder
@@ -345,7 +451,7 @@ allocations equals the pool exactly**. A settlement that does not balance
 should fail loudly rather than quietly mint a different amount than the
 reserve received.
 
-### 6.3 Revenue basis: collected, not billed
+### 7.3 Revenue basis: collected, not billed
 
 Pool is computed from **collected** revenue. A failed, refunded or
 charged-back payment must never generate a royalty — the platform would
@@ -359,7 +465,7 @@ already-withdrawn balance, floored at zero so a contributor is never driven
 negative by someone else's chargeback. The corresponding reserve
 transaction must be reversed too, or backing drifts.
 
-### 6.4 Settlement discipline
+### 7.4 Settlement discipline
 
 Identical to every other balance mutation in this repo:
 
@@ -372,9 +478,9 @@ Identical to every other balance mutation in this repo:
 
 ---
 
-## 7. Payout
+## 8. Payout
 
-### 7.1 Its own request, the same rails
+### 8.1 Its own request, the same rails
 
 `PayoutAccount` (bank via Flutterwave, mobile money, Stripe Connect) is
 already built and keyed to `User`. **A contributor receiving royalties is
@@ -398,7 +504,7 @@ wallet.updateMany({
 Never read-then-compare-then-update, so two concurrent requests cannot both
 pass a check taken before either debit lands.
 
-### 7.2 Gating
+### 8.2 Gating
 
 - **KYC** — the existing threshold gate applies; a royalty payout is a
   payout like any other.
@@ -407,7 +513,7 @@ pass a check taken before either debit lands.
   worth.
 - **OTP** — same step-up as wallet withdrawals. Fund-moving is fund-moving.
 
-### 7.3 Settings
+### 8.3 Settings
 
 | Setting | Default | Purpose |
 |---|---|---|
@@ -421,7 +527,7 @@ is platform-set; it does not guarantee a number.
 
 ---
 
-## 8. Contributor access to Stream
+## 9. Contributor access to Stream
 
 > "We will integrate the dashboard for contributors access in stream
 > platform not trainer dashboard. On VDCL success, user receives account
@@ -435,7 +541,7 @@ Royalties are a **Voice Stream** surface, not a trainer-dashboard one.
 Contributors see their published decks, usage and royalty balance at
 `stream.dialectlibrary.com`.
 
-### 8.1 Resolved: contributors are members of the Dialect Library org
+### 9.1 Resolved: contributors are members of the Dialect Library org
 
 Every contributor gets a `SubscriberMembership` in one **house
 organisation** — Dialect Library itself. They are not an org of one, and
@@ -453,7 +559,7 @@ This resolves what was the design's largest open question, and it does so
 - Contributors get a real Stream login through the existing
   `SubscriberUser` / `SubscriberMembership` / `SubscriberAuthGuard` stack.
 
-### 8.2 The org already exists
+### 9.2 The org already exists
 
 **This is not new infrastructure.** `SubscriberOrganization` id
 `dialect-library-platform` is already seeded in production by the
@@ -478,7 +584,7 @@ shared setting — **`PlatformSettings.platformOrganizationId`, with an env
 override**, as specified — so both subsystems read one value rather than
 duplicating a literal.
 
-### 8.3 What this makes possible — and what it must not
+### 9.3 What this makes possible — and what it must not
 
 Making contributors members of a real org is the right call, but it grants
 them a membership in an organisation that, structurally, *can do
@@ -506,7 +612,7 @@ customer. A subscription on the platform's own org would put it in its own
 royalty pool — the platform paying itself, diluting every real
 contributor's share. Worth an explicit guard rather than a convention.
 
-### 8.4 The invite
+### 9.4 The invite
 
 On VDCL countersignature (status → ACTIVE), the contributor receives an
 invite to the Stream contributor surface. Mechanically:
@@ -534,7 +640,7 @@ contributor signs, and gains a place to watch their work earn.
 
 ---
 
-## 9. Worked example
+## 10. Worked example
 
 One subscriber on the $39 plan, `royaltySharePercent = 30`:
 
@@ -561,12 +667,12 @@ minimum payout.
 **On scale.** With one subscriber the pool is small, and the programme only
 becomes meaningful as subscriber count grows. That is correct behaviour for
 a revenue share, but launch-period amounts will be modest and the product
-messaging must not overpromise. The minimum-payout threshold (§7.2) exists
+messaging must not overpromise. The minimum-payout threshold (§8.2) exists
 partly so contributors are not sent trivial transfers.
 
 ---
 
-## 10. For legal
+## 11. For legal
 
 The VDCL needs a **policy provision** covering the programme. It is a
 clause in a licence, not a change to what the licence is:
@@ -608,13 +714,13 @@ revenue in the reserve, avoids that while keeping the payout fully backed.
 
 ---
 
-## 11. Phasing
+## 12. Phasing
 
 | Phase | Content | Depends on |
 |---|---|---|
 | **A** | Contributor decks + publishing to market | VDCL Phase 2 (manifests) |
 | **B** | `RecordingUsageMonth` aggregation + live estimates | Real streaming traffic |
-| **C** | Accrual settlement (royaltyBalance + mint + reserve) | §10 settled; B has run a month |
+| **C** | Accrual settlement (royaltyBalance + mint + reserve) | §11 settled; B has run a month |
 | **D** | Royalty withdrawal (own request model, existing rails) | C; KYC gate; minimum threshold |
 | **E** | Contributor Stream dashboard + VDCL invite | CONTRIBUTOR role; platformOrganizationId setting |
 
@@ -627,12 +733,12 @@ against real usage should not first be computed with money attached.
 
 **C and D are financial infrastructure**, held to the same ledger
 discipline as withdrawals and P2P escrow. C carries the reserve coupling
-(§5.3) and is the part most needing review: a royalty mint whose reserve
+(§6.3) and is the part most needing review: a royalty mint whose reserve
 inflow is missing or wrong dilutes token backing silently.
 
-**E's identity question is settled** (§8.1): contributors are members of
+**E's identity question is settled** (§9.1): contributors are members of
 the Dialect Library house org, which already exists and is already used by
 validator-deck publishing. What E still needs is the `CONTRIBUTOR` role,
 the `platformOrganizationId` setting, and — most importantly — the
-`userId`-scoped query discipline in §8.3, since inside the house org
+`userId`-scoped query discipline in §9.3, since inside the house org
 `organizationId` no longer separates one contributor from another.

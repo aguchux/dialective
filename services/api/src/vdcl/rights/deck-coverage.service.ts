@@ -37,11 +37,27 @@ export interface DeckCoverage {
    * contributors, each with their own VDCL and their own withdrawal right.
    * Surfacing the count is what stops an org reading a deck as a single
    * licensed asset.
+   *
+   * NULL on small decks. Subscribers must never be able to work out that
+   * two recordings share an owner: on a 5,000-item deck the count reveals
+   * nothing, but on a 3-item deck "1 agreement" tells the subscriber all
+   * three came from the same contributor, which combined with dialect and
+   * subdialect can be narrowing in a small community. Suppressed below
+   * MIN_ITEMS_FOR_AGREEMENT_COUNT rather than reported exactly.
    */
-  contributingAgreements: number;
+  contributingAgreements: number | null;
   /** True when enforcement is off -- coverage is then advisory, not binding. */
   advisory: boolean;
 }
+
+/**
+ * Below this many items, the contributing-agreement count is suppressed --
+ * see the field's doc comment. Chosen as a conservative floor rather than a
+ * tuned one: the cost of suppressing on a slightly-too-large deck is an
+ * absent number, and the cost of reporting on a too-small one is a
+ * contributor's recordings becoming linkable.
+ */
+const MIN_ITEMS_FOR_AGREEMENT_COUNT = 20;
 
 const EMPTY_BREAKDOWN: DeckCoverageBreakdown = {
   licensed: 0,
@@ -100,7 +116,7 @@ export class DeckCoverageService {
         totalItems: 0,
         breakdown: { ...EMPTY_BREAKDOWN },
         coveragePercent: 100,
-        contributingAgreements: 0,
+        contributingAgreements: null,
         advisory: !enforcementOn,
       };
     }
@@ -195,7 +211,8 @@ export class DeckCoverageService {
       breakdown,
       coveragePercent:
         totalItems === 0 ? 100 : Number(((breakdown.licensed / totalItems) * 100).toFixed(1)),
-      contributingAgreements: agreementIds.size,
+      contributingAgreements:
+        totalItems >= MIN_ITEMS_FOR_AGREEMENT_COUNT ? agreementIds.size : null,
       advisory: !enforcementOn,
     };
   }

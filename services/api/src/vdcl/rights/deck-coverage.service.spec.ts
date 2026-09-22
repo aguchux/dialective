@@ -95,9 +95,39 @@ describe('DeckCoverageService', () => {
       pending: 1,
     });
     expect(coverage.coveragePercent).toBe(20);
-    // Four distinct contributor agreements feed this one deck -- the number
-    // that stops an org reading it as a single licensed asset.
+    // Suppressed: 5 items is below the floor, and an exact count on a tiny
+    // deck would tell the subscriber which recordings share a contributor.
+    expect(coverage.contributingAgreements).toBeNull();
+  });
+
+  it('reports the agreement count once the deck is large enough to anonymise it', async () => {
+    const rows = Array.from({ length: 25 }, (_, i) =>
+      manifestRow(`rec-${i}`, { agreementId: `a-${i % 4}` }),
+    );
+    const items = rows.map((r) => r.recordingId);
+    const { service } = makeService(rows, items);
+
+    const coverage = await service.forDeck('deck-1', [VdclPurpose.ASR_TRAINING]);
+
+    expect(coverage.totalItems).toBe(25);
     expect(coverage.contributingAgreements).toBe(4);
+  });
+
+  it('never lets a subscriber infer that a few recordings share one contributor', async () => {
+    // The specific leak: 3 recordings, 1 agreement. Reporting "1" would say
+    // outright that all three came from the same person, which combined
+    // with dialect can be narrowing in a small community.
+    const rows = ['rec-a', 'rec-b', 'rec-c'].map((id) =>
+      manifestRow(id, { agreementId: 'the-same-contributor' }),
+    );
+    const { service } = makeService(rows, ['rec-a', 'rec-b', 'rec-c']);
+
+    const coverage = await service.forDeck('deck-1', [VdclPurpose.ASR_TRAINING]);
+
+    expect(coverage.contributingAgreements).toBeNull();
+    // Coverage itself is still fully reported -- anonymity costs the count,
+    // not the usefulness of the shelf.
+    expect(coverage.breakdown.licensed).toBe(3);
   });
 
   it('counts a recording with no VDCL as pending, not as a hard failure', async () => {
