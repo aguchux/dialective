@@ -3,6 +3,7 @@
 **Companion to:** `Dialect-Library-VDCL-Product-and-Implementation-Plan.md`
 **Status:** Engineering design review, grounded in the codebase and production data as of 2026-09-22
 **Phase 0:** shipped 2026-09-22 (`be77c991`) — see §5
+**Phase 2:** shipped 2026-09-22 — compilation, manifests, hashing, inspector
 **Audience:** Engineering and product
 
 ---
@@ -263,14 +264,44 @@ Unchanged from the product plan §13. Solicitor review of wording,
 withdrawal rules, minors, biometric provisions, governing law. Engineering
 proceeds in parallel; nothing is *issued* until this lands.
 
-### Phase 2 — Compilation
+### Phase 2 — Compilation ✅ SHIPPED 2026-09-22
 
-- Eligibility rules and the compilation job.
-- Immutable manifest + hash.
-- Metric aggregation with definitions and pipeline versions attached.
-- Admin manifest inspector.
-- **Acceptance:** an admin can explain every included and excluded
-  recording.
+- ~~Eligibility rules and the compilation job.~~ `eligibility.ts` is a PURE
+  function over an explicit column set — no database, no settings, no clock
+  — because compilation has to be reproducible for the hash to mean
+  anything. It is conservative at every branch: anything uncertain is
+  excluded, since a clip wrongly left out costs a recompile while a clip
+  wrongly *included* means DL licensed work it had no right to and said so
+  in a signed document.
+- ~~Immutable manifest + hash.~~ `manifest-hash.ts` defines the canonical
+  form explicitly (sorted keys, sorted items, named fields, fixed decimal
+  precision) and embeds `CANONICAL_VERSION` in the payload. Compiling a
+  version that already has a manifest is refused — recompiling produces a
+  new version, never a mutation, because a signature over a mutable
+  document means nothing.
+- ~~Metric aggregation with definitions and pipeline versions attached.~~
+  `scoreDefinitions` ships with every manifest. The ASR pipeline version is
+  derived from the clips themselves, not read from config: what matters is
+  which engine produced *these* transcripts.
+- ~~Admin manifest inspector.~~ `/admin/vdcl`, plus `verify-hash` which
+  recomputes from stored rows and flags any manifest altered after issuance.
+- **Acceptance met:** `explainExclusions` accounts for every recording the
+  contributor owns — covered, or excluded with a named reason — and
+  separates reasons that resolve by waiting from ones that never resolve.
+
+**Two things this phase deliberately does NOT do.** It does not sign,
+countersign or activate anything: compilation moves a version to
+`PENDING_REVIEW` and a human decides what happens next. And it is
+admin-only, because until the contributor-facing maker ships in Phase 3
+with its readiness checks and consent capture, the only people who should
+trigger compilation are those who can read the result and explain it.
+
+**One design trade worth recording.** Exclusions are *recomputed* on demand
+rather than stored per clip — storing one row per excluded recording would
+mean hundreds of thousands of rows carrying no rights. The cost is that a
+recording whose state changed since compilation reports today's reason, not
+the one that applied on the day, which the response marks with
+`recomputedAt`.
 
 ### Phase 3 — Maker and signing
 

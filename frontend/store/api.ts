@@ -2767,6 +2767,115 @@ export interface ValidatorDeckItem {
   flaggedAt: string | null;
 }
 
+export type VdclVersionStatus =
+  | 'DRAFT'
+  | 'PENDING_COMPILATION'
+  | 'PENDING_REVIEW'
+  | 'PENDING_COUNTERSIGNATURE'
+  | 'ACTIVE'
+  | 'SUPERSEDED'
+  | 'WITHDRAWN'
+  | 'SUSPENDED'
+  | 'REJECTED'
+  | 'AMENDMENT_PENDING';
+
+export type VdclPurpose =
+  | 'ASR_TRAINING'
+  | 'TTS_TRAINING'
+  | 'LLM_TRAINING'
+  | 'LINGUISTIC_RESEARCH'
+  | 'DATASET_REDISTRIBUTION'
+  | 'PUBLIC_PROMOTION'
+  | 'BIOMETRIC_PROCESSING'
+  | 'VOICE_CLONING';
+
+export interface VdclInventoryPreview {
+  eligibleCount: number;
+  excludedCount: number;
+  exclusionsByReason: Record<string, number>;
+  totalDurationMs: string;
+  transcriptCount: number;
+  meanCompositeScore: number | null;
+}
+
+export interface VdclManifestInspection {
+  versionId: string;
+  status: VdclVersionStatus;
+  licenceKey?: string;
+  dialectTag?: string;
+  country?: { code: string; name: string } | null;
+  purposes?: VdclPurpose[];
+  manifestHash?: string | null;
+  message?: string;
+  manifest: {
+    id: string;
+    manifestKey: string;
+    recordingCount: number;
+    totalDurationMs: string;
+    transcriptCount: number;
+    excludedCount: number;
+    meanCompositeScore: string | null;
+    asrPipelineVersion: string | null;
+    qualityPipelineVersion: string | null;
+    scoreDefinitions: Record<string, string> | null;
+    compiledAt: string;
+  } | null;
+  compilationJob: {
+    stage: string;
+    progressPercent: number;
+    blockerMessage: string | null;
+    failureReason: string | null;
+    attempts: number;
+  } | null;
+  anomalies?: { kind: string; count: number; detail: string }[];
+  items?: {
+    id: string;
+    recordingId: string;
+    durationMs: number | null;
+    dialectTag: string;
+    compositeScore: string | null;
+    score: string | null;
+    hasTranscript: boolean;
+    audioPurgedAt: string | null;
+  }[];
+  page?: number;
+  pageSize?: number;
+  totalItems?: number;
+}
+
+export interface VdclExclusionReport {
+  versionId: string;
+  recomputedAt: string;
+  coveredInManifest: number;
+  coveredStillEligible: number;
+  coveredNoLongerEligible: number;
+  eligibleButNotInManifest: number;
+  exclusions: {
+    reason: string;
+    label: string;
+    transient: boolean;
+    count: number;
+    sampleRecordingIds: string[];
+  }[];
+}
+
+export interface VdclHashVerification {
+  versionId: string;
+  storedHash: string | null;
+  recomputedHash: string;
+  matches: boolean;
+}
+
+export interface VdclCompilationResult {
+  versionId: string;
+  manifestId: string;
+  manifestKey: string;
+  manifestHash: string;
+  recordingCount: number;
+  excludedCount: number;
+  exclusionsByReason: Record<string, number>;
+}
+
 export interface ValidatorDeckSummary {
   id: string;
   name: string;
@@ -3279,6 +3388,8 @@ export const dialectivaApi = createApi({
     'ValidatorDialectAssignments',
     'Integrations',
     'WhatsAppValidator',
+    'VdclAgreements',
+    'VdclManifest',
   ],
   endpoints: (builder) => ({
     register: builder.mutation<
@@ -6220,6 +6331,30 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/admin/validator-decks/from-stream-deck', method: 'POST', body }),
       invalidatesTags: ['ValidatorDecks', 'AdminValidatorDecks'],
     }),
+    getVdclInventoryPreview: builder.query<
+      VdclInventoryPreview,
+      { contributorId: string; dialectTag: string }
+    >({
+      query: (params) => ({ url: '/admin/vdcl/inventory', params }),
+    }),
+    compileVdclVersion: builder.mutation<VdclCompilationResult, string>({
+      query: (id) => ({ url: `/admin/vdcl/versions/${id}/compile`, method: 'POST' }),
+      invalidatesTags: (_r, _e, id) => [{ type: 'VdclManifest', id }, 'VdclAgreements'],
+    }),
+    getVdclManifest: builder.query<VdclManifestInspection, { id: string; page?: number }>({
+      query: ({ id, page }) => ({
+        url: `/admin/vdcl/versions/${id}/manifest`,
+        params: page ? { page } : undefined,
+      }),
+      providesTags: (_r, _e, { id }) => [{ type: 'VdclManifest', id }],
+    }),
+    getVdclExclusions: builder.query<VdclExclusionReport, string>({
+      query: (id) => `/admin/vdcl/versions/${id}/exclusions`,
+      providesTags: (_r, _e, id) => [{ type: 'VdclManifest', id: `${id}-exclusions` }],
+    }),
+    verifyVdclManifestHash: builder.query<VdclHashVerification, string>({
+      query: (id) => `/admin/vdcl/versions/${id}/verify-hash`,
+    }),
   }),
 });
 
@@ -6622,6 +6757,11 @@ export const {
   useAdminReassignValidatorDeckMutation,
   useAdminArchiveValidatorDeckMutation,
   useAdminCloneFromStreamDeckMutation,
+  useGetVdclInventoryPreviewQuery,
+  useCompileVdclVersionMutation,
+  useGetVdclManifestQuery,
+  useGetVdclExclusionsQuery,
+  useVerifyVdclManifestHashQuery,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };
