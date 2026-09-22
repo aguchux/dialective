@@ -15,7 +15,8 @@ export type RightsDenialReason =
   | 'licence_withdrawn' // contributor withdrew (prospective -- see VdclAgreement.withdrawnAt)
   | 'licence_suspended' // Dialect Library suspended it
   | 'licence_not_active' // draft/pending/superseded -- signed but not in force
-  | 'recording_not_covered'; // agreement is active but this clip is outside its frozen manifest
+  | 'recording_not_covered' // agreement is active but this clip is outside its frozen manifest
+  | 'no_declared_purpose'; // the subscriber's credential declares no purpose to check against
 
 export interface RightsDecision {
   allowed: boolean;
@@ -28,6 +29,23 @@ export interface RightsDecision {
 }
 
 const ALLOWED: RightsDecision = { allowed: true, entitlementDecision: 'allowed' };
+
+/**
+ * The purposes a credential declared, or a denial if it declared none.
+ *
+ * An undeclared credential is DENIED, never defaulted to a permissive
+ * purpose. Guessing on the subscriber's behalf would let them stream data
+ * for a use the contributor explicitly refused -- which is the exact failure
+ * the itemised consent model exists to prevent.
+ *
+ * Credentials minted before this field existed carry an empty array, so
+ * every one of them must be re-declared before enforcement is turned on.
+ * That is deliberate: silently grandfathering them in would reintroduce the
+ * same hole.
+ */
+export function declaredPurposes(credential: { purposes: VdclPurpose[] }): VdclPurpose[] {
+  return credential.purposes ?? [];
+}
 
 function deny(reason: RightsDenialReason, ids?: { agreementId?: string; versionId?: string }): RightsDecision {
   return { allowed: false, reason, entitlementDecision: `denied:${reason}`, ...ids };
@@ -144,6 +162,38 @@ export class RightsService {
   }
 
   /**
+   * The form the stream API actually calls: may this credential's traffic
+   * use this recording?
+   *
+   * A credential may declare several purposes (an org licensing for both ASR
+   * and TTS work on one key). ALL declared purposes must be granted, not any
+   * -- the credential is asserting what it intends to do with the data, and
+   * a contributor who permitted ASR but refused TTS has not licensed a key
+   * that does both. Taking "any" here would let one granted purpose smuggle
+   * in every refused one.
+   */
+  async mayUseForCredential(
+    recordingId: string,
+    credential: { purposes: VdclPurpose[] },
+  ): Promise<RightsDecision> {
+    if (!(await this.settings.isVdclEnforcementEnabled())) {
+      return ALLOWED;
+    }
+
+    const purposes = declaredPurposes(credential);
+    if (purposes.length === 0) {
+      return deny('no_declared_purpose');
+    }
+
+    let last: RightsDecision = ALLOWED;
+    for (const purpose of purposes) {
+      last = await this.mayUse(recordingId, purpose);
+      if (!last.allowed) return last;
+    }
+    return last;
+  }
+
+  /**
    * Batch form, for manifest listings that would otherwise issue one query
    * per recording. Same semantics as mayUse, same fail-closed default: a
    * recordingId absent from the returned map is denied.
@@ -214,6 +264,39 @@ export class RightsService {
   }
 
   /**
+   * Batch form of mayUseForCredential, for filtering a deck manifest down to
+   * what the subscriber may actually stream.
+   *
+   * A deck is normally PARTIALLY covered for any given purpose -- its
+   * recordings come from different contributors who granted different
+   * things. That is the expected case, not an error, so the manifest filters
+   * rather than failing.
+   */
+  async filterUsableForCredential(
+    recordingIds: string[],
+    credential: { purposes: VdclPurpose[] },
+  ): Promise<Set<string>> {
+    if (!(await this.settings.isVdclEnforcementEnabled())) {
+      return new Set(recordingIds);
+    }
+
+    const purposes = declaredPurposes(credential);
+    if (purposes.length === 0) return new Set();
+    if (recordingIds.length === 0) return new Set();
+
+    // Start from everything, then intersect per declared purpose -- a
+    // recording survives only if EVERY declared purpose is granted, matching
+    // mayUseForCredential's all-not-any rule.
+    let usable = new Set(recordingIds);
+    for (const purpose of purposes) {
+      const decisions = await this.mayUseMany([...usable], purpose);
+      usable = new Set([...usable].filter((id) => decisions.get(id)?.allowed));
+      if (usable.size === 0) break;
+    }
+    return usable;
+  }
+
+  /**
    * Records a rights decision to the VDCL audit trail.
    *
    * This exists because the 7 stream guards reject before the audio handler's
@@ -224,7 +307,8 @@ export class RightsService {
    */
   async recordDecision(params: {
     recordingId: string;
-    purpose: VdclPurpose;
+    /** Undefined when the credential declared none -- the denial itself is what matters then. */
+    purpose?: VdclPurpose;
     decision: RightsDecision;
     actorId?: string;
     detail?: string;
@@ -237,7 +321,7 @@ export class RightsService {
           recordingId: params.recordingId,
           actorId: params.actorId ?? null,
           eventType: params.decision.allowed ? 'rights_allowed' : 'rights_denied',
-          purpose: params.purpose,
+          purpose: params.purpose ?? null,
           detail: params.detail ?? params.decision.reason ?? null,
         },
       });

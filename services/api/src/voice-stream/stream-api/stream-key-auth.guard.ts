@@ -1,6 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Request } from 'express';
-import { StreamKeyScope } from '@dialectiva/db';
+import { StreamKeyScope, VdclPurpose } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { hashToken } from '../../auth/token.util';
 
@@ -10,6 +10,8 @@ export interface AuthenticatedStreamKeyRequest extends Request {
     organizationId: string;
     deckId: string | null;
     scopes: StreamKeyScope[];
+    /** What the subscriber declared this credential's traffic is FOR, matched against contributors' itemised VDCL grants. Empty = not declared, which is denied (not defaulted) once enforcement is on -- see RightsService. */
+    purposes: VdclPurpose[];
     /** Which table `id` points into -- StreamKeyAuthGuard sets 'stream_key', OAuthJwtAuthGuard sets 'oauth_client' (both populate this same request shape). */
     credentialType: 'stream_key' | 'oauth_client';
     /** Set by DedicatedCapacityGuard (Phase 4) once resolved, so downstream code (StreamAudioController's finally block) never needs a second Prisma lookup for the same plan field. Undefined until that guard runs. */
@@ -59,6 +61,7 @@ export class StreamKeyAuthGuard implements CanActivate {
       organizationId: key.organizationId,
       deckId: key.deckId,
       scopes: key.scopes,
+      purposes: key.purposes,
       credentialType: 'stream_key',
     };
 

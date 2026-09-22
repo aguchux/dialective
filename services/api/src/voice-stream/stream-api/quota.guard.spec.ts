@@ -24,6 +24,7 @@ const streamKey = {
   organizationId: 'org-1',
   deckId: null,
   scopes: [],
+  purposes: [],
   credentialType: 'stream_key' as const,
 };
 

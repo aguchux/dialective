@@ -378,11 +378,19 @@ export class CatalogueService {
     // stream API's guard chain, byte metering and StreamAccessLog entirely.
     // A rights check wired only into the streaming chokepoint would therefore
     // be trivially sidesteppable, so it has to be enforced here too.
-    const decision = await this.rights.mayUse(recordingId, VdclPurpose.ASR_TRAINING);
+    //
+    // Unlike the stream API, this is a HUMAN dashboard session with no
+    // machine credential, so there is no declared purpose to match against.
+    // Preview is evaluation -- a person listening to decide whether to
+    // license -- which is why it checks LINGUISTIC_RESEARCH, the narrowest
+    // purpose in the enum, rather than a training purpose the contributor
+    // may well have refused. A contributor who grants nothing at all still
+    // has their clip withheld from preview.
+    const decision = await this.rights.mayUse(recordingId, VdclPurpose.LINGUISTIC_RESEARCH);
     if (!decision.allowed) {
       void this.rights.recordDecision({
         recordingId,
-        purpose: VdclPurpose.ASR_TRAINING,
+        purpose: VdclPurpose.LINGUISTIC_RESEARCH,
         decision,
         actorId: userId,
         detail: `catalogue_preview org=${organizationId}`,

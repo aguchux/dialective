@@ -32,6 +32,7 @@ export class OAuthTokenController {
       organizationId: client.organizationId,
       deckId: client.deckId,
       scopes: client.scopes,
+      purposes: client.purposes,
     });
 
     return { access_token: token, token_type: 'Bearer', expires_in: expiresInSeconds };

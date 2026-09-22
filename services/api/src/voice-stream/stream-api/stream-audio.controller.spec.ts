@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
-import { StreamKeyScope, SubscriptionStatus } from '@dialectiva/db';
+import { StreamKeyScope, SubscriptionStatus, VdclPurpose } from '@dialectiva/db';
 import { StreamAudioController } from './stream-audio.controller';
 import { StreamManifestService } from './stream-manifest.service';
 import { StreamAccessLogService } from './stream-access-log.service';
@@ -78,7 +78,7 @@ describe('StreamAudioController (HTTP layer)', () => {
   let storage: { getObject: jest.Mock };
   let accessLog: { record: jest.Mock };
   let webhookEvents: { emit: jest.Mock };
-  let rights: { mayUse: jest.Mock; recordDecision: jest.Mock };
+  let rights: { mayUseForCredential: jest.Mock; recordDecision: jest.Mock };
 
   beforeEach(async () => {
     Object.values(mockRedisInstance).forEach((fn) => {
@@ -99,7 +99,9 @@ describe('StreamAudioController (HTTP layer)', () => {
     // VDCL rights check -- allowed by default so existing assertions stay
     // about the streaming layer; the licence-denial case has its own test.
     rights = {
-      mayUse: jest.fn().mockResolvedValue({ allowed: true, entitlementDecision: 'allowed' }),
+      mayUseForCredential: jest
+        .fn()
+        .mockResolvedValue({ allowed: true, entitlementDecision: 'allowed' }),
       recordDecision: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -198,6 +200,7 @@ describe('StreamAudioController (HTTP layer)', () => {
       organizationId: ORG_ID,
       deckId: null,
       scopes: [StreamKeyScope.AUDIO_STREAM],
+      purposes: [VdclPurpose.ASR_TRAINING],
       revokedAt: null,
       expiresAt: null,
       allowedIps: [],
@@ -221,6 +224,7 @@ describe('StreamAudioController (HTTP layer)', () => {
       organizationId: ORG_ID,
       deckId: null,
       scopes: [StreamKeyScope.AUDIO_STREAM],
+      purposes: [VdclPurpose.ASR_TRAINING],
       revokedAt: null,
       expiresAt: null,
       allowedIps: [],
@@ -259,6 +263,7 @@ describe('StreamAudioController (HTTP layer)', () => {
       organizationId: ORG_ID,
       deckId: null,
       scopes: [StreamKeyScope.AUDIO_STREAM],
+      purposes: [VdclPurpose.ASR_TRAINING],
       revokedAt: null,
       expiresAt: null,
       allowedIps: [],
@@ -272,14 +277,15 @@ describe('StreamAudioController (HTTP layer)', () => {
     expect(res.status).toBe(404);
   });
 
-  it('returns 403 and streams no bytes when no active VDCL covers the recording', async () => {
-    // The commercial lock: "no VDCL, no commercial use". It must refuse
-    // BEFORE any byte moves, so an unlicensed clip is never partially served.
+  it('passes the declared purposes of the presenting credential to the rights check', async () => {
+    // The purpose checked must be what THIS key declared, not a fixed
+    // assumption -- otherwise itemised consent is decorative.
     prisma.streamApiKey.findUnique.mockResolvedValue({
       id: STREAM_KEY_ID,
       organizationId: ORG_ID,
       deckId: null,
       scopes: [StreamKeyScope.AUDIO_STREAM],
+      purposes: [VdclPurpose.TTS_TRAINING],
       revokedAt: null,
       expiresAt: null,
       allowedIps: [],
@@ -289,7 +295,42 @@ describe('StreamAudioController (HTTP layer)', () => {
       audioKey: 'path/to/audio.wav',
       durationMs: 1234,
     });
-    rights.mayUse.mockResolvedValue({
+    const { Readable } = require('stream');
+    storage.getObject.mockResolvedValue({
+      body: Readable.from([Buffer.from('audio-bytes')]),
+      contentLength: 11,
+      contentRange: undefined,
+    });
+
+    await request(app.getHttpServer())
+      .get(`/stream/v1/decks/${DECK_ID}/items/${RECORDING_ID}/audio`)
+      .set('Authorization', `Bearer ${PLAIN_KEY}`);
+
+    expect(rights.mayUseForCredential).toHaveBeenCalledWith(
+      RECORDING_ID,
+      expect.objectContaining({ purposes: [VdclPurpose.TTS_TRAINING] }),
+    );
+  });
+
+  it('returns 403 and streams no bytes when no active VDCL covers the recording', async () => {
+    // The commercial lock: "no VDCL, no commercial use". It must refuse
+    // BEFORE any byte moves, so an unlicensed clip is never partially served.
+    prisma.streamApiKey.findUnique.mockResolvedValue({
+      id: STREAM_KEY_ID,
+      organizationId: ORG_ID,
+      deckId: null,
+      scopes: [StreamKeyScope.AUDIO_STREAM],
+      purposes: [VdclPurpose.ASR_TRAINING],
+      revokedAt: null,
+      expiresAt: null,
+      allowedIps: [],
+    });
+    manifest.getEligibleItemMetadata.mockResolvedValue({
+      audioBucket: 'bucket',
+      audioKey: 'path/to/audio.wav',
+      durationMs: 1234,
+    });
+    rights.mayUseForCredential.mockResolvedValue({
       allowed: false,
       reason: 'no_vdcl',
       entitlementDecision: 'denied:no_vdcl',

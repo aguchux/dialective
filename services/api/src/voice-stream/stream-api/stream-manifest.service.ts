@@ -1,12 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { IsvcConfidence } from '@dialectiva/db';
+import { IsvcConfidence, VdclPurpose } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogueService } from '../catalogue/catalogue.service';
+import { RightsService } from '../../vdcl/rights/rights.service';
 
 interface AuthenticatedStreamKey {
   id: string;
   organizationId: string;
   deckId: string | null;
+  /** Declared VDCL purposes -- what this credential's traffic is FOR. Optional so existing internal callers that build this shape by hand keep compiling; absent is treated as undeclared. */
+  purposes?: VdclPurpose[];
 }
 
 /**
@@ -22,6 +25,7 @@ export class StreamManifestService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly catalogue: CatalogueService,
+    private readonly rights: RightsService,
   ) {}
 
   private assertKeyCanAccessDeck(streamKey: AuthenticatedStreamKey, deckId: string): void {
@@ -119,10 +123,24 @@ export class StreamManifestService {
     const deck = await this.getDeck(streamKey, deckId);
 
     if (version !== undefined) {
-      return this.getPinnedManifest(deck, version);
+      return this.getPinnedManifest(deck, version, streamKey);
     }
 
-    const eligible = await this.listEligibleItems(streamKey, deckId);
+    const allEligible = await this.listEligibleItems(streamKey, deckId);
+
+    // VDCL coverage filter. A deck is normally only PARTIALLY licensed for
+    // any given purpose -- its recordings come from different contributors
+    // who granted different things -- so the manifest lists what this
+    // credential may actually stream rather than advertising items that
+    // would 403 partway through the subscriber's training run. The
+    // `licensed_*` fields below report the shortfall honestly instead of
+    // hiding it.
+    const usable = await this.rights.filterUsableForCredential(
+      allEligible.map(({ recording }) => recording.id),
+      { purposes: streamKey.purposes ?? [] },
+    );
+    const eligible = allEligible.filter(({ recording }) => usable.has(recording.id));
+
     const isvcByRecordingId = await this.currentIsvcByRecordingId(
       eligible.map(({ recording }) => recording.id),
     );
@@ -140,6 +158,12 @@ export class StreamManifestService {
       version: current?.version.version ?? 0,
       items: eligible.length,
       audio_hours: Number((totalDurationMs / 1000 / 60 / 60).toFixed(2)),
+      // Coverage, so a subscriber can see the shortfall before building a
+      // pipeline on it. Equal counts mean the deck is fully licensed for
+      // this credential's declared purposes.
+      deck_items: allEligible.length,
+      licensed_items: eligible.length,
+      declared_purposes: streamKey.purposes ?? [],
       records: eligible.map(({ recording }) => {
         const isvc = isvcByRecordingId.get(recording.id);
         return {
@@ -157,7 +181,11 @@ export class StreamManifestService {
     };
   }
 
-  private async getPinnedManifest(deck: { id: string; deckKey: string }, version: number) {
+  private async getPinnedManifest(
+    deck: { id: string; deckKey: string },
+    version: number,
+    streamKey: AuthenticatedStreamKey,
+  ) {
     const versionRow = await this.prisma.streamDeckVersion.findUnique({
       where: { deckId_version: { deckId: deck.id, version } },
       include: { items: true },
@@ -166,14 +194,29 @@ export class StreamManifestService {
       throw new NotFoundException(`Version ${version} not found for this Stream Deck`);
     }
 
-    const totalDurationMs = versionRow.items.reduce((sum, item) => sum + (item.durationMs ?? 0), 0);
+    // A pinned version freezes ELIGIBILITY at snapshot time (doc section
+    // 12's reproducibility guarantee) -- it does not freeze LICENSING.
+    // Rights are evaluated live, because a contributor's withdrawal or a
+    // suspended licence has to take effect on a pinned manifest too;
+    // otherwise pinning an old version would be a way to keep streaming
+    // what someone has since withdrawn.
+    const usable = await this.rights.filterUsableForCredential(
+      versionRow.items.map((item) => item.recordingId),
+      { purposes: streamKey.purposes ?? [] },
+    );
+    const items = versionRow.items.filter((item) => usable.has(item.recordingId));
+
+    const totalDurationMs = items.reduce((sum, item) => sum + (item.durationMs ?? 0), 0);
 
     return {
       deck_id: deck.deckKey,
       version: versionRow.version,
-      items: versionRow.items.length,
+      items: items.length,
       audio_hours: Number((totalDurationMs / 1000 / 60 / 60).toFixed(2)),
-      records: versionRow.items.map((item) => ({
+      deck_items: versionRow.items.length,
+      licensed_items: items.length,
+      declared_purposes: streamKey.purposes ?? [],
+      records: items.map((item) => ({
         id: item.recordingId,
         duration_ms: item.durationMs,
         language: item.dialectTag,

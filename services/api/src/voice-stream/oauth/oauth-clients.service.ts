@@ -13,6 +13,7 @@ const PUBLIC_CLIENT_SELECT = {
   deckId: true,
   clientId: true,
   scopes: true,
+  purposes: true,
   createdByUserId: true,
   createdAt: true,
   revokedAt: true,

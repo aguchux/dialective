@@ -4192,6 +4192,17 @@ model StreamApiKey {
   keyHash         String                 @unique
   keyPrefix       String // display-only, e.g. "dlsk_live_7MqP"
   scopes          StreamKeyScope[]
+  /// What the subscriber declares this credential's traffic is FOR. Scopes
+  /// say which endpoints a key may call; purposes say what the data may be
+  /// used for once retrieved, and are matched against each contributor's
+  /// itemised VDCL grants. An org doing both ASR and TTS work mints one key
+  /// per purpose, so a denial is always attributable to a specific
+  /// integration.
+  ///
+  /// Empty means "not declared". Under VDCL enforcement an undeclared key is
+  /// denied rather than defaulted -- guessing a purpose on the subscriber's
+  /// behalf would let them stream data for a use the contributor refused.
+  purposes        VdclPurpose[]          @default([])
   allowedIps      String[]               @default([]) // empty = no IP restriction
   createdByUserId String
   createdAt       DateTime               @default(now())
@@ -4224,6 +4235,7 @@ model OAuthClient {
   clientId        String                 @unique
   secretHash      String
   scopes          StreamKeyScope[] // reuses the existing scope enum -- same permission model as Stream Keys
+  purposes        VdclPurpose[]          @default([]) // same declared-purpose model as StreamApiKey.purposes
   createdByUserId String
   createdAt       DateTime               @default(now())
   revokedAt       DateTime?

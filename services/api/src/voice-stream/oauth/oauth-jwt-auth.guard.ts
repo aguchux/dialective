@@ -29,6 +29,7 @@ export class OAuthJwtAuthGuard implements CanActivate {
         organizationId: claims.organizationId,
         deckId: claims.deckId,
         scopes: claims.scopes,
+        purposes: claims.purposes ?? [],
         credentialType: 'oauth_client',
       };
       return true;

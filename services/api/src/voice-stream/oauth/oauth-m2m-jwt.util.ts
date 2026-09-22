@@ -1,11 +1,18 @@
 import * as jwt from 'jsonwebtoken';
-import { StreamKeyScope } from '@dialectiva/db';
+import { StreamKeyScope, VdclPurpose } from '@dialectiva/db';
 
 export interface M2mTokenClaims {
   sub: string; // OAuthClient.clientId
   organizationId: string;
   deckId: string | null;
   scopes: StreamKeyScope[];
+  /**
+   * Declared VDCL purposes for this credential's traffic. Optional in the
+   * type because a token minted before this field existed will not carry it;
+   * an absent/empty value is treated as "not declared" and denied under VDCL
+   * enforcement, never defaulted to a permissive purpose.
+   */
+  purposes?: VdclPurpose[];
 }
 
 /**

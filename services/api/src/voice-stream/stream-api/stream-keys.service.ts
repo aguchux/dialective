@@ -1,5 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ActivityEventType, StreamKeyScope, WebhookEventType } from '@dialectiva/db';
+import {
+  ActivityEventType,
+  StreamKeyScope,
+  VdclPurpose,
+  WebhookEventType,
+} from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { generateOpaqueToken, hashToken } from '../../auth/token.util';
 import { WebhookEventService } from '../webhooks/webhook-event.service';
@@ -16,6 +21,7 @@ const PUBLIC_KEY_SELECT = {
   deckId: true,
   keyPrefix: true,
   scopes: true,
+  purposes: true,
   allowedIps: true,
   createdByUserId: true,
   createdAt: true,
@@ -68,6 +74,7 @@ export class StreamKeysService {
     params: {
       deckId?: string;
       scopes: StreamKeyScope[];
+      purposes?: VdclPurpose[];
       allowedIps?: string[];
       expiresAt?: string;
     },
@@ -85,6 +92,7 @@ export class StreamKeysService {
         keyHash,
         keyPrefix,
         scopes: params.scopes,
+        purposes: params.purposes ?? [],
         allowedIps: params.allowedIps ?? [],
         createdByUserId,
         expiresAt: params.expiresAt ? new Date(params.expiresAt) : null,
@@ -165,6 +173,7 @@ export class StreamKeysService {
         keyHash,
         keyPrefix,
         scopes: existing.scopes,
+        purposes: existing.purposes,
         allowedIps: effectiveAllowedIps,
         createdByUserId: existing.createdByUserId,
         expiresAt: existing.expiresAt,

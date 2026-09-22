@@ -12,8 +12,14 @@ function setup() {
     subscription: { findUnique: jest.fn().mockResolvedValue(null) },
   };
   const catalogue = { getEligibleRecording: jest.fn() };
-  const service = new StreamManifestService(prisma as never, catalogue as never);
-  return { service, prisma, catalogue };
+  // VDCL coverage filter -- passes everything through by default so the
+  // existing manifest assertions stay about manifest behaviour; the
+  // partial-coverage case has its own test.
+  const rights = {
+    filterUsableForCredential: jest.fn().mockImplementation((ids: string[]) => new Set(ids)),
+  };
+  const service = new StreamManifestService(prisma as never, catalogue as never, rights as never);
+  return { service, prisma, catalogue, rights };
 }
 
 const orgWideKey = { id: 'key-1', organizationId: 'org-1', deckId: null };
@@ -130,6 +136,43 @@ describe('StreamManifestService.getManifest', () => {
       audio_endpoint: '/stream/v1/decks/DLSD-NG-IGB-NSK-A1B2C3/items/rec-1/audio',
     });
     expect(manifest.records[0].audio_endpoint).not.toContain('http');
+  });
+
+  it('lists only the licensed items and reports the shortfall honestly', async () => {
+    // A deck is normally only PARTIALLY licensed for a given purpose, since
+    // its recordings come from different contributors. The manifest must not
+    // advertise items that would 403 partway through a training run.
+    const { service, prisma, catalogue, rights } = setup();
+    prisma.streamDeck.findUnique.mockResolvedValue({
+      id: 'deck-1',
+      organizationId: 'org-1',
+      deckKey: 'DLSD-NG-IGB-NSK-A1B2C3',
+    });
+    prisma.streamDeckItem.findMany.mockResolvedValue([
+      { id: 'item-1', recordingId: 'rec-1' },
+      { id: 'item-2', recordingId: 'rec-2' },
+    ]);
+    catalogue.getEligibleRecording.mockImplementation((id: string) =>
+      Promise.resolve({
+        id,
+        dialectTag: 'ig',
+        durationMs: 3_600_000,
+        compositeScore: 90,
+        dialectVariant: null,
+      }),
+    );
+    prisma.streamDeckCurrentVersion.findUnique.mockResolvedValue({ version: { version: 3 } });
+    // Only rec-1 is licensed for this credential's declared purposes.
+    rights.filterUsableForCredential.mockResolvedValue(new Set(['rec-1']));
+
+    const manifest = await service.getManifest(orgWideKey, 'deck-1');
+
+    expect(manifest.items).toBe(1);
+    expect(manifest.records.map((r: { id: string }) => r.id)).toEqual(['rec-1']);
+    // audio_hours must reflect what is actually streamable, not the deck total.
+    expect(manifest.audio_hours).toBe(1);
+    expect(manifest.deck_items).toBe(2);
+    expect(manifest.licensed_items).toBe(1);
   });
 
   it('returns version 0 for a deck with no material version yet', async () => {

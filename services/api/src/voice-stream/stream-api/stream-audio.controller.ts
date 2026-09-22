@@ -82,16 +82,23 @@ export class StreamAudioController {
       // eligibility and before a single byte moves, so an unlicensed clip is
       // never partially streamed. Fails closed; returns allowed unconditionally
       // while PlatformSettings.vdclEnforcementEnabled is off, which is the
-      // default. Streaming a deck is model-training use, hence ASR_TRAINING.
-      const rightsDecision = await this.rights.mayUse(recordingId, VdclPurpose.ASR_TRAINING);
+      // default.
+      //
+      // The purpose checked is what THIS credential declared it will use the
+      // data for, matched against each contributor's itemised grants -- not a
+      // fixed assumption. A key declaring TTS_TRAINING is refused a clip
+      // whose contributor granted only ASR_TRAINING.
+      const rightsDecision = await this.rights.mayUseForCredential(recordingId, req.streamKey);
       if (!rightsDecision.allowed) {
         entitlementDecision = rightsDecision.entitlementDecision;
         resultCode = 403;
         void this.rights.recordDecision({
           recordingId,
-          purpose: VdclPurpose.ASR_TRAINING,
+          purpose: req.streamKey.purposes[0],
           decision: rightsDecision,
-          detail: `stream_audio org=${req.streamKey.organizationId} deck=${deckId}`,
+          detail: `stream_audio org=${req.streamKey.organizationId} deck=${deckId} purposes=${
+            req.streamKey.purposes.join(',') || 'none'
+          }`,
         });
         res.status(403).json({
           message: 'This recording is not licensed for streaming under an active contributor licence',

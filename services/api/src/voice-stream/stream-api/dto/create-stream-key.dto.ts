@@ -7,7 +7,7 @@ import {
   IsOptional,
   IsString,
 } from 'class-validator';
-import { StreamKeyScope } from '@dialectiva/db';
+import { StreamKeyScope, VdclPurpose } from '@dialectiva/db';
 
 export class CreateStreamKeyDto {
   @IsOptional()
@@ -18,6 +18,19 @@ export class CreateStreamKeyDto {
   @ArrayNotEmpty()
   @IsEnum(StreamKeyScope, { each: true })
   scopes!: StreamKeyScope[];
+
+  /**
+   * What this key's traffic will be used FOR, matched against each
+   * contributor's itemised VDCL grants. Optional at the API boundary so
+   * existing integrations keep working, but a key with no declared purpose
+   * streams nothing once VDCL enforcement is on -- it is denied rather than
+   * defaulted, since guessing would hand a subscriber a use the contributor
+   * may have refused.
+   */
+  @IsOptional()
+  @IsArray()
+  @IsEnum(VdclPurpose, { each: true })
+  purposes?: VdclPurpose[];
 
   @IsOptional()
   @IsArray()

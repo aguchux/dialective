@@ -217,3 +217,151 @@ describe('RightsService.recordDecision', () => {
     ).resolves.toBeUndefined();
   });
 });
+
+/**
+ * Purpose-aware enforcement is what makes itemised consent real rather than
+ * decorative. Recording the grants faithfully and then checking a single
+ * hardcoded purpose at the gate would let a subscriber stream data for a use
+ * the contributor explicitly refused.
+ */
+describe('RightsService.mayUseForCredential', () => {
+  const RECORDING_ID = 'recording-1';
+
+  function makeService(grantedPurposes: VdclPurpose[], enforcementEnabled = true) {
+    const prisma = {
+      vdclManifestItem: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            recordingId: RECORDING_ID,
+            manifest: {
+              versionId: 'v1',
+              vdclVersion: {
+                id: 'v1',
+                status: VdclVersionStatus.ACTIVE,
+                agreementId: 'a1',
+                agreement: { id: 'a1', withdrawnAt: null, activeVersionId: 'v1' },
+                grants: grantedPurposes.map((purpose) => ({ purpose })),
+              },
+            },
+          },
+        ]),
+      },
+      vdclAuditEvent: { create: jest.fn().mockResolvedValue({}) },
+    };
+    const settings = {
+      isVdclEnforcementEnabled: jest.fn().mockResolvedValue(enforcementEnabled),
+    };
+    return { service: new RightsService(prisma as never, settings as never), prisma };
+  }
+
+  it('denies a credential that declares no purpose at all', async () => {
+    // Undeclared must be denied, never defaulted -- guessing a purpose on the
+    // subscriber's behalf is exactly the hole this closes.
+    const { service } = makeService([VdclPurpose.ASR_TRAINING]);
+    const decision = await service.mayUseForCredential(RECORDING_ID, { purposes: [] });
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason).toBe('no_declared_purpose');
+  });
+
+  it('allows when the declared purpose is granted', async () => {
+    const { service } = makeService([VdclPurpose.ASR_TRAINING]);
+    const decision = await service.mayUseForCredential(RECORDING_ID, {
+      purposes: [VdclPurpose.ASR_TRAINING],
+    });
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('denies a TTS key against an ASR-only grant -- the case that matters', async () => {
+    // A contributor granted speech recognition training and nothing else.
+    // A subscriber whose key declares speech synthesis must be refused.
+    const { service } = makeService([VdclPurpose.ASR_TRAINING]);
+    const decision = await service.mayUseForCredential(RECORDING_ID, {
+      purposes: [VdclPurpose.TTS_TRAINING],
+    });
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason).toBe('purpose_not_granted');
+  });
+
+  it('requires ALL declared purposes, not any', async () => {
+    // A key declaring both ASR and TTS against an ASR-only grant is refused:
+    // otherwise one granted purpose would smuggle in every refused one.
+    const { service } = makeService([VdclPurpose.ASR_TRAINING]);
+    const decision = await service.mayUseForCredential(RECORDING_ID, {
+      purposes: [VdclPurpose.ASR_TRAINING, VdclPurpose.TTS_TRAINING],
+    });
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason).toBe('purpose_not_granted');
+  });
+
+  it('allows a multi-purpose key when every declared purpose is granted', async () => {
+    const { service } = makeService([
+      VdclPurpose.ASR_TRAINING,
+      VdclPurpose.TTS_TRAINING,
+      VdclPurpose.LLM_TRAINING,
+    ]);
+    const decision = await service.mayUseForCredential(RECORDING_ID, {
+      purposes: [VdclPurpose.ASR_TRAINING, VdclPurpose.TTS_TRAINING],
+    });
+    expect(decision.allowed).toBe(true);
+  });
+
+  it('allows an undeclared credential while enforcement is off', async () => {
+    const { service } = makeService([], false);
+    const decision = await service.mayUseForCredential(RECORDING_ID, { purposes: [] });
+    expect(decision.allowed).toBe(true);
+  });
+});
+
+describe('RightsService.filterUsableForCredential', () => {
+  function makeService(grantsByRecording: Record<string, VdclPurpose[]>, enabled = true) {
+    const rows = Object.entries(grantsByRecording).map(([recordingId, purposes]) => ({
+      recordingId,
+      manifest: {
+        vdclVersion: {
+          id: `v-${recordingId}`,
+          status: VdclVersionStatus.ACTIVE,
+          agreementId: `a-${recordingId}`,
+          agreement: { withdrawnAt: null, activeVersionId: `v-${recordingId}` },
+          grants: purposes.map((purpose) => ({ purpose })),
+        },
+      },
+    }));
+    const prisma = {
+      vdclManifestItem: {
+        findMany: jest.fn().mockImplementation(({ where }) => {
+          const wanted: string[] = where.recordingId.in;
+          return Promise.resolve(rows.filter((r) => wanted.includes(r.recordingId)));
+        }),
+      },
+      vdclAuditEvent: { create: jest.fn() },
+    };
+    const settings = { isVdclEnforcementEnabled: jest.fn().mockResolvedValue(enabled) };
+    return { service: new RightsService(prisma as never, settings as never) };
+  }
+
+  it('returns only the recordings licensed for the declared purpose', async () => {
+    // Partial coverage is the NORMAL case: a deck's recordings come from
+    // different contributors who granted different things.
+    const { service } = makeService({
+      'rec-a': [VdclPurpose.ASR_TRAINING, VdclPurpose.TTS_TRAINING],
+      'rec-b': [VdclPurpose.ASR_TRAINING],
+      'rec-c': [],
+    });
+    const usable = await service.filterUsableForCredential(['rec-a', 'rec-b', 'rec-c'], {
+      purposes: [VdclPurpose.TTS_TRAINING],
+    });
+    expect([...usable]).toEqual(['rec-a']);
+  });
+
+  it('returns nothing for an undeclared credential', async () => {
+    const { service } = makeService({ 'rec-a': [VdclPurpose.ASR_TRAINING] });
+    const usable = await service.filterUsableForCredential(['rec-a'], { purposes: [] });
+    expect(usable.size).toBe(0);
+  });
+
+  it('returns everything untouched while enforcement is off', async () => {
+    const { service } = makeService({}, false);
+    const usable = await service.filterUsableForCredential(['rec-a', 'rec-b'], { purposes: [] });
+    expect([...usable].sort()).toEqual(['rec-a', 'rec-b']);
+  });
+});

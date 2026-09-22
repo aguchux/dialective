@@ -56,6 +56,7 @@ describe('OAuthJwtAuthGuard', () => {
       organizationId: 'org-1',
       deckId: 'deck-1',
       scopes: ['MANIFEST_READ'],
+      purposes: [],
       credentialType: 'oauth_client',
     });
   });
