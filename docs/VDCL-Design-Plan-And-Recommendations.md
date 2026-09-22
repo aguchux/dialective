@@ -2,6 +2,7 @@
 
 **Companion to:** `Dialect-Library-VDCL-Product-and-Implementation-Plan.md`
 **Status:** Engineering design review, grounded in the codebase and production data as of 2026-09-22
+**Phase 0:** shipped 2026-09-22 (`be77c991`) — see §5
 **Audience:** Engineering and product
 
 ---
@@ -227,14 +228,34 @@ The product plan's phases are right in content, wrong in order. Enforcement
 should precede the maker UI, because it is currently free and will not stay
 free.
 
-### Phase 0 — Foundations (before anything contributor-facing)
+### Phase 0 — Foundations ✅ SHIPPED 2026-09-22 (`be77c991`)
 
-- Fix the retention/manifest conflict (§4).
-- Add the `vdcl` schema and migration.
-- Implement `rights.mayUse()` and wire it into `StreamAudioController`,
-  failing closed.
-- **Acceptance:** a subscriber cannot stream any recording lacking an
-  active VDCL. With 0 decks, this is currently a no-op — that is the point.
+- ~~Fix the retention/manifest conflict (§4).~~ Option A implemented:
+  audio under an ACTIVE, non-withdrawn VDCL is exempt from
+  `audio-retention-job`, gated by `vdclRetentionExemptionEnabled`
+  (default ON). Fails safe — an unreadable settings row keeps the
+  exemption on.
+- ~~Add the `vdcl` schema and migration.~~ 8 models, 3 enums, 2
+  `PlatformSettings` columns. Applied to production after a rollback-only
+  dry run; additive only.
+- ~~Implement `rights.mayUse()` and wire it into
+  `StreamAudioController`, failing closed.~~ Also wired into
+  `CatalogueService.preview` — see below.
+- **Acceptance met:** a subscriber cannot stream or preview any recording
+  lacking an active VDCL, once `vdclEnforcementEnabled` is turned on. It
+  defaults OFF so the code ships dark.
+
+**One correction to this document's own §3.3.** It described the audio
+chokepoint as singular. It is not. `GET /voice-stream/catalogue/:recordingId/preview`
+issues a presigned Spaces URL directly, bypassing the 7-guard chain, byte
+metering and `StreamAccessLog` entirely — its only audit is a
+`CataloguePreviewLog` row. A rights check wired only into
+`StreamAudioController` would have been trivially sidesteppable, so both
+paths are gated. Any future egress path must be gated too.
+
+**Still to do before enforcement is turned on:** nothing technical — the
+gate is a settings toggle. What it waits on is Phase 2 producing real
+manifests, since flipping it with no manifests would deny everything.
 
 ### Phase 1 — Legal (parallel, blocking on issuance only)
 
