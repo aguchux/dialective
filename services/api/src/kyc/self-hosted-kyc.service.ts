@@ -81,6 +81,17 @@ export class SelfHostedKycService {
       throw new BadRequestException('Self-hosted identity verification is not enabled');
     }
 
+    const appBase = process.env.KYC_APP_URL ?? 'https://kyc.dialectlibrary.com';
+    let kycAppUrl: URL;
+    try {
+      kycAppUrl = new URL('/', appBase);
+    } catch {
+      this.logger.error(`DLKYC session start rejected invalid KYC_APP_URL: ${appBase}`);
+      throw new ServiceUnavailableException(
+        'DLKYC identity verification is temporarily unavailable. Please try again later.',
+      );
+    }
+
     const sessionId = randomUUID();
     const verification = await this.prisma.kycVerification.create({
       data: {
@@ -96,8 +107,6 @@ export class SelfHostedKycService {
       verificationId: verification.id,
       callbackUrl,
     });
-    const appBase = process.env.KYC_APP_URL ?? 'https://kyc.dialectlibrary.com';
-    const kycAppUrl = new URL('/', appBase);
     kycAppUrl.searchParams.set('token', token);
 
     return { sessionId, kycAppUrl: kycAppUrl.toString() };

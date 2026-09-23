@@ -18,7 +18,7 @@ function setup() {
     $transaction: jest.fn((ops: unknown[]) => Promise.all(ops)),
   };
   const didit = { createSession: jest.fn() };
-  const selfHosted = {};
+  const selfHosted = { createSession: jest.fn() };
   const settings = { getActiveKycProvider: jest.fn().mockResolvedValue('didit') };
   const mail = {};
   const service = new KycService(
@@ -28,7 +28,7 @@ function setup() {
     settings as never,
     mail as never,
   );
-  return { service, prisma, didit };
+  return { service, prisma, didit, selfHosted, settings };
 }
 
 describe('KycService.createVerificationSession', () => {
@@ -62,6 +62,32 @@ describe('KycService.createVerificationSession', () => {
       service.createVerificationSession('user-1', 'https://app/callback'),
     ).rejects.toThrow(BadRequestException);
     expect(didit.createSession).not.toHaveBeenCalled();
+  });
+
+  it('uses DLKYC when it is the active provider without calling Didit', async () => {
+    const { service, prisma, didit, selfHosted, settings } = setup();
+    prisma.user.findUniqueOrThrow.mockResolvedValue({ kycStatus: 'NOT_STARTED' });
+    settings.getActiveKycProvider.mockResolvedValue('self');
+    selfHosted.createSession.mockResolvedValue({
+      sessionId: 'dlkyc-session-1',
+      kycAppUrl: 'https://kyc.dialectlibrary.com/?token=handoff',
+    });
+
+    await expect(
+      service.createVerificationSession('user-1', 'https://app/callback'),
+    ).resolves.toEqual({
+      sessionId: 'dlkyc-session-1',
+      url: 'https://kyc.dialectlibrary.com/?token=handoff',
+      provider: 'self',
+    });
+
+    expect(selfHosted.createSession).toHaveBeenCalledWith('user-1', 'https://app/callback');
+    expect(didit.createSession).not.toHaveBeenCalled();
+    expect(prisma.kycVerification.upsert).not.toHaveBeenCalled();
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { kycStatus: 'IN_PROGRESS' },
+    });
   });
 });
 

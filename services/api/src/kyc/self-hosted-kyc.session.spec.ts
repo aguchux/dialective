@@ -1,8 +1,14 @@
 process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? 'test-secret';
 
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { SelfHostedKycService } from './self-hosted-kyc.service';
-import { signKycHandoffToken } from './self-hosted-kyc-handoff.util';
+import { signKycHandoffToken, verifyKycHandoffToken } from './self-hosted-kyc-handoff.util';
 
 function setup(overrides?: { verification?: Record<string, unknown> }) {
   const verification = {
@@ -15,6 +21,7 @@ function setup(overrides?: { verification?: Record<string, unknown> }) {
   };
   const prisma = {
     kycVerification: {
+      create: jest.fn().mockResolvedValue(verification),
       findUnique: jest.fn().mockResolvedValue(verification),
       update: jest.fn().mockResolvedValue(verification),
     },
@@ -30,8 +37,62 @@ function setup(overrides?: { verification?: Record<string, unknown> }) {
     {} as never,
     {} as never,
   );
-  return { prisma, service, verification };
+  return { prisma, service, settings, verification };
 }
+
+describe('SelfHostedKycService.createSession', () => {
+  const originalKycAppUrl = process.env.KYC_APP_URL;
+
+  afterEach(() => {
+    if (originalKycAppUrl === undefined) delete process.env.KYC_APP_URL;
+    else process.env.KYC_APP_URL = originalKycAppUrl;
+  });
+
+  it('creates a DLKYC verification and returns a scoped handoff URL', async () => {
+    process.env.KYC_APP_URL = 'https://kyc.dialectlibrary.com';
+    const { service, prisma } = setup();
+
+    const result = await service.createSession('u1', 'https://dialectlibrary.com/dashboard');
+
+    expect(prisma.kycVerification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        userId: 'u1',
+        provider: 'self',
+        status: 'IN_PROGRESS',
+        providerSessionId: expect.any(String),
+      }),
+    });
+    const url = new URL(result.kycAppUrl);
+    expect(url.origin).toBe('https://kyc.dialectlibrary.com');
+    const claims = verifyKycHandoffToken(url.searchParams.get('token') ?? '');
+    expect(claims).toMatchObject({
+      typ: 'kyc-handoff',
+      sub: 'u1',
+      verificationId: 'v1',
+      callbackUrl: 'https://dialectlibrary.com/dashboard',
+    });
+  });
+
+  it('rejects when DLKYC is disabled without creating a verification', async () => {
+    const { service, prisma, settings } = setup();
+    settings.isSelfHostedKycEnabled.mockResolvedValue(false);
+
+    await expect(
+      service.createSession('u1', 'https://dialectlibrary.com/dashboard'),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.kycVerification.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed DLKYC app URL before creating session state', async () => {
+    process.env.KYC_APP_URL = 'not a url';
+    const { service, prisma } = setup();
+
+    await expect(
+      service.createSession('u1', 'https://dialectlibrary.com/dashboard'),
+    ).rejects.toThrow(ServiceUnavailableException);
+    expect(prisma.kycVerification.create).not.toHaveBeenCalled();
+  });
+});
 
 describe('SelfHostedKycService.getChallenge', () => {
   it('assigns and persists a challenge type the first time it is called', async () => {
