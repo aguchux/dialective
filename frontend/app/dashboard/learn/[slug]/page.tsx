@@ -16,19 +16,20 @@ export default function StudyCoursePage() {
   const { data: course, isLoading, isError } = useGetCourseToStudyQuery(slug);
   const [saveProgress] = useSaveCourseProgressMutation();
 
-  // Skip re-saving the same index the query already reported (e.g. the
-  // initial mount firing onSlideChange at the resumed index) -- avoids a
-  // redundant write with no state change.
+  // Skip an index only after the API has confirmed it. Failed writes remain
+  // retryable, including the final slide that unlocks training.
   const lastSavedRef = useRef<number | null>(null);
 
   const handleSlideChange = useCallback(
-    (index: number) => {
+    async (index: number) => {
       if (!course) return;
       if (lastSavedRef.current === index) return;
+      await saveProgress({
+        slug,
+        lastSlideIndex: index,
+        totalSlides: course.slides.length,
+      }).unwrap();
       lastSavedRef.current = index;
-      void saveProgress({ slug, lastSlideIndex: index, totalSlides: course.slides.length })
-        .unwrap()
-        .catch(() => undefined);
     },
     [course, saveProgress, slug],
   );
@@ -75,6 +76,7 @@ export default function StudyCoursePage() {
             // resuming there keeps the first Next click always valid.
             initialIndex={course.progress?.maxSlideIndexReached ?? 0}
             onClose={() => router.push('/dashboard?view=home')}
+            onFinish={() => handleSlideChange(course.slides.length - 1)}
             onSlideChange={handleSlideChange}
             slides={course.slides}
           />

@@ -40,9 +40,9 @@ export function CourseSlideViewer({
   alreadyCompleted?: boolean;
   /** Shown on the completion screen's thank-you copy; omitted (generic copy) when not provided, e.g. the public no-auth viewer. */
   courseTitle?: string;
-  onSlideChange?: (index: number) => void;
+  onSlideChange?: (index: number) => void | Promise<void>;
   /** Fires once, when the trainer hits Finish on the last slide (not on every resume of an already-completed course -- see alreadyCompleted). */
-  onFinish?: () => void;
+  onFinish?: () => void | Promise<void>;
   onClose?: () => void;
   /** Used when there's no onClose callback available (e.g. a server-rendered host page) -- navigates here instead. */
   closeHref?: string;
@@ -55,6 +55,9 @@ export function CourseSlideViewer({
   const [showCompletion, setShowCompletion] = useState(alreadyCompleted);
   const [playback, setPlayback] = useState<PlaybackState>('idle');
   const [audioProgress, setAudioProgress] = useState(0);
+  const [progressPending, setProgressPending] = useState(false);
+  const [progressError, setProgressError] = useState<string | null>(null);
+  const progressPendingRef = useRef(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const container = usePortalContainer();
   const router = useRouter();
@@ -67,12 +70,23 @@ export function CourseSlideViewer({
     }
   }
 
-  function handleFinish() {
-    onFinish?.();
-    if (showCompletionScreen) {
-      setShowCompletion(true);
-    } else {
-      handleClose();
+  async function handleFinish() {
+    if (progressPendingRef.current) return;
+    progressPendingRef.current = true;
+    setProgressPending(true);
+    setProgressError(null);
+    try {
+      await onFinish?.();
+      if (showCompletionScreen) {
+        setShowCompletion(true);
+      } else {
+        handleClose();
+      }
+    } catch {
+      setProgressError('Could not save your course completion. Check your connection and retry.');
+    } finally {
+      progressPendingRef.current = false;
+      setProgressPending(false);
     }
   }
 
@@ -103,8 +117,6 @@ export function CourseSlideViewer({
     audioRef.current?.pause();
     setPlayback('idle');
     setAudioProgress(0);
-    onSlideChange?.(index);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
 
   // Arrow-key navigation -- a full-screen deck reads as its own surface, so
@@ -112,16 +124,31 @@ export function CourseSlideViewer({
   // closes it.
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'ArrowRight') goTo(index + 1);
-      if (event.key === 'ArrowLeft') goTo(index - 1);
+      if (event.key === 'ArrowRight') void goTo(index + 1);
+      if (event.key === 'ArrowLeft') void goTo(index - 1);
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, slides.length]);
 
-  function goTo(next: number) {
-    setIndex(clampIndex(next, slides.length));
+  async function goTo(next: number) {
+    if (progressPendingRef.current) return;
+    const target = clampIndex(next, slides.length);
+    if (target === index) return;
+
+    progressPendingRef.current = true;
+    setProgressPending(true);
+    setProgressError(null);
+    try {
+      await onSlideChange?.(target);
+      setIndex(target);
+    } catch {
+      setProgressError('Could not save your course progress. Check your connection and retry.');
+    } finally {
+      progressPendingRef.current = false;
+      setProgressPending(false);
+    }
   }
 
   function togglePlayback() {
@@ -225,15 +252,16 @@ export function CourseSlideViewer({
             <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 hidden items-center justify-between p-4 md:flex">
               <button
                 className="pointer-events-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-black/50 px-5 font-extrabold text-white backdrop-blur-sm transition-colors hover:bg-black/70 disabled:cursor-not-allowed disabled:opacity-40"
-                disabled={isFirst}
-                onClick={() => goTo(index - 1)}
+                disabled={isFirst || progressPending}
+                onClick={() => void goTo(index - 1)}
                 type="button"
               >
                 <ArrowLeft className="size-4" aria-hidden="true" /> Previous
               </button>
               <button
-                className="pointer-events-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-5 font-extrabold text-white transition-colors hover:bg-accent-dark"
-                onClick={() => (isLast ? handleFinish() : goTo(index + 1))}
+                className="pointer-events-auto inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-accent px-5 font-extrabold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-45"
+                disabled={progressPending}
+                onClick={() => void (isLast ? handleFinish() : goTo(index + 1))}
                 type="button"
               >
                 {isLast ? 'Finish' : 'Next'} <ArrowRight className="size-4" aria-hidden="true" />
@@ -256,19 +284,29 @@ export function CourseSlideViewer({
             </div>
 
             <div className="fixed inset-x-0 bottom-0 z-10 bg-white md:static md:z-auto">
+              {progressError && (
+                <p
+                  className="border-t border-line px-4 py-2 text-sm font-bold text-danger"
+                  role="alert"
+                >
+                  {progressError}
+                </p>
+              )}
+
               {/* Mobile-only prev/next -- desktop's equivalent controls are overlaid on the image column. */}
               <div className="flex items-center justify-between gap-3 border-t border-line p-3 md:hidden">
                 <button
                   className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-line bg-surface font-extrabold text-ink hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-45"
-                  disabled={isFirst}
-                  onClick={() => goTo(index - 1)}
+                  disabled={isFirst || progressPending}
+                  onClick={() => void goTo(index - 1)}
                   type="button"
                 >
                   <ArrowLeft className="size-4" aria-hidden="true" /> Previous
                 </button>
                 <button
-                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-accent font-extrabold text-white hover:bg-accent-dark"
-                  onClick={() => (isLast ? handleFinish() : goTo(index + 1))}
+                  className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-accent font-extrabold text-white hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-45"
+                  disabled={progressPending}
+                  onClick={() => void (isLast ? handleFinish() : goTo(index + 1))}
                   type="button"
                 >
                   {isLast ? 'Finish' : 'Next'} <ArrowRight className="size-4" aria-hidden="true" />

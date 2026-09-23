@@ -1,7 +1,12 @@
 import { BadGatewayException, Injectable, Logger } from '@nestjs/common';
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
 
-const DIDIT_API_BASE = 'https://verification.didit.me/v3';
+// Didit exposes session creation and decision retrieval on separate v2 hosts.
+// The v3 verification namespace serves other products and does not expose
+// the hosted-workflow session creation endpoint.
+const DIDIT_SESSION_API_BASE = 'https://apx.didit.me/auth/v2';
+const DIDIT_DECISION_API_BASE = 'https://verification.didit.me/v2';
+const DIDIT_REQUEST_TIMEOUT_MS = 15_000;
 const WEBHOOK_MAX_AGE_SECONDS = 300;
 
 export interface CreateSessionResult {
@@ -30,7 +35,7 @@ export interface DiditDecision {
 }
 
 /**
- * Thin wrapper around Didit's v3 hosted-verification API -- same "one class
+ * Thin wrapper around Didit's v2 hosted-workflow API -- same "one class
  * per external integration" shape as flutterwave.service.ts: no constructor
  * DI, env vars read lazily via getters that fail fast on first use, typed
  * results never leak raw provider JSON to callers except in `raw` (kept only
@@ -73,52 +78,74 @@ export class DiditService {
   }
 
   async createSession(userId: string, callbackUrl: string): Promise<CreateSessionResult> {
-    const res = await fetch(`${DIDIT_API_BASE}/session/`, {
-      method: 'POST',
-      headers: this.authHeaders(),
-      body: JSON.stringify({
-        workflow_id: this.workflowId,
-        vendor_data: userId,
-        callback: callbackUrl,
-      }),
-    });
-    const raw = await readDiditJson(res);
-    if (!res.ok) {
-      this.logger.error(`Didit createSession failed: ${res.status} ${JSON.stringify(raw)}`);
+    // Resolve configuration outside the provider error boundary so a broken
+    // deployment remains explicit instead of looking like a transient outage.
+    const headers = this.authHeaders();
+    const workflowId = this.workflowId;
+    try {
+      const res = await fetch(`${DIDIT_SESSION_API_BASE}/session/`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          workflow_id: workflowId,
+          vendor_data: userId,
+          callback: callbackUrl,
+        }),
+        signal: AbortSignal.timeout(DIDIT_REQUEST_TIMEOUT_MS),
+      });
+      const raw = await readDiditJson(res);
+      if (!res.ok) {
+        this.logger.error(`Didit createSession failed: ${res.status} ${JSON.stringify(raw)}`);
+        throw new BadGatewayException(
+          'The identity verification provider could not start a session. Please try again.',
+        );
+      }
+      const sessionId = raw.session_id;
+      const url = raw.url;
+      if (typeof sessionId !== 'string' || typeof url !== 'string') {
+        this.logger.error(
+          `Didit createSession response missing session_id/url: ${JSON.stringify(raw)}`,
+        );
+        throw new BadGatewayException(
+          'The identity verification provider returned an invalid session response.',
+        );
+      }
+      return { sessionId, url };
+    } catch (error) {
+      if (error instanceof BadGatewayException) throw error;
+      this.logger.error(`Didit createSession request failed: ${String(error)}`);
       throw new BadGatewayException(
         'The identity verification provider could not start a session. Please try again.',
       );
     }
-    const sessionId = raw.session_id;
-    const url = raw.url;
-    if (typeof sessionId !== 'string' || typeof url !== 'string') {
-      this.logger.error(
-        `Didit createSession response missing session_id/url: ${JSON.stringify(raw)}`,
-      );
-      throw new BadGatewayException(
-        'The identity verification provider returned an invalid session response.',
-      );
-    }
-    return { sessionId, url };
   }
 
   /** Fallback poll used only by the admin "Refresh from Didit" action -- the webhook is the primary result path. */
   async getDecision(sessionId: string): Promise<DiditDecision> {
-    const res = await fetch(
-      `${DIDIT_API_BASE}/session/${encodeURIComponent(sessionId)}/decision/`,
-      {
-        method: 'GET',
-        headers: this.authHeaders(),
-      },
-    );
-    const raw = await readDiditJson(res);
-    if (!res.ok) {
-      this.logger.error(`Didit getDecision failed: ${res.status} ${JSON.stringify(raw)}`);
+    try {
+      const res = await fetch(
+        `${DIDIT_DECISION_API_BASE}/session/${encodeURIComponent(sessionId)}/decision/`,
+        {
+          method: 'GET',
+          headers: this.authHeaders(),
+          signal: AbortSignal.timeout(DIDIT_REQUEST_TIMEOUT_MS),
+        },
+      );
+      const raw = await readDiditJson(res);
+      if (!res.ok) {
+        this.logger.error(`Didit getDecision failed: ${res.status} ${JSON.stringify(raw)}`);
+        throw new BadGatewayException(
+          'The identity verification provider could not fetch this decision.',
+        );
+      }
+      return parseDecision(raw);
+    } catch (error) {
+      if (error instanceof BadGatewayException) throw error;
+      this.logger.error(`Didit getDecision request failed: ${String(error)}`);
       throw new BadGatewayException(
         'The identity verification provider could not fetch this decision.',
       );
     }
-    return parseDecision(raw);
   }
 
   /**

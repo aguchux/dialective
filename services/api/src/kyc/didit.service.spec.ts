@@ -142,7 +142,7 @@ describe('DiditService', () => {
     it('returns the session id and hosted verification url on success', async () => {
       process.env.DIDIT_API_KEY = 'test-api-key';
       process.env.DIDIT_WORKFLOW_ID = 'wf-1';
-      jest.spyOn(global, 'fetch').mockResolvedValue(
+      const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(
         new Response(
           JSON.stringify({
             session_id: 'sess-1',
@@ -156,6 +156,55 @@ describe('DiditService', () => {
       await expect(
         service.createSession('user-1', 'https://example.com/callback'),
       ).resolves.toEqual({ sessionId: 'sess-1', url: 'https://verify.didit.me/session/sess-1' });
+
+      expect(fetchSpy).toHaveBeenCalledWith('https://apx.didit.me/auth/v2/session/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': 'test-api-key',
+        },
+        body: JSON.stringify({
+          workflow_id: 'wf-1',
+          vendor_data: 'user-1',
+          callback: 'https://example.com/callback',
+        }),
+        signal: expect.any(AbortSignal),
+      });
+    });
+
+    it('returns a stable provider error when the request fails', async () => {
+      process.env.DIDIT_API_KEY = 'test-api-key';
+      process.env.DIDIT_WORKFLOW_ID = 'wf-1';
+      jest.spyOn(global, 'fetch').mockRejectedValue(new TypeError('fetch failed'));
+
+      await expect(service.createSession('user-1', 'https://example.com/callback')).rejects.toThrow(
+        'The identity verification provider could not start a session. Please try again.',
+      );
+    });
+  });
+
+  describe('getDecision', () => {
+    it('uses the hosted workflow v2 decision endpoint', async () => {
+      process.env.DIDIT_API_KEY = 'test-api-key';
+      const fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue(new Response(JSON.stringify({ status: 'In Review' }), { status: 200 }));
+
+      await expect(service.getDecision('session/with spaces')).resolves.toMatchObject({
+        status: 'In Review',
+      });
+
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://verification.didit.me/v2/session/session%2Fwith%20spaces/decision/',
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': 'test-api-key',
+          },
+          signal: expect.any(AbortSignal),
+        },
+      );
     });
   });
 });
