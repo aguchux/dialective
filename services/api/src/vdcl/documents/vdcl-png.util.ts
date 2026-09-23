@@ -1,13 +1,24 @@
 import type * as CanvasModule from 'canvas';
 import type { VdclDocumentData } from './vdcl-pdf.util';
-
-const ACCENT = '#6a18a8';
-const INK = '#111111';
-const MUTED = '#666666';
-const LINE = '#e3e3e8';
+import {
+  ACCENT,
+  ACCENT_DARK,
+  GREEN,
+  GREEN_DARK,
+  GREEN_SOFT,
+  INK,
+  LINE,
+  MUTED,
+  SURFACE,
+  SURFACE_MUTED,
+  isInForce,
+  statusColour,
+} from './vdcl-theme';
 
 const WIDTH = 1200;
 const HEIGHT = 820;
+const PAD = 64;
+const RIGHT = WIDTH - PAD;
 
 const PURPOSE_LABELS: Record<string, string> = {
   ASR_TRAINING: 'Speech recognition',
@@ -19,13 +30,6 @@ const PURPOSE_LABELS: Record<string, string> = {
   BIOMETRIC_PROCESSING: 'Speaker identification',
 };
 
-const STATUS_COLOURS: Record<string, string> = {
-  ACTIVE: '#0f7a3d',
-  SUSPENDED: '#b45309',
-  WITHDRAWN: '#b91c1c',
-  SUPERSEDED: '#525252',
-};
-
 function formatDuration(ms: string): string {
   const value = Number(ms);
   if (!Number.isFinite(value) || value <= 0) return '0m';
@@ -34,12 +38,49 @@ function formatDuration(ms: string): string {
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
+type Ctx = CanvasModule.CanvasRenderingContext2D;
+
+/** Rounded rect -- node-canvas has no roundRect, and square cards read as unfinished next to the site's rounded ones. */
+function roundRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+/** The verified tick, drawn rather than pulled from a font the container may not ship. */
+function drawTick(ctx: Ctx, cx: number, cy: number, size: number, colour: string) {
+  ctx.strokeStyle = colour;
+  ctx.lineWidth = Math.max(2, size * 0.16);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - size * 0.32, cy + size * 0.02);
+  ctx.lineTo(cx - size * 0.08, cy + size * 0.26);
+  ctx.lineTo(cx + size * 0.34, cy - size * 0.28);
+  ctx.stroke();
+}
+
 /**
  * Renders the one-page PNG certificate.
  *
  * A portable visual summary, explicitly NOT a substitute for the signed
  * PDF -- the document says so on its face, because a shareable image that
  * looks like a contract invites people to treat it as one.
+ *
+ * Colour comes from vdcl-theme, shared with the PDF, so the two cannot
+ * drift apart: a contributor sees them side by side and they are two views
+ * of one instrument. Purple is the brand; green appears ONLY where the
+ * licence is genuinely in force, so the seal means something rather than
+ * being trim. A suspended or withdrawn licence renders its own status
+ * colour and gets no seal at all.
  *
  * The contributor is identified only by the privacy-safe label. A PNG is
  * the most shareable artefact in the whole product: it gets pasted into
@@ -64,125 +105,172 @@ export async function renderVdclCertificatePng(data: VdclDocumentData): Promise<
   const canvas = canvasLib.createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext('2d');
 
-  ctx.fillStyle = '#ffffff';
+  const inForce = isInForce(data.status);
+  const badgeColour = statusColour(data.status);
+
+  ctx.fillStyle = SURFACE;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-  // Brand rail
-  ctx.fillStyle = ACCENT;
-  ctx.fillRect(0, 0, WIDTH, 14);
+  // Masthead. The gradient is the site's accent -> accent-dark, the same
+  // pair the dashboard hero uses.
+  const rail = ctx.createLinearGradient(0, 0, WIDTH, 0);
+  rail.addColorStop(0, ACCENT_DARK);
+  rail.addColorStop(1, ACCENT);
+  ctx.fillStyle = rail;
+  ctx.fillRect(0, 0, WIDTH, 132);
 
-  let y = 76;
-  ctx.fillStyle = ACCENT;
-  ctx.font = 'bold 34px sans-serif';
-  ctx.fillText('Dialect Library', 64, y);
-
-  y += 44;
-  ctx.fillStyle = INK;
-  ctx.font = 'bold 28px sans-serif';
-  ctx.fillText('Voice Dataset Contributor Licence', 64, y);
-
-  y += 40;
-  ctx.fillStyle = MUTED;
-  ctx.font = '20px sans-serif';
-  ctx.fillText(`${data.licenceKey}   ·   version ${data.version}`, 64, y);
-
-  // Status badge
-  const badgeColour = STATUS_COLOURS[data.status] ?? MUTED;
-  ctx.fillStyle = badgeColour;
-  const badgeText = data.status.replace(/_/g, ' ');
-  ctx.font = 'bold 18px sans-serif';
-  const badgeWidth = ctx.measureText(badgeText).width + 36;
-  ctx.fillRect(WIDTH - 64 - badgeWidth, 56, badgeWidth, 40);
   ctx.fillStyle = '#ffffff';
-  ctx.fillText(badgeText, WIDTH - 64 - badgeWidth + 18, 83);
+  ctx.font = 'bold 32px sans-serif';
+  ctx.fillText('Dialect Library', PAD, 60);
+  ctx.font = '20px sans-serif';
+  ctx.fillText('Voice Dataset Contributor Licence', PAD, 96);
 
-  y += 36;
-  ctx.strokeStyle = LINE;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(64, y);
-  ctx.lineTo(WIDTH - 64, y);
-  ctx.stroke();
+  // Status badge, sitting in the masthead so it is the first thing read.
+  ctx.font = 'bold 17px sans-serif';
+  const badgeText = data.status.replace(/_/g, ' ');
+  const badgeW = ctx.measureText(badgeText).width + (inForce ? 62 : 40);
+  const badgeX = RIGHT - badgeW;
+  ctx.fillStyle = inForce ? GREEN : badgeColour;
+  roundRect(ctx, badgeX, 48, badgeW, 42, 21);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  if (inForce) {
+    drawTick(ctx, badgeX + 26, 69, 18, '#ffffff');
+    ctx.fillText(badgeText, badgeX + 44, 76);
+  } else {
+    ctx.fillText(badgeText, badgeX + 20, 76);
+  }
+
+  let y = 176;
+  ctx.fillStyle = MUTED;
+  ctx.font = '19px sans-serif';
+  ctx.fillText(`${data.licenceKey}   ·   version ${data.version}`, PAD, y);
 
   // Identity block -- label only, never a name.
-  y += 44;
-  ctx.fillStyle = MUTED;
-  ctx.font = '16px sans-serif';
-  ctx.fillText('CONTRIBUTOR', 64, y);
-  ctx.fillText(data.dialectTags.length === 1 ? 'DIALECT' : 'DIALECTS', 400, y);
-  ctx.fillText('COUNTRY', 700, y);
+  y += 46;
+  const cols: [string, string][] = [
+    ['CONTRIBUTOR', data.contributorLabel],
+    [data.dialectTags.length === 1 ? 'DIALECT' : 'DIALECTS', fitDialects(ctx, data.dialectTags)],
+    ['COUNTRY', data.countryName ?? '—'],
+  ];
+  cols.forEach(([label, value], i) => {
+    const x = PAD + i * 336;
+    ctx.fillStyle = MUTED;
+    ctx.font = '15px sans-serif';
+    ctx.fillText(label, x, y);
+    ctx.fillStyle = INK;
+    ctx.font = 'bold 22px sans-serif';
+    ctx.fillText(value, x, y + 30);
+  });
 
-  y += 30;
-  ctx.fillStyle = INK;
-  ctx.font = 'bold 22px sans-serif';
-  ctx.fillText(data.contributorLabel, 64, y);
-  // The column is a fixed 300px before COUNTRY starts, so a contributor
-  // with several dialects would otherwise render straight through the next
-  // heading. Truncate with a count rather than letting it collide.
-  ctx.fillText(fitDialects(ctx, data.dialectTags), 400, y);
-  ctx.fillText(data.countryName ?? '—', 700, y);
-
-  // Metrics
-  y += 60;
+  // Metrics, as cards rather than bare numbers -- the site renders its own
+  // stats this way (see VdclMaker's Stat), and a certificate that shares
+  // the product's shapes reads as issued by it.
+  y += 68;
   const metrics: [string, string][] = [
     ['RECORDINGS', String(data.recordingCount)],
     ['VALIDATED AUDIO', formatDuration(data.totalDurationMs)],
     ['WITH TRANSCRIPTS', `${data.transcriptCount}/${data.recordingCount}`],
     ['MEAN QUALITY', data.meanCompositeScore ? `${data.meanCompositeScore}/100` : '—'],
   ];
-  metrics.forEach(([label, value], index) => {
-    const x = 64 + index * 272;
+  const cardW = (WIDTH - PAD * 2 - 3 * 16) / 4;
+  metrics.forEach(([label, value], i) => {
+    const x = PAD + i * (cardW + 16);
+    ctx.fillStyle = SURFACE_MUTED;
+    roundRect(ctx, x, y, cardW, 92, 12);
+    ctx.fill();
     ctx.fillStyle = MUTED;
-    ctx.font = '15px sans-serif';
-    ctx.fillText(label, x, y);
+    ctx.font = '13px sans-serif';
+    ctx.fillText(label, x + 16, y + 28);
     ctx.fillStyle = INK;
     ctx.font = 'bold 30px sans-serif';
-    ctx.fillText(value, x, y + 38);
+    ctx.fillText(value, x + 16, y + 68);
   });
 
-  // Permitted uses
-  y += 96;
+  // Permitted uses. Ticks are green only when the licence is in force --
+  // an unticked list on a withdrawn licence would still read as granting.
+  y += 132;
   ctx.fillStyle = MUTED;
   ctx.font = '15px sans-serif';
-  ctx.fillText('PERMITTED USES', 64, y);
-  y += 28;
-  ctx.fillStyle = INK;
+  ctx.fillText('PERMITTED USES', PAD, y);
+  y += 30;
   ctx.font = '18px sans-serif';
-  for (const purpose of data.purposes) {
-    ctx.fillText(`•  ${PURPOSE_LABELS[purpose] ?? purpose}`, 64, y);
-    y += 26;
+  const markColour = inForce ? GREEN : MUTED;
+  for (const purpose of data.purposes.slice(0, 7)) {
+    drawTick(ctx, PAD + 9, y - 6, 15, markColour);
+    ctx.fillStyle = INK;
+    ctx.fillText(PURPOSE_LABELS[purpose] ?? purpose, PAD + 30, y);
+    y += 27;
   }
 
-  // Signature status
-  y += 18;
+  // Verification panel. Tinted green only when in force; otherwise it takes
+  // the neutral surface so the document never implies a status it lacks.
+  const panelY = HEIGHT - 232;
+  const panelW = 660;
+  ctx.fillStyle = inForce ? GREEN_SOFT : SURFACE_MUTED;
+  roundRect(ctx, PAD, panelY, panelW, 118, 14);
+  ctx.fill();
+  ctx.strokeStyle = inForce ? GREEN : LINE;
+  ctx.lineWidth = 1;
+  roundRect(ctx, PAD, panelY, panelW, 118, 14);
+  ctx.stroke();
+
+  if (inForce) drawTick(ctx, PAD + 28, panelY + 34, 20, GREEN_DARK);
+  ctx.fillStyle = inForce ? GREEN_DARK : INK;
+  ctx.font = 'bold 17px sans-serif';
+  ctx.fillText(
+    inForce ? 'Signed and countersigned' : 'Signature status',
+    PAD + (inForce ? 52 : 20),
+    panelY + 40,
+  );
+
   ctx.fillStyle = MUTED;
   ctx.font = '15px sans-serif';
   ctx.fillText(
-    `Contributor signed: ${data.signedAt ? data.signedAt.toISOString().slice(0, 10) : 'not yet'}    ·    Dialect Library countersigned: ${
+    `Contributor signed  ${data.signedAt ? data.signedAt.toISOString().slice(0, 10) : 'not yet'}`,
+    PAD + 20,
+    panelY + 72,
+  );
+  ctx.fillText(
+    `Dialect Library countersigned  ${
       data.countersignedAt ? data.countersignedAt.toISOString().slice(0, 10) : 'not yet'
     }`,
-    64,
-    y,
+    PAD + 20,
+    panelY + 98,
   );
 
-  // QR verification mark
+  // QR verification mark, boxed so it reads as a scannable target rather
+  // than an image floating on the page.
+  const qrSize = 132;
+  const qrX = RIGHT - qrSize - 20;
+  const qrY = panelY - 6;
+  ctx.fillStyle = SURFACE;
+  roundRect(ctx, qrX - 20, qrY - 14, qrSize + 40, qrSize + 56, 14);
+  ctx.fill();
+  ctx.strokeStyle = LINE;
+  roundRect(ctx, qrX - 20, qrY - 14, qrSize + 40, qrSize + 56, 14);
+  ctx.stroke();
   const qr = await canvasLib.loadImage(data.qrPng);
-  ctx.drawImage(qr, WIDTH - 220, HEIGHT - 240, 156, 156);
+  ctx.drawImage(qr, qrX, qrY, qrSize, qrSize);
   ctx.fillStyle = MUTED;
-  ctx.font = '14px sans-serif';
-  ctx.fillText('Scan to verify', WIDTH - 210, HEIGHT - 66);
+  ctx.font = 'bold 13px sans-serif';
+  ctx.fillText('SCAN TO VERIFY', qrX + 4, qrY + qrSize + 28);
 
   // The disclaimer is not decoration. Without it a shareable image reads
   // as the licence itself.
   ctx.fillStyle = MUTED;
-  ctx.font = 'italic 16px sans-serif';
-  ctx.fillText('See signed PDF for complete terms.', 64, HEIGHT - 76);
+  ctx.font = 'italic 15px sans-serif';
+  ctx.fillText('See signed PDF for complete terms.', PAD, HEIGHT - 72);
   ctx.font = '13px sans-serif';
   ctx.fillText(
     'Verification confirms licence status and dataset metrics only. It does not disclose contributor identity.',
-    64,
-    HEIGHT - 50,
+    PAD,
+    HEIGHT - 48,
   );
+
+  // Footer rule in the brand, closing the frame the masthead opens.
+  ctx.fillStyle = ACCENT;
+  ctx.fillRect(0, HEIGHT - 10, WIDTH, 10);
 
   return canvas.toBuffer('image/png');
 }
@@ -194,9 +282,12 @@ export async function renderVdclCertificatePng(data: VdclDocumentData): Promise<
  * certificate never shows a truncated dialect code that reads as a
  * different dialect.
  */
-function fitDialects(ctx: { measureText: (t: string) => { width: number } }, tags: string[]): string {
+function fitDialects(
+  ctx: { measureText: (t: string) => { width: number } },
+  tags: string[],
+): string {
   if (tags.length === 0) return '—';
-  const MAX_WIDTH = 280;
+  const MAX_WIDTH = 300;
   const full = tags.join(', ');
   if (ctx.measureText(full).width <= MAX_WIDTH) return full;
   for (let keep = tags.length - 1; keep >= 1; keep -= 1) {

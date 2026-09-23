@@ -1,8 +1,17 @@
 import PDFDocument from 'pdfkit';
-
-const ACCENT = '#6a18a8';
-const MUTED = '#666666';
-const INK = '#111111';
+import {
+  ACCENT,
+  ACCENT_DARK,
+  GREEN,
+  GREEN_DARK,
+  GREEN_SOFT,
+  INK,
+  LINE,
+  MUTED,
+  SURFACE_MUTED,
+  isInForce,
+  statusColour,
+} from './vdcl-theme';
 
 export interface VdclDocumentData {
   licenceKey: string;
@@ -108,7 +117,19 @@ export function renderVdclPdf(data: VdclDocumentData): Promise<Buffer> {
     const heading = (n: number, text: string) => {
       doc.moveDown(1);
       doc.fillColor(ACCENT).fontSize(12).font('Helvetica-Bold').text(`${n}. ${text}`);
-      doc.moveDown(0.3);
+      // A hairline in the site's line colour under each heading -- the
+      // same separation the dashboard cards use, so the document reads as
+      // issued by the product rather than typed in a different tool.
+      const ruleY = doc.y + 2;
+      doc
+        .save()
+        .strokeColor(LINE)
+        .lineWidth(0.75)
+        .moveTo(doc.page.margins.left, ruleY)
+        .lineTo(doc.page.width - doc.page.margins.right, ruleY)
+        .stroke()
+        .restore();
+      doc.moveDown(0.5);
       doc.fillColor(INK).fontSize(9.5).font('Helvetica');
     };
     const body = (text: string) => {
@@ -120,12 +141,43 @@ export function renderVdclPdf(data: VdclDocumentData): Promise<Buffer> {
     };
 
     // 1. Cover and identity
-    doc.fillColor(ACCENT).fontSize(20).font('Helvetica-Bold').text('Dialect Library');
+    //
+    // The masthead mirrors the PNG certificate's: same accent-dark to
+    // accent band, same white wordmark, same status chip on the right. The
+    // two are views of one instrument and a contributor sees them side by
+    // side, so they open identically.
+    const pageW = doc.page.width;
+    const inForce = isInForce(data.status);
+    doc.save();
+    const band = doc.linearGradient(0, 0, pageW, 0);
+    band.stop(0, ACCENT_DARK).stop(1, ACCENT);
+    doc.rect(0, 0, pageW, 96).fill(band);
     doc
-      .fillColor(INK)
-      .fontSize(15)
+      .fillColor('#ffffff')
+      .fontSize(20)
       .font('Helvetica-Bold')
-      .text('Voice Dataset Contributor Licence', { paragraphGap: 6 });
+      .text('Dialect Library', doc.page.margins.left, 28);
+    doc
+      .fillColor('#ffffff')
+      .fontSize(12)
+      .font('Helvetica')
+      .text('Voice Dataset Contributor Licence', doc.page.margins.left, 56);
+
+    // Status chip. Green ONLY when in force -- see vdcl-theme.
+    const chipText = data.status.replace(/_/g, ' ');
+    doc.fontSize(9).font('Helvetica-Bold');
+    const chipW = doc.widthOfString(chipText) + 22;
+    const chipX = pageW - doc.page.margins.right - chipW;
+    doc.roundedRect(chipX, 34, chipW, 22, 11).fill(inForce ? GREEN : statusColour(data.status));
+    doc
+      .fillColor('#ffffff')
+      .fontSize(9)
+      .font('Helvetica-Bold')
+      .text(chipText, chipX + 11, 41, { lineBreak: false });
+    doc.restore();
+
+    doc.y = 124;
+    doc.x = doc.page.margins.left;
     pair('Licence', `${data.licenceKey}  (version ${data.version})`);
     pair('Status', data.status);
     pair('Issued', formatDate(data.countersignedAt));
@@ -227,6 +279,42 @@ export function renderVdclPdf(data: VdclDocumentData): Promise<Buffer> {
 
     // 11. Signatures and tamper-evident validation
     heading(11, 'Signatures and tamper-evident validation');
+
+    // The verified panel, matching the PNG's. Tinted green ONLY when the
+    // licence is actually in force -- a suspended or withdrawn licence
+    // takes the neutral surface, so the colour never claims a status the
+    // document does not have.
+    const panelX = doc.page.margins.left;
+    const panelW = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const panelTop = doc.y;
+    doc.save();
+    doc
+      .roundedRect(panelX, panelTop, panelW, 44, 6)
+      .fillAndStroke(inForce ? GREEN_SOFT : SURFACE_MUTED, inForce ? GREEN : LINE);
+    doc
+      .fillColor(inForce ? GREEN_DARK : INK)
+      .fontSize(10)
+      .font('Helvetica-Bold')
+      .text(
+        inForce ? 'Signed and countersigned -- this licence is in force' : 'Signature status',
+        panelX + 12,
+        panelTop + 10,
+      );
+    doc
+      .fillColor(MUTED)
+      .fontSize(8.5)
+      .font('Helvetica')
+      .text(
+        `Contributor signed ${formatDate(data.signedAt)}   ·   Dialect Library countersigned ${formatDate(
+          data.countersignedAt,
+        )}`,
+        panelX + 12,
+        panelTop + 26,
+      );
+    doc.restore();
+    doc.y = panelTop + 56;
+    doc.x = panelX;
+
     pair('Signed by contributor', formatDate(data.signedAt));
     pair('Countersigned by Dialect Library', formatDate(data.countersignedAt));
     body(
