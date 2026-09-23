@@ -5504,6 +5504,37 @@ export const dialectivaApi = createApi({
       query: (params) => ({ url: '/p2p/admin/disputes', params: params ?? undefined }),
       providesTags: ['P2P'],
     }),
+    requestP2PForceResolveOtp: builder.mutation<
+      { otpRequestId: string; destination?: string; channel?: string },
+      { id: string; outcome: 'refund-seller' | 'release-buyer' }
+    >({
+      query: ({ id, outcome }) => ({
+        url: `/p2p/admin/trades/${id}/force-resolve-otp`,
+        method: 'POST',
+        body: { outcome },
+      }),
+    }),
+    // Breaks the deadlock on a trade marked paid but never released, with
+    // no dispute -- the escrow is frozen and neither party has a control
+    // that moves it. Invalidates Wallet as well as P2P because the escrow
+    // actually moves.
+    forceResolveP2PTrade: builder.mutation<
+      P2PTrade,
+      {
+        id: string;
+        outcome: 'refund-seller' | 'release-buyer';
+        reason: string;
+        otpRequestId?: string;
+        code?: string;
+      }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/p2p/admin/trades/${id}/force-resolve`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['P2P', 'Wallet'],
+    }),
     resolveP2PDispute: builder.mutation<
       P2PDispute,
       { id: string; winner: 'buyer' | 'seller'; resolutionNote?: string }
@@ -6906,6 +6937,8 @@ export const {
   useUpdateAdminIntegrationMutation,
   useListAdminP2PTradesQuery,
   useListAdminP2PDisputesQuery,
+  useRequestP2PForceResolveOtpMutation,
+  useForceResolveP2PTradeMutation,
   useResolveP2PDisputeMutation,
   useGetUsersQuery,
   useGetAuditHoldQueueQuery,

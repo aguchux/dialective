@@ -22,3 +22,27 @@ export function p2pTradeOtpContextHash(
 ): string {
   return hashContext(input);
 }
+
+/**
+ * Binds an admin force-resolution OTP to the exact stuck trade and the
+ * escrow amount being moved.
+ *
+ * Separate from adminActionContextHash's set only because this lives in the
+ * P2P module and binds P2P-shaped fields; the reasoning is identical. It
+ * binds `tokenAmount` as well as the trade id so a code issued after
+ * reading one trade's escrow can never complete a resolution over a
+ * different figure -- the amount is what the admin actually weighed when
+ * deciding, and it is what moves.
+ */
+export function p2pAdminForceResolveContextHash(input: {
+  tradeId: string;
+  outcome: 'refund-seller' | 'release-buyer';
+  tokenAmount: string;
+}): string {
+  return hashContext({
+    action: 'p2p-admin-force-resolve',
+    tradeId: input.tradeId,
+    outcome: input.outcome,
+    tokenAmount: input.tokenAmount,
+  });
+}

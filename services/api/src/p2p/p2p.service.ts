@@ -34,11 +34,16 @@ import {
   ListTradesDto,
   RequestP2pTradeOtpDto,
   RaiseDisputeDto,
+  RequestForceResolveOtpDto,
   ResolveDisputeDto,
+  ForceResolveTradeDto,
   UpdateP2PMarketSettingsDto,
   UpdateP2pPaymentInstructionsDto,
 } from './dto/p2p.dto';
-import { p2pTradeOtpContextHash } from './p2p-trade-otp-context.util';
+import {
+  p2pAdminForceResolveContextHash,
+  p2pTradeOtpContextHash,
+} from './p2p-trade-otp-context.util';
 
 /**
  * Renders a deadline as the time REMAINING ("15 minutes"), not an absolute
@@ -87,6 +92,8 @@ const OPEN_TRADE_STATUSES = [
 
 @Injectable()
 export class P2PService {
+  private readonly logger = new Logger(P2PService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly otp: OtpService,
@@ -1459,6 +1466,146 @@ export class P2PService {
       where: { id: disputeId },
       include: { trade: { include: tradeInclude } },
     });
+  }
+
+  /**
+   * A trade an admin may force-resolve: PAID_MARKED (or the transitional
+   * CANCEL_PENDING that a buyer's mark-paid would have cleared) with no
+   * dispute open against it.
+   *
+   * Shared by requestForceResolveOtp and forceResolveTrade so an admin is
+   * never issued a code for a resolution that will then refuse -- the same
+   * pairing as VdclAdminService.assertActivatable.
+   *
+   * A DISPUTED trade is deliberately excluded: it already has a dispute row
+   * carrying a reported reason and a resolution path that records the
+   * outcome against it. Force-resolving around that would leave the dispute
+   * row open forever, pointing at escrow that has already moved.
+   */
+  private async loadForceResolvableTrade(tradeId: string) {
+    const trade = await this.prisma.p2PTokenTrade.findUnique({
+      where: { id: tradeId },
+      include: { dispute: true, offer: { select: { type: true } } },
+    });
+    if (!trade) throw new NotFoundException('Trade not found');
+    if (trade.dispute && trade.dispute.status === P2PDisputeStatus.OPEN) {
+      throw new UnprocessableEntityException(
+        'This trade has an open dispute -- resolve it from the disputes table instead',
+      );
+    }
+    if (trade.status !== P2PTradeStatus.PAID_MARKED) {
+      throw new UnprocessableEntityException(
+        `Only trades marked paid but never released can be force-resolved (this one is ${trade.status})`,
+      );
+    }
+    return trade;
+  }
+
+  async requestForceResolveOtp(
+    adminId: string,
+    tradeId: string,
+    dto: RequestForceResolveOtpDto,
+  ) {
+    const trade = await this.loadForceResolvableTrade(tradeId);
+    const admin = await this.prisma.user.findUniqueOrThrow({
+      where: { id: adminId },
+      select: { email: true, phoneNumber: true, phoneVerifiedAt: true },
+    });
+    const { destination, channel } = await resolveOtpDestination(admin, this.platformSettings);
+    return this.otp.issueForUser(
+      adminId,
+      OtpPurpose.ADMIN_PAYOUT,
+      destination,
+      p2pAdminForceResolveContextHash({
+        tradeId,
+        outcome: dto.outcome,
+        tokenAmount: trade.tokenAmount.toString(),
+      }),
+      channel,
+    );
+  }
+
+  /**
+   * Breaks the deadlock on a trade the two parties have abandoned.
+   *
+   * A trade reaching PAID_MARKED with no dispute is a buyer asserting they
+   * paid and a seller who never confirmed. Nothing in the system verifies
+   * that assertion, and nothing expires the trade: markPaid deliberately
+   * ignores paymentDeadlineAt, and expireStaleRecords only sweeps
+   * AWAITING_PAYMENT and CANCEL_PENDING. So the escrow sits locked
+   * indefinitely -- the seller cannot spend it, the buyer has not received
+   * it, and neither party has a control that moves it. requestCancel
+   * explicitly refuses a PAID_MARKED trade ("raise a dispute if needed"),
+   * which is sound protection for a buyer who really did pay, but it means
+   * a buyer who clicked the button and walked away silently freezes a
+   * seller's tokens for good.
+   *
+   * `refund-seller` is the safe direction and the one this is really for:
+   * it restores the pre-trade state. The escrow is already the seller's --
+   * releasing it to the buyer is what would be the transfer -- so refunding
+   * moves nothing that was not theirs, and a buyer who genuinely paid can
+   * still come back and raise a dispute against the now-closed trade
+   * (raiseDispute refuses only RELEASED/CANCELLED/EXPIRED, so this does
+   * close that door -- which is exactly why the reason is mandatory and the
+   * UI says to try contacting both parties first).
+   *
+   * `release-buyer` exists because the opposite case is real -- a seller who
+   * received fiat and then stopped responding -- but it hands over someone
+   * else's tokens on an unverified claim, so it is not the default and the
+   * admin's reason has to carry what proof they actually saw.
+   *
+   * Reuses refundTradeToSeller/releaseTradeToBuyer rather than touching
+   * wallets here, so this path goes through the same claimTradeOutOfPlay
+   * serialization as every other resolution: an admin force-resolving while
+   * the seller finally hits release cannot pay the escrow out twice.
+   */
+  async forceResolveTrade(adminId: string, tradeId: string, dto: ForceResolveTradeDto) {
+    const trade = await this.loadForceResolvableTrade(tradeId);
+    const settings = await this.settingsRow();
+    if (settings.adminOtpRequiredForDisputes) {
+      if (!dto.otpRequestId || !dto.code) {
+        throw new UnprocessableEntityException(
+          'OTP verification is required to force-resolve a trade',
+        );
+      }
+      await this.otp.verify({
+        otpRequestId: dto.otpRequestId,
+        userId: adminId,
+        purpose: OtpPurpose.ADMIN_PAYOUT,
+        code: dto.code,
+        contextHash: p2pAdminForceResolveContextHash({
+          tradeId,
+          outcome: dto.outcome,
+          // Re-derived from the row, not taken from the request, so a code
+          // issued against one escrow figure cannot complete a resolution
+          // over another.
+          tokenAmount: trade.tokenAmount.toString(),
+        }),
+      });
+    }
+
+    if (dto.outcome === 'release-buyer') {
+      await this.releaseTradeToBuyer(trade.id);
+      await this.notify(
+        trade.buyerId,
+        await this.platformSettings.isP2pSmsTokensReleasedEnabled(),
+        'Dialect Library: Tokens released -- your P2P trade was completed by support.',
+      );
+    } else {
+      // relistOffer stays false. The seller's counterparty walked away
+      // mid-trade, which is not the same as the automatic non-payment sweep
+      // where nobody had claimed anything yet -- republishing the listing
+      // here would put a seller back on the market without them asking,
+      // after an intervention they did not initiate.
+      await this.refundTradeToSeller(trade.id);
+    }
+
+    this.logger.warn(
+      `Admin ${adminId} force-resolved stuck trade ${tradeId} (${dto.outcome}, ${trade.tokenAmount.toString()} DL): ${dto.reason}`,
+    );
+    return this.prisma.p2PTokenTrade
+      .findUniqueOrThrow({ where: { id: tradeId }, include: tradeInclude })
+      .then((row) => serializeTrade(row));
   }
 
   private async settingsRow() {

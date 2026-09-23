@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertTriangle, MessageCircle, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, MessageCircle, ShieldAlert, Unlock } from 'lucide-react';
 import { AdminShell } from '@/components/admin/AdminShell';
 import { DataTable, DataTableColumn } from '@/components/ui/DataTable';
 import { Dialog, DialogContent } from '@/components/ui/Dialog';
@@ -13,14 +13,46 @@ import {
   P2PDisputeParty,
   P2PTrade,
   P2PTradeStatus,
+  useForceResolveP2PTradeMutation,
+  useGetAdminP2PSettingsQuery,
   useGetMeQuery,
   useListAdminP2PDisputesQuery,
   useListAdminP2PTradesQuery,
+  useRequestP2PForceResolveOtpMutation,
   useResolveP2PDisputeMutation,
 } from '@/store/api';
 
 const PAGE_SIZE = 5;
 const TERMINAL_TRADE_STATUSES = new Set<P2PTradeStatus>(['RELEASED', 'CANCELLED', 'EXPIRED']);
+
+/**
+ * How long a trade sits marked-paid before the admin override appears.
+ *
+ * Not zero. A seller confirming a genuine payment normally takes minutes to
+ * hours, and an override offered immediately invites an admin to step into
+ * a trade that was about to settle itself. A day is well past any honest
+ * confirmation delay while still far short of how long these have actually
+ * been frozen.
+ */
+const STUCK_TRADE_HOURS = 24;
+
+/**
+ * A trade nobody can move: the buyer said they paid, the seller never
+ * confirmed, and no dispute was raised.
+ *
+ * Nothing in the system resolves this on its own. markPaid ignores the
+ * payment deadline by design, the stale sweep only touches unpaid and
+ * cancel-pending trades, and requestCancel refuses a paid trade outright
+ * ("raise a dispute if needed"). So the seller's tokens stay locked
+ * indefinitely -- they cannot spend them, the buyer never receives them,
+ * and neither party has a button that ends it.
+ */
+function isStuckTrade(trade: P2PTrade): boolean {
+  if (trade.status !== 'PAID_MARKED') return false;
+  if (trade.dispute && trade.dispute.status === 'OPEN') return false;
+  const since = trade.paidAt ?? trade.createdAt;
+  return Date.now() - new Date(since).getTime() >= STUCK_TRADE_HOURS * 3_600_000;
+}
 
 function partyName(party: P2PDisputeParty): string {
   return [party.firstName, party.lastName].filter(Boolean).join(' ') || party.email;
@@ -89,6 +121,10 @@ export default function AdminP2PPage() {
     status: 'OPEN',
   });
   const [resolveDispute, { isLoading: resolving }] = useResolveP2PDisputeMutation();
+  const { data: p2pSettings } = useGetAdminP2PSettingsQuery();
+  const [requestForceOtp, { isLoading: sendingCode }] = useRequestP2PForceResolveOtpMutation();
+  const [forceResolve, { isLoading: forceResolving }] = useForceResolveP2PTradeMutation();
+  const [stuckTrade, setStuckTrade] = useState<P2PTrade | null>(null);
   const [error, setError] = useState('');
   const [chatTrade, setChatTrade] = useState<P2PTrade | null>(null);
   const [pendingResolution, setPendingResolution] = useState<{
@@ -206,6 +242,9 @@ export default function AdminP2PPage() {
           {!TERMINAL_TRADE_STATUSES.has(t.status) && (
             <TimeOpenBadge since={t.createdAt} suffix="open" />
           )}
+          {isStuckTrade(t) && (
+            <p className="text-xs font-bold text-warning">escrow frozen</p>
+          )}
         </div>
       ),
     },
@@ -249,6 +288,27 @@ export default function AdminP2PPage() {
           {new Date(t.paymentDeadlineAt).toLocaleString()}
         </span>
       ),
+    },
+    {
+      key: 'actions',
+      header: '',
+      // Only rendered for a trade nobody can move -- see isStuckTrade. Every
+      // other row is either still live between its two parties or already
+      // terminal, and neither is an admin's to reach into.
+      render: (t) =>
+        isStuckTrade(t) ? (
+          <button
+            className="inline-flex min-h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border border-warning/50 bg-warning/10 px-3 text-xs font-extrabold text-warning hover:bg-warning/20"
+            onClick={() => {
+              setError('');
+              setStuckTrade(t);
+            }}
+            type="button"
+          >
+            <Unlock className="size-3.5" aria-hidden="true" />
+            Resolve stuck
+          </button>
+        ) : null,
     },
   ];
 
@@ -305,6 +365,50 @@ export default function AdminP2PPage() {
         />
       )}
       <Dialog
+        open={stuckTrade !== null}
+        onOpenChange={(open) => {
+          if (!open && !forceResolving) {
+            setStuckTrade(null);
+            setError('');
+          }
+        }}
+      >
+        {stuckTrade && (
+          <ForceResolveTradeDialog
+            error={error}
+            onCancel={() => {
+              setStuckTrade(null);
+              setError('');
+            }}
+            onRequestCode={async (outcome) => {
+              setError('');
+              try {
+                const res = await requestForceOtp({ id: stuckTrade.id, outcome }).unwrap();
+                return res.otpRequestId;
+              } catch (err) {
+                setError(normalizeErrorMessage(err, 'Unable to send confirmation code'));
+                return null;
+              }
+            }}
+            onSubmit={async (body) => {
+              setError('');
+              try {
+                await forceResolve({ id: stuckTrade.id, ...body }).unwrap();
+                setStuckTrade(null);
+                return true;
+              } catch (err) {
+                setError(normalizeErrorMessage(err, 'Unable to resolve this trade'));
+                return false;
+              }
+            }}
+            otpRequired={p2pSettings?.adminOtpRequiredForDisputes ?? true}
+            sendingCode={sendingCode}
+            submitting={forceResolving}
+            trade={stuckTrade}
+          />
+        )}
+      </Dialog>
+      <Dialog
         open={pendingResolution !== null}
         onOpenChange={(open) => {
           if (!open && !resolving) {
@@ -328,6 +432,217 @@ export default function AdminP2PPage() {
         )}
       </Dialog>
     </AdminShell>
+  );
+}
+
+/**
+ * The override for a trade neither party can move any more.
+ *
+ * Deliberately not a one-click button in the row. Refunding the seller
+ * closes the trade, and raiseDispute refuses a closed trade -- so a buyer
+ * who genuinely paid and was waiting on a slow seller loses their route to
+ * contest it. That makes "contact both parties first" a real instruction,
+ * not boilerplate, and it is why the reason is mandatory.
+ *
+ * Refund is preselected because the escrow is already the seller's: nothing
+ * has been paid out, and restoring the pre-trade state is the only outcome
+ * that moves no tokens between parties. Releasing to the buyer transfers a
+ * seller's tokens on the strength of a claim nobody verified, so it has to
+ * be chosen explicitly.
+ */
+function ForceResolveTradeDialog({
+  error,
+  onCancel,
+  onRequestCode,
+  onSubmit,
+  otpRequired,
+  sendingCode,
+  submitting,
+  trade,
+}: {
+  error: string;
+  onCancel: () => void;
+  onRequestCode: (outcome: 'refund-seller' | 'release-buyer') => Promise<string | null>;
+  onSubmit: (body: {
+    outcome: 'refund-seller' | 'release-buyer';
+    reason: string;
+    otpRequestId?: string;
+    code?: string;
+  }) => Promise<boolean>;
+  otpRequired: boolean;
+  sendingCode: boolean;
+  submitting: boolean;
+  trade: P2PTrade;
+}) {
+  const [outcome, setOutcome] = useState<'refund-seller' | 'release-buyer'>('refund-seller');
+  const [reason, setReason] = useState('');
+  const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+
+  const sellerName = counterpartyName(trade.seller);
+  const buyerName = counterpartyName(trade.buyer);
+  const recipient = outcome === 'refund-seller' ? sellerName : buyerName;
+  const since = trade.paidAt ?? trade.createdAt;
+
+  // Changing direction invalidates any code already issued -- the backend
+  // binds the outcome into the OTP context, so a code taken for a refund
+  // will not complete a release.
+  function pickOutcome(next: 'refund-seller' | 'release-buyer') {
+    setOutcome(next);
+    setOtpRequestId(null);
+    setCode('');
+  }
+
+  const reasonOk = reason.trim().length >= 10;
+  const codeOk = !otpRequired || (otpRequestId !== null && code.trim().length > 0);
+
+  return (
+    <DialogContent
+      title="Resolve stuck trade"
+      description="Marked paid but never released, with no dispute raised. The escrow is frozen."
+    >
+      <div className="grid gap-4">
+        <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-sm font-bold text-muted">Escrow held</span>
+            <span className="font-black">{tradeLabel(trade)}</span>
+          </div>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-sm font-bold text-muted">Marked paid by buyer</span>
+            <span className="text-right font-bold">
+              {elapsedSince(since)} ago &middot; {buyerName}
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-sm font-bold text-muted">Never confirmed by seller</span>
+            <span className="text-right font-bold">{sellerName}</span>
+          </div>
+        </div>
+
+        <p className="rounded-lg border border-warning/50 bg-warning/[0.08] px-3.5 py-3 text-sm leading-relaxed text-ink">
+          <AlertTriangle className="mr-1.5 inline size-4 text-warning" aria-hidden="true" />
+          Nobody has verified whether the fiat payment actually arrived. Try contacting both
+          parties first &mdash; once this trade closes, neither of them can raise a dispute on it.
+        </p>
+
+        <fieldset className="grid gap-2">
+          <legend className="text-sm font-black text-ink">Outcome</legend>
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line p-3 hover:bg-surface-muted">
+            <input
+              checked={outcome === 'refund-seller'}
+              className="mt-1 size-4"
+              name="force-resolve-outcome"
+              onChange={() => pickOutcome('refund-seller')}
+              type="radio"
+            />
+            <span className="grid gap-0.5">
+              <span className="text-sm font-extrabold">Cancel and refund the seller</span>
+              <span className="text-xs leading-relaxed text-muted">
+                Unlocks {trade.tokenAmount} DL back to {sellerName}, who has held it in escrow
+                throughout. Moves nothing between the two parties.
+              </span>
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line p-3 hover:bg-surface-muted">
+            <input
+              checked={outcome === 'release-buyer'}
+              className="mt-1 size-4"
+              name="force-resolve-outcome"
+              onChange={() => pickOutcome('release-buyer')}
+              type="radio"
+            />
+            <span className="grid gap-0.5">
+              <span className="text-sm font-extrabold">Release to the buyer</span>
+              <span className="text-xs leading-relaxed text-muted">
+                Transfers {trade.tokenAmount} DL from {sellerName} to {buyerName}. Only if you
+                have seen proof the payment arrived &mdash; record what you saw below.
+              </span>
+            </span>
+          </label>
+        </fieldset>
+
+        <div className="grid gap-1.5">
+          <label className="text-sm font-black text-ink" htmlFor="force-resolve-reason">
+            Reason (required &mdash; this is the only record of why)
+          </label>
+          <textarea
+            className="min-h-20 rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+            id="force-resolve-reason"
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="e.g. Both parties unreachable for 5 days, no payment proof supplied"
+            value={reason}
+          />
+        </div>
+
+        {otpRequired && (
+          <div className="grid gap-2 rounded-lg border border-line p-3">
+            {otpRequestId === null ? (
+              <button
+                className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted disabled:opacity-60"
+                disabled={sendingCode}
+                onClick={() => {
+                  void onRequestCode(outcome).then((id) => {
+                    if (id) setOtpRequestId(id);
+                  });
+                }}
+                type="button"
+              >
+                {sendingCode ? 'Sending code…' : 'Send me a confirmation code'}
+              </button>
+            ) : (
+              <div className="grid gap-1.5">
+                <label className="text-sm font-black text-ink" htmlFor="force-resolve-code">
+                  Confirmation code
+                </label>
+                <input
+                  autoComplete="one-time-code"
+                  className="max-w-40 rounded-lg border border-line bg-surface px-3 py-2 font-mono tracking-[0.3em]"
+                  id="force-resolve-code"
+                  inputMode="numeric"
+                  onChange={(e) => setCode(e.target.value)}
+                  placeholder="000000"
+                  value={code}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {error && (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-bold text-danger dark:bg-red-950">
+            {error}
+          </p>
+        )}
+
+        <div className="flex flex-wrap justify-end gap-2">
+          <button
+            className="min-h-10 rounded-lg border border-line px-4 text-sm font-extrabold hover:bg-surface-muted disabled:opacity-60"
+            disabled={submitting}
+            onClick={onCancel}
+            type="button"
+          >
+            Cancel
+          </button>
+          <button
+            className="min-h-10 rounded-lg bg-accent px-4 text-sm font-extrabold text-white disabled:opacity-60"
+            disabled={submitting || !reasonOk || !codeOk}
+            onClick={() => {
+              void onSubmit({
+                outcome,
+                reason: reason.trim(),
+                otpRequestId: otpRequestId ?? undefined,
+                code: otpRequired ? code.trim() : undefined,
+              });
+            }}
+            type="button"
+          >
+            {submitting
+              ? 'Resolving...'
+              : `${outcome === 'refund-seller' ? 'Refund' : 'Release to'} ${recipient}`}
+          </button>
+        </div>
+      </div>
+    </DialogContent>
   );
 }
 

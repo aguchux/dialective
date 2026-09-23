@@ -24,7 +24,9 @@ import {
   ListTradesDto,
   RequestP2pTradeOtpDto,
   RaiseDisputeDto,
+  RequestForceResolveOtpDto,
   ResolveDisputeDto,
+  ForceResolveTradeDto,
   UpdateOfferDto,
   UpdateP2PMarketSettingsDto,
   UpdateP2pPaymentInstructionsDto,
@@ -232,5 +234,33 @@ export class P2PController {
     @Body() body: ResolveDisputeDto,
   ) {
     return this.p2p.resolveDispute(req.user.sub, id, body);
+  }
+
+  /**
+   * Force-resolution of a stuck trade -- one marked paid but never
+   * released, with no dispute. Two routes, not one, because the step-up
+   * code has to be issued against the escrow figure the admin is about to
+   * move; see P2PService.forceResolveTrade.
+   */
+  @Post('admin/trades/:id/force-resolve-otp')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  adminRequestForceResolveOtp(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: RequestForceResolveOtpDto,
+  ) {
+    return this.p2p.requestForceResolveOtp(req.user.sub, id, body);
+  }
+
+  @Post('admin/trades/:id/force-resolve')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  adminForceResolveTrade(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: ForceResolveTradeDto,
+  ) {
+    return this.p2p.forceResolveTrade(req.user.sub, id, body);
   }
 }

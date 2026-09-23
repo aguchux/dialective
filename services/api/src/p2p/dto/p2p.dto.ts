@@ -14,7 +14,9 @@ import {
   Length,
   Matches,
   Max,
+  MaxLength,
   Min,
+  MinLength,
   ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -250,6 +252,48 @@ export class ResolveDisputeDto {
   @IsOptional()
   @IsString()
   resolutionNote?: string;
+}
+
+/**
+ * Admin force-resolution of a stuck trade -- one sitting in PAID_MARKED with
+ * no dispute, where the buyer claimed payment and then went quiet and the
+ * seller never confirmed.
+ *
+ * `outcome` is explicit rather than inferred because the two directions are
+ * not symmetric in risk. `refund-seller` restores the pre-trade state: the
+ * escrow was already the seller's, and nothing has been paid out. That is
+ * the default for an unverified payment claim. `release-buyer` gives away a
+ * seller's tokens on the strength of that same unverified claim, so it
+ * exists only for when the admin has actually seen proof of payment, and
+ * the reason is where they record what they saw.
+ */
+export class ForceResolveTradeDto {
+  @IsIn(['refund-seller', 'release-buyer'])
+  outcome!: 'refund-seller' | 'release-buyer';
+
+  /**
+   * Required, and long enough to be a sentence. This action has no dispute
+   * row behind it carrying a reported reason, so unlike resolveDispute
+   * there is no other record anywhere of why an admin moved someone's
+   * escrow. The audit row is it.
+   */
+  @IsString()
+  @MinLength(10)
+  @MaxLength(500)
+  reason!: string;
+
+  @IsOptional()
+  @IsString()
+  otpRequestId?: string;
+
+  @IsOptional()
+  @IsString()
+  code?: string;
+}
+
+export class RequestForceResolveOtpDto {
+  @IsIn(['refund-seller', 'release-buyer'])
+  outcome!: 'refund-seller' | 'release-buyer';
 }
 
 export class UpdateP2PMarketSettingsDto {
