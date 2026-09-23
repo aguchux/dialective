@@ -98,6 +98,8 @@ import {
   useGetP2PPaymentInstructionsQuery,
   useUpdateP2PPaymentInstructionsMutation,
   useGetIncompleteRequiredCoursesQuery,
+  useGetSuggestedCoursesQuery,
+  useDismissSuggestedCourseMutation,
   useGetMeQuery,
   useResendEmailVerificationMutation,
   useRequestPhoneOtpMutation,
@@ -277,6 +279,16 @@ export function TrainerDashboard({ forcedView }: { forcedView?: DashboardView } 
       session?.user.role === 'DISTRIBUTOR' ||
       session?.user.role === 'VALIDATOR',
   });
+  // Courses this trainer is grandfathered out of -- shown as a suggestion,
+  // never a gate. Same skip conditions as the blocking query above: neither
+  // applies to a role that does not train.
+  const { data: suggestedCourses } = useGetSuggestedCoursesQuery(undefined, {
+    skip:
+      status !== 'authenticated' ||
+      session?.user.role === 'ADMIN' ||
+      session?.user.role === 'DISTRIBUTOR' ||
+      session?.user.role === 'VALIDATOR',
+  });
   const { data: publicSettings } = useGetPublicClientSettingsQuery();
 
   // Same "check client-side first, server is still the authoritative
@@ -356,6 +368,11 @@ export function TrainerDashboard({ forcedView }: { forcedView?: DashboardView } 
         {incompleteRequiredCourses && incompleteRequiredCourses.length > 0 && (
           <RequiredCoursesBanner courses={incompleteRequiredCourses} />
         )}
+        {/* Only when nothing is actually blocking -- stacking a suggestion
+            under a gate buries the thing the trainer must act on. */}
+        {(!incompleteRequiredCourses || incompleteRequiredCourses.length === 0) &&
+          suggestedCourses &&
+          suggestedCourses.length > 0 && <SuggestedCourseBanner course={suggestedCourses[0]} />}
         <MicrophonePermissionBanner activeView={activeView} />
 
         <main className="mx-auto w-full max-w-6xl px-4 pb-28 pt-6 md:px-6 md:pt-9 lg:pb-12">
@@ -566,6 +583,59 @@ function RequiredCoursesBanner({
         >
           Start now
         </Link>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A course that became required after this trainer signed up.
+ *
+ * They completed every requirement that existed when they joined, so
+ * blocking them now would be punishing them for a rule that changed under
+ * them -- see CoursesService.getIncompleteRequiredCourses. It is still
+ * worth reading, and it still pays its completion reward, so it is offered
+ * rather than hidden. Visually distinct from the amber gate above: this one
+ * is neutral and dismissible, because nothing is wrong.
+ */
+function SuggestedCourseBanner({
+  course,
+}: {
+  course: { id: string; slug: string; title: string; summary: string };
+}) {
+  const [dismiss, { isLoading }] = useDismissSuggestedCourseMutation();
+  const [hidden, setHidden] = useState(false);
+  if (hidden) return null;
+
+  return (
+    <div className="border-b border-line bg-surface-muted px-4 py-2.5 text-sm">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-2 md:px-2">
+        <p className="min-w-0 text-ink">
+          <span className="font-bold">New course: {course.title}</span>
+          <span className="text-muted"> &mdash; not required for you, but worth a read.</span>
+        </p>
+        <span className="flex shrink-0 items-center gap-3">
+          <Link
+            className="font-extrabold text-accent underline hover:no-underline"
+            href={`/dashboard/learn/${course.slug}`}
+          >
+            Read it
+          </Link>
+          <button
+            className="font-bold text-muted hover:text-ink disabled:opacity-60"
+            disabled={isLoading}
+            onClick={() => {
+              // Hidden immediately rather than waiting on the round trip --
+              // a dismissal that lingers reads as a broken button. The
+              // mutation still invalidates so it stays gone on reload.
+              setHidden(true);
+              void dismiss(course.slug);
+            }}
+            type="button"
+          >
+            Dismiss
+          </button>
+        </span>
       </div>
     </div>
   );

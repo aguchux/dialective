@@ -309,6 +309,9 @@ export class CoursesService {
         status,
         visibility: dto.visibility ?? CourseVisibility.PRIVATE,
         required: dto.required ?? false,
+        // Stamped on the transition into required so the gate knows which
+        // trainers this can apply to -- see getIncompleteRequiredCourses.
+        requiredSince: dto.required ? new Date() : null,
         completionRewardTokens: dto.completionRewardTokens ?? null,
         sortOrder: (lastCourse?.sortOrder ?? -1) + 1,
         authorId,
@@ -344,7 +347,17 @@ export class CoursesService {
         ...(dto.coverImageKey !== undefined && { coverImageKey: cleanOptional(dto.coverImageKey) }),
         ...(dto.coverImageAlt !== undefined && { coverImageAlt: cleanOptional(dto.coverImageAlt) }),
         ...(dto.visibility !== undefined && { visibility: dto.visibility }),
-        ...(dto.required !== undefined && { required: dto.required }),
+        // requiredSince moves only on a real transition. Re-saving a course
+        // that is already required must NOT restamp it -- that would reset
+        // the grandfathering line and retrospectively block every trainer
+        // who joined before the edit, which is the exact bug this column
+        // exists to prevent. An admin editing a typo is not changing who
+        // the course applies to.
+        ...(dto.required !== undefined &&
+          dto.required !== current.required && {
+            required: dto.required,
+            requiredSince: dto.required ? new Date() : null,
+          }),
         ...(dto.completionRewardTokens !== undefined && {
           completionRewardTokens: dto.completionRewardTokens ?? null,
         }),
@@ -397,11 +410,14 @@ export class CoursesService {
    * requirement surfaces first, matching how it was likely assigned.
    */
   async getIncompleteRequiredCourses(userId: string) {
-    const required = await this.prisma.course.findMany({
-      where: { status: BlogPostStatus.PUBLISHED, required: true },
-      select: { id: true, slug: true, title: true },
-      orderBy: { createdAt: 'asc' },
-    });
+    const [user, required] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: userId }, select: { createdAt: true } }),
+      this.prisma.course.findMany({
+        where: { status: BlogPostStatus.PUBLISHED, required: true },
+        select: { id: true, slug: true, title: true, requiredSince: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
     if (required.length === 0) return [];
 
     const completedRows = await this.prisma.courseProgress.findMany({
@@ -410,7 +426,98 @@ export class CoursesService {
     });
     const completedIds = new Set(completedRows.map((row) => row.courseId));
 
-    return required.filter((course) => !completedIds.has(course.id));
+    return required
+      .filter((course) => !completedIds.has(course.id))
+      // Grandfathering. A course only gates a trainer who signed up at or
+      // after it became required. Marking a new course required must not
+      // reach back and block trainers who had already satisfied every
+      // requirement that existed when they joined -- they did nothing, and
+      // from their side the platform just starts demanding training again
+      // with no explanation. A null requiredSince keeps the old
+      // applies-to-everyone reading, which the migration backfills away so
+      // only a row written before this column can hit it.
+      .filter(
+        (course) =>
+          !course.requiredSince ||
+          !user ||
+          user.createdAt.getTime() >= course.requiredSince.getTime(),
+      )
+      .map(({ id, slug, title }) => ({ id, slug, title }));
+  }
+
+  /**
+   * Required courses this trainer is grandfathered out of and has not yet
+   * completed or dismissed -- suggested reading, never a gate.
+   *
+   * Deliberately a separate method from getIncompleteRequiredCourses rather
+   * than a flag on its rows: that one feeds the 403 that blocks training,
+   * and a caller that forgot to filter by a `blocking: false` flag would
+   * turn a suggestion into a block. These cannot be confused because they
+   * never travel together.
+   */
+  async getSuggestedCourses(userId: string) {
+    const [user, required] = await Promise.all([
+      this.prisma.user.findUnique({ where: { id: userId }, select: { createdAt: true } }),
+      this.prisma.course.findMany({
+        where: { status: BlogPostStatus.PUBLISHED, required: true, requiredSince: { not: null } },
+        select: { id: true, slug: true, title: true, summary: true, requiredSince: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+    ]);
+    if (!user || required.length === 0) return [];
+
+    const grandfathered = required.filter(
+      (course) => user.createdAt.getTime() < course.requiredSince!.getTime(),
+    );
+    if (grandfathered.length === 0) return [];
+
+    // One query covers both exclusions: a course already completed needs no
+    // suggestion, and a dismissed one was explicitly waved away.
+    const handled = await this.prisma.courseProgress.findMany({
+      where: {
+        userId,
+        courseId: { in: grandfathered.map((c) => c.id) },
+        OR: [{ completedAt: { not: null } }, { suggestionDismissedAt: { not: null } }],
+      },
+      select: { courseId: true },
+    });
+    const handledIds = new Set(handled.map((row) => row.courseId));
+
+    return grandfathered
+      .filter((course) => !handledIds.has(course.id))
+      .map(({ id, slug, title, summary }) => ({ id, slug, title, summary }));
+  }
+
+  /**
+   * Dismisses a suggested course for this trainer.
+   *
+   * Refuses a course that actually gates them, so this can never be used to
+   * skip a requirement -- the check is the same grandfathering comparison
+   * the gate itself makes, not a trusted client assertion.
+   */
+  async dismissSuggestion(userId: string, slug: string) {
+    const [user, course] = await Promise.all([
+      this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { createdAt: true } }),
+      this.prisma.course.findFirst({
+        where: { slug, status: BlogPostStatus.PUBLISHED },
+        select: { id: true, required: true, requiredSince: true },
+      }),
+    ]);
+    if (!course) throw new NotFoundException('Course not found');
+
+    const gatesThisTrainer =
+      course.required &&
+      (!course.requiredSince || user.createdAt.getTime() >= course.requiredSince.getTime());
+    if (gatesThisTrainer) {
+      throw new BadRequestException('This course is required for you and cannot be dismissed');
+    }
+
+    await this.prisma.courseProgress.upsert({
+      where: { userId_courseId: { userId, courseId: course.id } },
+      create: { userId, courseId: course.id, suggestionDismissedAt: new Date() },
+      update: { suggestionDismissedAt: new Date() },
+    });
+    return { dismissed: true };
   }
 }
 

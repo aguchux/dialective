@@ -3503,7 +3503,20 @@ model Course {
   slides                 Json
   status                 BlogPostStatus   @default(DRAFT)
   visibility             CourseVisibility @default(PRIVATE) // PUBLIC courses skip the login wall entirely -- see CourseVisibility doc comment
-  required               Boolean          @default(false) // when true (and PUBLISHED), every trainer must complete this course (CourseProgress.completedAt set) before starting a word-training session -- see CoursesService.getIncompleteRequiredCourses and its call site in WordsService.startSession
+  required               Boolean          @default(false) // when true (and PUBLISHED), trainers who signed up at/after requiredSince must complete this course (CourseProgress.completedAt set) before starting a word-training session -- see CoursesService.getIncompleteRequiredCourses and its call site in WordsService.startSession
+  /// When this course BECAME required, stamped by CoursesService on the
+  /// transition false -> true (and cleared on true -> false). The gate
+  /// compares it against User.createdAt so a newly-required course applies
+  /// to trainers who join afterwards, never retrospectively to trainers who
+  /// had already satisfied every requirement that existed when they signed
+  /// up. Without this, marking a fourth course required in September
+  /// silently blocked 1,628 trainers who had completed all three that
+  /// existed when they onboarded -- they had done nothing wrong and had no
+  /// way to know a rule had changed under them.
+  /// Null while required=false. Null WITH required=true means "applies to
+  /// everyone", which is only reachable for rows that predate this column;
+  /// the backfill sets it explicitly so no such row is left behind.
+  requiredSince          DateTime?
   completionRewardTokens Decimal?         @db.Decimal(20, 8) // one-time DL credited on first completion; null/0 means no reward -- see CoursesService.saveProgress's COURSE_COMPLETION_REWARD credit
   sortOrder              Int              @default(0)
   authorId               String
@@ -3538,6 +3551,11 @@ model CourseProgress {
   lastSlideIndex       Int       @default(0)
   maxSlideIndexReached Int       @default(0)
   completedAt          DateTime?
+  /// Set when a grandfathered trainer dismisses the suggestion to read a
+  /// course they are not required to complete. Only ever affects the
+  /// non-blocking prompt -- a course that genuinely gates this trainer is
+  /// not dismissible, so this can never be used to skip a requirement.
+  suggestionDismissedAt DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 

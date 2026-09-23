@@ -54,6 +54,19 @@ export class CoursesProtectedController {
     return this.courses.getIncompleteRequiredCourses(user.sub);
   }
 
+  // Courses this trainer is grandfathered out of -- suggested, never
+  // blocking. Registered before the :slug wildcard for the same reason as
+  // "required/incomplete" above.
+  @Get('suggested')
+  getSuggested(@CurrentUser() user: AccessTokenClaims) {
+    return this.courses.getSuggestedCourses(user.sub);
+  }
+
+  @Post('suggested/:slug/dismiss')
+  dismissSuggestion(@CurrentUser() user: AccessTokenClaims, @Param('slug') slug: string) {
+    return this.courses.dismissSuggestion(user.sub, slug);
+  }
+
   @Get(':slug')
   get(@CurrentUser() user: AccessTokenClaims, @Param('slug') slug: string) {
     return this.courses.getForStudy(user.sub, slug);

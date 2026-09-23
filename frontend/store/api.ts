@@ -3381,6 +3381,19 @@ export interface IncompleteRequiredCourse {
   title: string;
 }
 
+/**
+ * A required course this trainer is grandfathered out of: it became
+ * required after they signed up, so it is suggested reading, never a gate.
+ * Deliberately a distinct type from IncompleteRequiredCourse so a
+ * suggestion can never be passed to a component that blocks on it.
+ */
+export interface SuggestedCourse {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+}
+
 /** Public catalog card -- no slide content, safe to serve unauthenticated. */
 export interface CourseCard {
   id: string;
@@ -6361,6 +6374,14 @@ export const dialectivaApi = createApi({
       query: () => '/courses/study/required/incomplete',
       providesTags: ['RequiredCourses'],
     }),
+    getSuggestedCourses: builder.query<SuggestedCourse[], void>({
+      query: () => '/courses/study/suggested',
+      providesTags: ['RequiredCourses'],
+    }),
+    dismissSuggestedCourse: builder.mutation<{ dismissed: boolean }, string>({
+      query: (slug) => ({ url: `/courses/study/suggested/${slug}/dismiss`, method: 'POST' }),
+      invalidatesTags: ['RequiredCourses'],
+    }),
     createValidatorDeck: builder.mutation<ValidatorDeckSummary, CreateValidatorDeckInput>({
       query: (body) => ({ url: '/validator/decks', method: 'POST', body }),
       invalidatesTags: ['ValidatorDecks'],
@@ -7059,6 +7080,8 @@ export const {
   useGetCourseToStudyQuery,
   useSaveCourseProgressMutation,
   useGetIncompleteRequiredCoursesQuery,
+  useGetSuggestedCoursesQuery,
+  useDismissSuggestedCourseMutation,
   useCreateValidatorDeckMutation,
   useGetMyValidatorDialectsQuery,
   useGetValidatorDecksQuery,

@@ -25,7 +25,10 @@ describe('CoursesService', () => {
         upsert: jest.fn(),
       },
       user: {
-        findUnique: jest.fn().mockResolvedValue({ email: 'trainer@example.com' }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ email: 'trainer@example.com', createdAt: new Date('2020-01-01') }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({ createdAt: new Date('2020-01-01') }),
         count: jest.fn().mockResolvedValue(0),
       },
       $transaction: jest.fn(),
@@ -445,5 +448,195 @@ describe('CoursesService', () => {
       const result = await service.getIncompleteRequiredCourses('user-1');
       expect(result).toEqual([{ id: 'c2', slug: 'safety', title: 'Safety' }]);
     });
+
+    /**
+     * The bug this guards: marking a fourth course required in September
+     * retrospectively blocked 1,628 trainers who had completed every
+     * requirement that existed when they signed up. From their side, a
+     * platform they were compliant with started demanding training again.
+     */
+    it('does not block a trainer who signed up before the course became required', async () => {
+      prisma.user.findUnique.mockResolvedValue({ createdAt: new Date('2026-08-01') });
+      prisma.course.findMany.mockResolvedValue([
+        { id: 'c1', slug: 'intro', title: 'Intro', requiredSince: new Date('2026-07-01') },
+        { id: 'c2', slug: 'p2p', title: 'P2P', requiredSince: new Date('2026-09-16') },
+      ]);
+      prisma.courseProgress.findMany.mockResolvedValue([{ courseId: 'c1' }]);
+
+      const result = await service.getIncompleteRequiredCourses('user-1');
+      expect(result).toEqual([]);
+    });
+
+    it('still blocks a trainer who signed up after the course became required', async () => {
+      prisma.user.findUnique.mockResolvedValue({ createdAt: new Date('2026-09-20') });
+      prisma.course.findMany.mockResolvedValue([
+        { id: 'c2', slug: 'p2p', title: 'P2P', requiredSince: new Date('2026-09-16') },
+      ]);
+      prisma.courseProgress.findMany.mockResolvedValue([]);
+
+      const result = await service.getIncompleteRequiredCourses('user-1');
+      expect(result).toEqual([{ id: 'c2', slug: 'p2p', title: 'P2P' }]);
+    });
+
+    it('blocks a trainer who signed up at the exact moment it became required', async () => {
+      const at = new Date('2026-09-16T00:00:00Z');
+      prisma.user.findUnique.mockResolvedValue({ createdAt: at });
+      prisma.course.findMany.mockResolvedValue([
+        { id: 'c2', slug: 'p2p', title: 'P2P', requiredSince: at },
+      ]);
+      prisma.courseProgress.findMany.mockResolvedValue([]);
+
+      const result = await service.getIncompleteRequiredCourses('user-1');
+      expect(result).toHaveLength(1);
+    });
+
+    /**
+     * Only reachable for rows written before the requiredSince column
+     * existed; the migration backfills every currently-required course, but
+     * the fallback must stay blocking rather than silently exempting
+     * everyone if one is ever missed.
+     */
+    it('treats a null requiredSince as applying to everyone', async () => {
+      prisma.user.findUnique.mockResolvedValue({ createdAt: new Date('2020-01-01') });
+      prisma.course.findMany.mockResolvedValue([
+        { id: 'c1', slug: 'legacy', title: 'Legacy', requiredSince: null },
+      ]);
+      prisma.courseProgress.findMany.mockResolvedValue([]);
+
+      const result = await service.getIncompleteRequiredCourses('user-1');
+      expect(result).toEqual([{ id: 'c1', slug: 'legacy', title: 'Legacy' }]);
+    });
+  });
+
+  describe('grandfathered suggestions', () => {
+    it('suggests a course the trainer is grandfathered out of', async () => {
+      prisma.user.findUnique.mockResolvedValue({ createdAt: new Date('2026-08-01') });
+      prisma.course.findMany.mockResolvedValue([
+        {
+          id: 'c2',
+          slug: 'p2p',
+          title: 'P2P',
+          summary: 'How P2P works',
+          requiredSince: new Date('2026-09-16'),
+        },
+      ]);
+      prisma.courseProgress.findMany.mockResolvedValue([]);
+
+      const result = await service.getSuggestedCourses('user-1');
+      expect(result).toEqual([{ id: 'c2', slug: 'p2p', title: 'P2P', summary: 'How P2P works' }]);
+    });
+
+    it('does not suggest a course that actually gates this trainer', async () => {
+      prisma.user.findUnique.mockResolvedValue({ createdAt: new Date('2026-09-20') });
+      prisma.course.findMany.mockResolvedValue([
+        { id: 'c2', slug: 'p2p', title: 'P2P', summary: '', requiredSince: new Date('2026-09-16') },
+      ]);
+
+      expect(await service.getSuggestedCourses('user-1')).toEqual([]);
+    });
+
+    it('does not suggest a course already completed or dismissed', async () => {
+      prisma.user.findUnique.mockResolvedValue({ createdAt: new Date('2026-08-01') });
+      prisma.course.findMany.mockResolvedValue([
+        { id: 'c2', slug: 'p2p', title: 'P2P', summary: '', requiredSince: new Date('2026-09-16') },
+      ]);
+      prisma.courseProgress.findMany.mockResolvedValue([{ courseId: 'c2' }]);
+
+      expect(await service.getSuggestedCourses('user-1')).toEqual([]);
+    });
+
+    /**
+     * The dismissal route must never become a way around a requirement, so
+     * it re-runs the same grandfathering comparison the gate makes rather
+     * than trusting that the client only offers dismiss on a suggestion.
+     */
+    it('refuses to dismiss a course that is genuinely required for this trainer', async () => {
+      prisma.user.findUniqueOrThrow.mockResolvedValue({ createdAt: new Date('2026-09-20') });
+      prisma.course.findFirst.mockResolvedValue({
+        id: 'c2',
+        required: true,
+        requiredSince: new Date('2026-09-16'),
+      });
+
+      await expect(service.dismissSuggestion('user-1', 'p2p')).rejects.toThrow(BadRequestException);
+      expect(prisma.courseProgress.upsert).not.toHaveBeenCalled();
+    });
+
+    it('records a dismissal for a grandfathered trainer', async () => {
+      prisma.user.findUniqueOrThrow.mockResolvedValue({ createdAt: new Date('2026-08-01') });
+      prisma.course.findFirst.mockResolvedValue({
+        id: 'c2',
+        required: true,
+        requiredSince: new Date('2026-09-16'),
+      });
+
+      await service.dismissSuggestion('user-1', 'p2p');
+      expect(prisma.courseProgress.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId_courseId: { userId: 'user-1', courseId: 'c2' } },
+        }),
+      );
+    });
+  });
+
+  describe('requiredSince stamping', () => {
+    /**
+     * Restamping on an ordinary edit would reset the grandfathering line
+     * and retrospectively block everyone who joined before it -- the exact
+     * bug this column exists to prevent.
+     */
+    it('does not move requiredSince when re-saving an already-required course', async () => {
+      prisma.course.findUnique.mockResolvedValue({
+        id: 'c1',
+        status: 'PUBLISHED',
+        required: true,
+        publishedAt: new Date('2026-09-16'),
+        authorId: 'admin-1',
+        slides: { slides: [{}] },
+      });
+      prisma.course.update.mockResolvedValue({ id: 'c1' });
+
+      await service.update('c1', { required: true, summary: 'typo fixed' } as any);
+
+      const data = prisma.course.update.mock.calls[0][0].data;
+      expect(data).not.toHaveProperty('requiredSince');
+    });
+
+    it('stamps requiredSince when a course first becomes required', async () => {
+      prisma.course.findUnique.mockResolvedValue({
+        id: 'c1',
+        status: 'PUBLISHED',
+        required: false,
+        publishedAt: new Date('2026-09-16'),
+        authorId: 'admin-1',
+        slides: { slides: [{}] },
+      });
+      prisma.course.update.mockResolvedValue({ id: 'c1' });
+
+      await service.update('c1', { required: true } as any);
+
+      const data = prisma.course.update.mock.calls[0][0].data;
+      expect(data.required).toBe(true);
+      expect(data.requiredSince).toBeInstanceOf(Date);
+    });
+
+    it('clears requiredSince when a course stops being required', async () => {
+      prisma.course.findUnique.mockResolvedValue({
+        id: 'c1',
+        status: 'PUBLISHED',
+        required: true,
+        publishedAt: new Date('2026-09-16'),
+        authorId: 'admin-1',
+        slides: { slides: [{}] },
+      });
+      prisma.course.update.mockResolvedValue({ id: 'c1' });
+
+      await service.update('c1', { required: false } as any);
+
+      const data = prisma.course.update.mock.calls[0][0].data;
+      expect(data.required).toBe(false);
+      expect(data.requiredSince).toBeNull();
+    });
+
   });
 });
