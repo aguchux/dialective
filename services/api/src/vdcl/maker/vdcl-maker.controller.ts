@@ -6,6 +6,7 @@ import { VdclSigningService } from './vdcl-signing.service';
 import { CompilationTrackerService } from './compilation-tracker.service';
 import { VdclDocumentsService } from '../documents/vdcl-documents.service';
 import { SignVdclVersionDto, StartVdclDraftDto } from './dto/maker.dto';
+import { VdclEnabledGuard } from '../vdcl-enabled.guard';
 
 interface AuthedRequest {
   user: { sub: string };
@@ -32,9 +33,13 @@ function clientEvidence(req: AuthedRequest) {
  * Contributor-facing means it is on the other side of the anonymity
  * boundary from the subscriber surfaces: nothing here reveals which
  * organizations hold or stream a contributor's work.
+ *
+ * The whole controller sits behind VdclEnabledGuard. Contributor licensing
+ * is off until publication completes, and this is the surface that has to go
+ * dark -- admin and public verification deliberately do not, see the guard.
  */
 @Controller('vdcl')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, VdclEnabledGuard)
 export class VdclMakerController {
   constructor(
     private readonly readiness: VdclReadinessService,

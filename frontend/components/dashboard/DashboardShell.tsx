@@ -37,7 +37,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/DropdownMenu';
-import { useGetWhatsAppValidationPendingCountQuery } from '@/store/api';
+import {
+  useGetPublicClientSettingsQuery,
+  useGetWhatsAppValidationPendingCountQuery,
+} from '@/store/api';
 
 /** Small red count badge, same styling as NotificationBell's unread badge. */
 function CountBadge({ count }: { count: number }) {
@@ -105,6 +108,11 @@ export function DashboardHeader({
     pollingInterval: 60000,
   });
   const p2pPendingCount = pendingData?.count ?? 0;
+  // Contributor licensing is gated until publication completes. Hidden rather
+  // than disabled: the backend refuses these routes outright while off, so a
+  // visible menu item would only lead somewhere that errors.
+  const { data: publicSettings } = useGetPublicClientSettingsQuery();
+  const vdclEnabled = publicSettings?.vdclEnabled ?? false;
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 md:px-6">
@@ -180,9 +188,11 @@ export function DashboardHeader({
                   </span>
                 )}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => router.push('/dashboard/licence')}>
-                <FileSignature className="size-4" aria-hidden="true" /> My Licence
-              </DropdownMenuItem>
+              {vdclEnabled && (
+                <DropdownMenuItem onSelect={() => router.push('/dashboard/licence')}>
+                  <FileSignature className="size-4" aria-hidden="true" /> My Licence
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onSelect={() => router.push('/dashboard?view=testimonials')}>
                 <MessageSquareQuote className="size-4" aria-hidden="true" /> Testimonials
               </DropdownMenuItem>

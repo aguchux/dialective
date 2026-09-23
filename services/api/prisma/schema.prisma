@@ -3118,6 +3118,20 @@ model PlatformSettings {
   submissionRateLimitPerHour                 Int       @default(120) // max word/sentence recordings a single trainer may submit per rolling hour while submissionRateLimitEnabled is on
   submissionDailyLimitEnabled                Boolean   @default(false) // master switch for the per-trainer DAILY submission cap, independent of submissionRateLimitEnabled: an admin can run the hourly burst limit, the daily total, both, or neither. Off by default so enabling it is always a deliberate act
   submissionDailyLimitPerDay                 Int       @default(200) // max recordings a single trainer may submit per rolling 24h while submissionDailyLimitEnabled is on. Counted from WordRecording rows rather than an in-memory throttler bucket, so the cap survives a restart or Redis eviction and an admin can always explain a refusal from the data. 200 is deliberately between the observed p90 (~109/day) and p99 (~272/day): it leaves ordinary contributors untouched while constraining the long tail that drives minting -- see SubmissionDailyLimitGuard
+  /// Master switch for the whole contributor-licensing feature, distinct from
+  /// the two flags below: this one decides whether contributors can reach VDCL
+  /// AT ALL, they decide how an already-issued licence behaves.
+  ///
+  /// OFF by default, and deliberately so. Nothing may be issued to a real
+  /// contributor until Phase 1 legal review lands, and a default of ON would
+  /// make that depend on an admin remembering to turn it off. While off, every
+  /// contributor-facing VDCL route refuses and the dashboard surfaces vanish.
+  ///
+  /// Admin routes (/admin/vdcl) and public verification (/verify/:token) stay
+  /// reachable while off, on purpose: the flow has to be exercisable before
+  /// publication, and a certificate already in someone's hands must never stop
+  /// verifying because an admin flipped a switch.
+  vdclEnabled                                Boolean   @default(false)
   /// Master switch for the VDCL commercial lock ("no VDCL, no commercial
   /// use"). OFF by default: the enforcement code ships dark so it can sit in
   /// production being exercised before it starts refusing anything. While off,

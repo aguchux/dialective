@@ -942,4 +942,46 @@ describe('PlatformSettingsService.update -- VDCL flags', () => {
     expect(writeCall.update.vdclEnforcementEnabled).toBeUndefined();
     expect(writeCall.update.vdclRetentionExemptionEnabled).toBeUndefined();
   });
+
+  it('persists vdclEnabled in both directions', async () => {
+    // The master gate. Turning it back OFF is the case that matters most --
+    // it is what closes contributor licensing again if something surfaces
+    // during publication, so it must not be a one-way switch.
+    for (const value of [true, false]) {
+      const { service, prisma } = setupWriteOnly();
+
+      await service.update({ vdclEnabled: value }).catch(() => {});
+
+      const writeCall = prisma.platformSettings.upsert.mock.calls[0][0];
+      expect(writeCall.update.vdclEnabled).toBe(value);
+    }
+  });
+
+  it('leaves vdclEnabled untouched when not supplied', async () => {
+    const { service, prisma } = setupWriteOnly();
+
+    await service.update({ minWalletBalanceTokens: 5 }).catch(() => {});
+
+    const writeCall = prisma.platformSettings.upsert.mock.calls[0][0];
+    expect(writeCall.update.vdclEnabled).toBeUndefined();
+  });
+
+  it('reads vdclEnabled fresh, not from the cached row', async () => {
+    // An admin closing licensing mid-publication must stop signatures at
+    // once. If this read came off the TTL cache, a contributor could still
+    // sign for the remainder of the window -- which is exactly the thing the
+    // gate exists to prevent.
+    const upsert = jest
+      .fn()
+      .mockResolvedValueOnce({ id: 'default', vdclEnabled: true })
+      .mockResolvedValueOnce({ id: 'default', vdclEnabled: false });
+    const service = new PlatformSettingsService(
+      { platformSettings: { upsert } } as never,
+      {} as never,
+    );
+
+    expect(await service.isVdclEnabled()).toBe(true);
+    expect(await service.isVdclEnabled()).toBe(false);
+    expect(upsert).toHaveBeenCalledTimes(2);
+  });
 });

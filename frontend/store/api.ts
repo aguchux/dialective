@@ -1468,6 +1468,8 @@ export interface PublicClientSettings {
   wordTrainingRecordingMaxTimeoutSeconds: number;
   domainConversationTaskEnabled: boolean;
   dialectValidationTaskEnabled: boolean;
+  /** Master gate for contributor licensing; false hides every VDCL surface. */
+  vdclEnabled: boolean;
   sessionIdleTimeoutMinutes: number;
   sessionMaxHours: number;
   phoneVerificationRequired: boolean;
@@ -2060,6 +2062,7 @@ export interface PlatformSettings {
   testimonyApprovalMonthlyLimit: number;
   testimonyTextRewardTokens: string;
   testimonyVideoRewardTokens: string;
+  vdclEnabled: boolean;
   vdclEnforcementEnabled: boolean;
   vdclRetentionExemptionEnabled: boolean;
   qualityGateEnabled: boolean;
@@ -2259,6 +2262,7 @@ export interface PlatformSettingsInput {
   testimonyApprovalMonthlyLimit?: number;
   testimonyTextRewardTokens?: number;
   testimonyVideoRewardTokens?: number;
+  vdclEnabled?: boolean;
   vdclEnforcementEnabled?: boolean;
   vdclRetentionExemptionEnabled?: boolean;
   qualityGateEnabled?: boolean;

@@ -41,6 +41,7 @@ export function DatasetStorageSettingsPanel() {
   const { data: settings } = useGetPlatformSettingsQuery();
   const [updateSettings, { isLoading: isSavingVdcl }] = useUpdatePlatformSettingsMutation();
 
+  const [vdclEnabled, setVdclEnabled] = useState(false);
   const [vdclEnforcement, setVdclEnforcement] = useState(false);
   const [vdclRetentionExemption, setVdclRetentionExemption] = useState(true);
   const [vdclMessage, setVdclMessage] = useState<string | null>(null);
@@ -48,6 +49,7 @@ export function DatasetStorageSettingsPanel() {
 
   useEffect(() => {
     if (!settings) return;
+    setVdclEnabled(settings.vdclEnabled);
     setVdclEnforcement(settings.vdclEnforcementEnabled);
     setVdclRetentionExemption(settings.vdclRetentionExemptionEnabled);
   }, [settings]);
@@ -57,6 +59,7 @@ export function DatasetStorageSettingsPanel() {
     setVdclError(null);
     try {
       await updateSettings({
+        vdclEnabled,
         vdclEnforcementEnabled: vdclEnforcement,
         vdclRetentionExemptionEnabled: vdclRetentionExemption,
       }).unwrap();
@@ -146,10 +149,30 @@ export function DatasetStorageSettingsPanel() {
         <div className="grid gap-1">
           <h3 className="text-lg font-bold leading-snug">Contributor licensing (VDCL)</h3>
           <p className="text-sm leading-relaxed text-muted">
-            Controls whether a contributor licence is required before a subscriber may stream a
-            recording, and whether licensed audio is protected from the retention rules below.
+            Controls whether contributors can create a licence at all, whether a licence is required
+            before a subscriber may stream a recording, and whether licensed audio is protected from
+            the retention rules below.
           </p>
         </div>
+
+        <label className="flex items-start gap-3" htmlFor="vdcl-enabled">
+          <input
+            checked={vdclEnabled}
+            className="mt-0.5 size-5 accent-accent"
+            id="vdcl-enabled"
+            onChange={(event) => setVdclEnabled(event.target.checked)}
+            type="checkbox"
+          />
+          <span>
+            <span className="block font-bold">Open contributor licensing (VDCL)</span>
+            <span className="mt-1 block text-sm leading-relaxed text-muted">
+              Off until licence publication is complete. While off, contributors see no licence page
+              or menu item and every contributor licensing request is refused, so no licence can be
+              signed. Admin licence screens and public certificate verification keep working either
+              way, so you can still exercise the flow and any issued certificate still verifies.
+            </span>
+          </span>
+        </label>
 
         <label className="flex items-start gap-3" htmlFor="vdcl-enforcement">
           <input

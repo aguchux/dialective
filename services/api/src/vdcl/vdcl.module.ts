@@ -19,6 +19,7 @@ import { VdclDocumentsService } from './documents/vdcl-documents.service';
 import { VdclVerificationService } from './documents/verification.service';
 import { VdclVerificationController } from './documents/verification.controller';
 import { StorageModule } from '../storage/storage.module';
+import { VdclEnabledGuard } from './vdcl-enabled.guard';
 
 /**
  * Voice Dataset Contributor Licence (VDCL).
@@ -47,6 +48,7 @@ import { StorageModule } from '../storage/storage.module';
     VdclVerificationController,
   ],
   providers: [
+    VdclEnabledGuard,
     RightsService,
     DeckCoverageService,
     CoverageNotifierService,

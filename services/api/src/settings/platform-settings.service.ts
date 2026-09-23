@@ -497,6 +497,21 @@ export class PlatformSettingsService {
   }
 
   /**
+   * Whether contributors can reach VDCL at all. Off by default.
+   *
+   * Distinct from the two flags below: this one decides whether the feature
+   * exists for a contributor, they decide how an issued licence behaves.
+   * Reads fresh (not cached) -- VdclEnabledGuard calls this on every
+   * contributor VDCL request, and an admin switching the feature off must
+   * stop signatures immediately rather than after ROW_CACHE_TTL_MS. Signing
+   * a licence is not an action worth letting through on a stale read.
+   */
+  async isVdclEnabled(): Promise<boolean> {
+    const row = await this.fetchRow();
+    return row.vdclEnabled;
+  }
+
+  /**
    * The VDCL commercial lock. Off by default so the enforcement code ships
    * dark -- see the column doc comment in schema.prisma.
    */
@@ -1259,6 +1274,7 @@ export class PlatformSettingsService {
       keyboardLayoutMaxLength: row.keyboardLayoutMaxLength,
       submissionRateLimitEnabled: row.submissionRateLimitEnabled,
       submissionRateLimitPerHour: row.submissionRateLimitPerHour,
+      vdclEnabled: row.vdclEnabled,
       vdclEnforcementEnabled: row.vdclEnforcementEnabled,
       vdclRetentionExemptionEnabled: row.vdclRetentionExemptionEnabled,
       submissionDailyLimitEnabled: row.submissionDailyLimitEnabled,
@@ -1513,6 +1529,7 @@ export class PlatformSettingsService {
     keyboardLayoutMaxLength?: number;
     submissionRateLimitEnabled?: boolean;
     submissionRateLimitPerHour?: number;
+    vdclEnabled?: boolean;
     vdclEnforcementEnabled?: boolean;
     vdclRetentionExemptionEnabled?: boolean;
     submissionDailyLimitEnabled?: boolean;
@@ -2267,6 +2284,7 @@ export class PlatformSettingsService {
       keyboardLayoutMaxLength: row.keyboardLayoutMaxLength,
       submissionRateLimitEnabled: row.submissionRateLimitEnabled,
       submissionRateLimitPerHour: row.submissionRateLimitPerHour,
+      vdclEnabled: row.vdclEnabled,
       vdclEnforcementEnabled: row.vdclEnforcementEnabled,
       vdclRetentionExemptionEnabled: row.vdclRetentionExemptionEnabled,
       submissionDailyLimitEnabled: row.submissionDailyLimitEnabled,
@@ -2456,6 +2474,10 @@ export class PlatformSettingsService {
       wordTrainingRecordingMaxTimeoutSeconds,
       domainConversationTaskEnabled: row.domainConversationTaskEnabled,
       dialectValidationTaskEnabled: row.dialectValidationTaskEnabled,
+      // Public so the dashboard can hide the licence nav item and route
+      // without an admin-only call. The backend guard is the actual gate --
+      // this only stops us advertising a door that would refuse.
+      vdclEnabled: row.vdclEnabled,
       dialectValidationPayoutTokens: row.dialectValidationPayoutTokens?.toString() ?? null,
       misplacedDialectFlagThreshold: row.misplacedDialectFlagThreshold,
       noAudioClawbackFlagThreshold: row.noAudioClawbackFlagThreshold,

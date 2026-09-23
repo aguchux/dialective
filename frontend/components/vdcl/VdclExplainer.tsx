@@ -8,6 +8,7 @@ import {
   Building2,
   Coins,
   FileSignature,
+  Repeat2,
   ShieldCheck,
   Undo2,
 } from 'lucide-react';
@@ -23,7 +24,7 @@ import { primaryButton, secondaryButton } from '@/components/vdcl/vdcl-ui';
  * themselves. An acknowledgement that cannot be tied to specific wording
  * is not evidence of anything.
  */
-export const VDCL_EXPLAINER_VERSION = 'vdcl-explainer-1.0';
+export const VDCL_EXPLAINER_VERSION = 'vdcl-explainer-1.1';
 
 interface Slide {
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>;
@@ -35,9 +36,17 @@ interface Slide {
  * What a VDCL is, before anyone is asked to grant one.
  *
  * Ordered by what a contributor needs in order to decide, not by what is
- * easiest to say. The two facts that constrain them for good -- withdrawal
- * being prospective only, and a trained model being unrecoverable -- are
- * slide four, before the confirmation, never in a PDF clause afterwards.
+ * easiest to say. The facts that constrain them for good come before the
+ * confirmation, never in a PDF clause afterwards: withdrawal being
+ * prospective only and a trained model being unrecoverable (slide four),
+ * and the reclaim dissolving the DL tokens those recordings already earned
+ * (slide five).
+ *
+ * Slide five is the one a contributor is most likely to feel misled about
+ * later, because it takes something away that they already hold and that
+ * they were originally told they could withdraw. It says so in those words,
+ * up front, rather than being softened into a benefit -- and the
+ * confirmation at the end names it explicitly for the same reason.
  */
 const SLIDES: Slide[] = [
   {
@@ -59,6 +68,11 @@ const SLIDES: Slide[] = [
     icon: Undo2,
     title: 'Withdrawal stops the future, not the past',
     body: 'You can withdraw your licence at any time and organisations must stop using your recordings for anything new. But a model already trained on them cannot be untrained, and copies already distributed under the licence cannot be recalled. This is the part worth being sure about before you sign.',
+  },
+  {
+    icon: Repeat2,
+    title: 'Your earned DL tokens are dissolved',
+    body: 'When you reclaim your recordings into your licensed dataset, the DL tokens those recordings already earned are dissolved as part of the transition, and the previous withdrawal system is not coming back. What you receive instead is the dataset itself: your qualifying recordings become yours to license through a Stream Deck, which can earn royalties each time a subscriber licenses it. That is an opportunity, not a guarantee — royalties depend on subscriber demand, and may be less than the tokens dissolved, or nothing at all.',
   },
   {
     icon: Coins,
@@ -199,8 +213,10 @@ export function VdclExplainer({
                 I have read this and understand what a VDCL means.
               </span>
               <span className="text-sm leading-relaxed text-muted">
-                In particular, that withdrawing my licence stops future use but cannot untrain a
-                model or recall copies already distributed.
+                In particular, that the DL tokens my reclaimed recordings already earned are
+                dissolved and the old withdrawal system is not returning, and that withdrawing my
+                licence stops future use but cannot untrain a model or recall copies already
+                distributed.
               </span>
             </span>
           </label>

@@ -432,6 +432,18 @@ export class UpdatePlatformSettingsDto {
   submissionRateLimitPerHour?: number;
 
   /**
+   * Master gate for the whole contributor-licensing feature. While OFF, every
+   * contributor-facing VDCL route refuses and the dashboard surfaces are
+   * hidden; admin VDCL screens and public verification stay reachable so the
+   * flow can be exercised before publication and existing certificates keep
+   * verifying. Default off -- nothing is issued to a real contributor until
+   * legal review lands.
+   */
+  @IsOptional()
+  @IsBoolean()
+  vdclEnabled?: boolean;
+
+  /**
    * VDCL commercial lock. Turning this ON denies any subscriber stream of a
    * recording not covered by an ACTIVE VDCL granting the requested purpose.
    * It is a HARD gate: with no manifests in existence it denies everything,
