@@ -11,6 +11,7 @@ import {
   FileSignature,
   Gauge,
   Mic,
+  Pencil,
   ShieldCheck,
 } from 'lucide-react';
 import { cardClass } from '@/components/dashboard/shared';
@@ -19,7 +20,7 @@ import { ConsentCards, CONSENT_WORDING_VERSION } from '@/components/vdcl/Consent
 import { VdclSignPanel } from '@/components/vdcl/VdclSignPanel';
 import { VdclTracker } from '@/components/vdcl/VdclTracker';
 import { VdclDocuments } from '@/components/vdcl/VdclDocuments';
-import { alertTone, primaryButton } from '@/components/vdcl/vdcl-ui';
+import { alertTone, primaryButton, secondaryButton } from '@/components/vdcl/vdcl-ui';
 import {
   normalizeErrorMessage,
   useGetMyVdclVersionsQuery,
@@ -71,6 +72,11 @@ export function VdclMaker() {
   const [purposes, setPurposes] = useState<VdclPurpose[]>([]);
   const [activeVersionId, setActiveVersionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The consent form is opt-in, not the landing state. Opening straight
+  // onto seven legal choices presents the decision before any of the
+  // context that makes it answerable -- what the licence covers, what is
+  // excluded, what it would apply to. The hero CTA is what reveals it.
+  const [formOpen, setFormOpen] = useState(false);
 
   const openVersion = versions.data?.find((v) =>
     ['DRAFT', 'PENDING_COMPILATION', 'PENDING_REVIEW', 'PENDING_COUNTERSIGNATURE'].includes(
@@ -79,7 +85,74 @@ export function VdclMaker() {
   );
   const activeLicence = versions.data?.find((v) => v.status === 'ACTIVE');
   const current = activeVersionId ?? openVersion?.versionId ?? null;
-  const canStart = readiness.data?.ready && !openVersion && !activeLicence;
+  /**
+   * Whether a NEW version may be started. Deliberately does not exclude an
+   * active licence: compileVersion refuses to mutate a signed manifest, so
+   * changing what a licence covers means drafting a new version, and
+   * createDraft supports exactly that. The only real bar is a version
+   * already in flight -- two would mean two answers to "what does this
+   * licence cover" racing to be signed, which createDraft also refuses.
+   */
+  const canStart = Boolean(readiness.data?.ready && !openVersion);
+
+  /**
+   * The licence is only viewable once BOTH signatures exist.
+   *
+   * Countersignature is what actually grants rights and what triggers
+   * document issue -- before it, a signed licence permits nothing and the
+   * PDF/PNG do not exist yet. Offering a View button any earlier would open
+   * a panel whose downloads can only fail. ACTIVE is checked as well as the
+   * timestamps so a suspended or withdrawn licence does not present itself
+   * as one in force.
+   */
+  const viewableLicence =
+    activeLicence && activeLicence.signedAt && activeLicence.countersignedAt
+      ? activeLicence
+      : null;
+
+  /**
+   * Three states, one button:
+   *   nothing started      -> "Create your VDCL"
+   *   started, not finished -> "Complete your VDCL"
+   *   in force             -> "Update your VDCL" (a new version; the
+   *                            existing one is immutable, so this never
+   *                            edits a licence already signed)
+   *
+   * Wording follows what the contributor has actually done, so a half-
+   * finished licence never asks them to "create" something they already
+   * started and would lose.
+   */
+  const ctaMode: 'create' | 'complete' | 'update' = activeLicence
+    ? 'update'
+    : openVersion
+      ? 'complete'
+      : 'create';
+  const ctaLabel =
+    ctaMode === 'create'
+      ? 'Create your VDCL'
+      : ctaMode === 'complete'
+        ? 'Complete your VDCL'
+        : 'Update your VDCL';
+
+  /**
+   * Where the CTA sends them. "Complete" has an open version whose next
+   * step is already on the page (the tracker and sign panel), so it scrolls
+   * rather than opening the consent form -- re-picking purposes would
+   * discard work in progress. "Create" and "Update" both start a new
+   * version, which begins with the purposes.
+   */
+  function handleCta() {
+    if (ctaMode === 'complete') {
+      if (openVersion) setActiveVersionId(openVersion.versionId);
+      document.getElementById('vdcl-progress')?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+    setFormOpen(true);
+    // Deferred a frame so the section exists before we scroll to it.
+    requestAnimationFrame(() =>
+      document.getElementById('vdcl-consent')?.scrollIntoView({ behavior: 'smooth' }),
+    );
+  }
 
   async function handleStart() {
     setError(null);
@@ -119,6 +192,53 @@ export function VdclMaker() {
           <ShieldCheck className="size-4" aria-hidden="true" />
           Your name is never shared with the organisations that license your recordings.
         </p>
+
+        {/* The page's one action, in the hero rather than below the fold.
+            The View button appears beside it only once the licence is
+            genuinely in force -- see viewableLicence. */}
+        {readiness.data ? (
+          <div className="mt-6 flex flex-wrap items-center gap-3">
+            <ActionButton
+              onClick={handleCta}
+              disabled={!readiness.data.ready}
+              className={primaryButton}
+            >
+              <span className="inline-flex items-center gap-2">
+                {ctaMode === 'update' ? (
+                  <Pencil className="size-4" aria-hidden="true" />
+                ) : (
+                  <FileSignature className="size-4" aria-hidden="true" />
+                )}
+                {ctaLabel}
+                <ArrowRight className="size-4" aria-hidden="true" />
+              </span>
+            </ActionButton>
+
+            {viewableLicence ? (
+              <a
+                className={`inline-flex items-center ${secondaryButton}`}
+                href="#vdcl-documents"
+                onClick={(e) => {
+                  e.preventDefault();
+                  document
+                    .getElementById('vdcl-documents')
+                    ?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <ShieldCheck className="size-4" aria-hidden="true" />
+                  View your licence
+                </span>
+              </a>
+            ) : null}
+
+            {!readiness.data.ready ? (
+              <p className="text-sm text-muted">
+                A few account details are needed first — see below.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </header>
 
       {error ? (
@@ -249,19 +369,36 @@ export function VdclMaker() {
               covers {activeLicence.recordingCount ?? 0} recordings.
             </p>
           </section>
-          <VdclDocuments versionId={activeLicence.versionId} />
+          <div id="vdcl-documents">
+            <VdclDocuments versionId={activeLicence.versionId} />
+          </div>
         </>
       ) : null}
 
       {/* Permissions before the signature, each one a separate choice --
           never a single "accept everything" box. */}
-      {canStart ? (
-        <section className={`${cardClass} p-5`}>
+      {canStart && formOpen ? (
+        <section className={`${cardClass} p-5`} id="vdcl-consent">
           <h2 className="text-lg font-black text-ink">What may your recordings be used for?</h2>
           <p className="mt-1 text-sm leading-relaxed text-muted">
             Pick each use you are willing to allow. Anything you leave unticked is not permitted,
             and you can withdraw the whole licence later.
           </p>
+          {/* A signed manifest is immutable, so an update is a new version
+              rather than an edit. Saying so here stops it reading as though
+              the licence they already hold is about to change under them. */}
+          {activeLicence ? (
+            <p
+              className={`mt-3 flex items-start gap-2 rounded-lg px-3.5 py-3 text-sm ${alertTone.neutral}`}
+            >
+              <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <span>
+                This creates <strong className="font-bold text-ink">version {' '}
+                {(activeLicence.version ?? 0) + 1}</strong> of your licence. Your current licence
+                stays in force until Dialect Library countersigns the new one.
+              </span>
+            </p>
+          ) : null}
 
           <div className="mt-4">
             <ConsentCards selected={purposes} onChange={setPurposes} />
@@ -290,10 +427,10 @@ export function VdclMaker() {
       ) : null}
 
       {current ? (
-        <>
+        <div className="grid gap-6" id="vdcl-progress">
           <VdclTracker versionId={current} />
           <VdclSignPanel versionId={current} />
-        </>
+        </div>
       ) : null}
 
       {versions.data && versions.data.length > 0 ? (
