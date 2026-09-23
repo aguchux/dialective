@@ -15,6 +15,53 @@ import { CoverageNotifierService } from '../rights/coverage-notifier.service';
 import { VdclDocumentsService } from '../documents/vdcl-documents.service';
 
 /**
+ * Every licence action that carries a step-up, besides countersignature.
+ *
+ * All of them are consequential and irreversible-ish: they stop a
+ * contributor's work reaching subscribers, send their licence back, or end
+ * it. Each was previously a single unconfirmed click.
+ */
+export type VdclAdminAction =
+  | 'vdcl-suspend'
+  | 'vdcl-reinstate'
+  | 'vdcl-revoke'
+  | 'vdcl-withdraw'
+  | 'vdcl-reissue';
+
+/** What the refusal message says the code is for. */
+const VDCL_ACTION_LABELS: Record<VdclAdminAction, string> = {
+  'vdcl-suspend': 'suspend this licence',
+  'vdcl-reinstate': 'reinstate this licence',
+  'vdcl-revoke': 'revoke this countersignature',
+  'vdcl-withdraw': 'record this withdrawal',
+  'vdcl-reissue': 're-issue these documents',
+};
+
+/** The optional step-up every guarded action accepts. */
+export interface VdclStepUp {
+  otpRequestId?: string;
+  code?: string;
+}
+
+/**
+ * The version fields the agreements list needs, shared so the active
+ * version and the latest version cannot describe themselves differently.
+ */
+const VERSION_SUMMARY_SELECT = {
+  id: true,
+  version: true,
+  status: true,
+  signedAt: true,
+  countersignedAt: true,
+  manifestHash: true,
+  rejectionReason: true,
+  rejectedAt: true,
+  pdfKey: true,
+  pngKey: true,
+  _count: { select: { grants: true } },
+} as const;
+
+/**
  * Admin lifecycle control over VDCL agreements.
  *
  * Phase 0 shipped the rights check with no way to create or change an
@@ -44,20 +91,23 @@ export class VdclAdminService {
 
   async listAgreements(params: { status?: VdclVersionStatus; take?: number }) {
     const take = Math.min(params.take ?? 50, 200);
-    return this.prisma.vdclAgreement.findMany({
+    const agreements = await this.prisma.vdclAgreement.findMany({
       take,
       orderBy: { createdAt: 'desc' },
       include: {
         activeVersion: {
-          select: {
-            id: true,
-            version: true,
-            status: true,
-            signedAt: true,
-            countersignedAt: true,
-            manifestHash: true,
-            _count: { select: { grants: true } },
-          },
+          select: VERSION_SUMMARY_SELECT,
+        },
+        // The LATEST version, whatever its status. activeVersion alone was
+        // not enough: activeVersionId is only set AT countersignature, so a
+        // version sitting in PENDING_COUNTERSIGNATURE -- the one state that
+        // actually needs an admin -- was invisible here. The panel showed
+        // "no active version" and offered only a withdrawal form for the
+        // very licence it was meant to be countersigning.
+        versions: {
+          orderBy: { version: 'desc' },
+          take: 1,
+          select: VERSION_SUMMARY_SELECT,
         },
         _count: { select: { versions: true } },
       },
@@ -65,6 +115,13 @@ export class VdclAdminService {
         ? { where: { versions: { some: { status: params.status } } } }
         : {}),
     });
+
+    return agreements.map(({ versions, ...agreement }) => ({
+      ...agreement,
+      // What the admin should be looking at: the active version when there
+      // is one, otherwise whatever is most recent and may need action.
+      latestVersion: versions[0] ?? null,
+    }));
   }
 
   async getAgreement(agreementId: string) {
@@ -152,7 +209,10 @@ export class VdclAdminService {
 
     return this.otp.issueForUser(
       adminUserId,
-      OtpPurpose.ADMIN_PAYOUT,
+      // Its own purpose, not ADMIN_PAYOUT. The borrowed one sent an email
+      // about a payout, telling an admin nothing about the fact they were
+      // about to bind the company to a licence over someone's voice.
+      OtpPurpose.VDCL_COUNTERSIGN,
       destination,
       adminActionContextHash({
         action: 'vdcl-countersign',
@@ -161,6 +221,87 @@ export class VdclAdminService {
       }),
       channel,
     );
+  }
+
+  /**
+   * Re-render a version's documents, behind the same step-up as everything
+   * else on this screen. Re-issuing rewrites the stored hashes, so an
+   * accidental click changes what a contributor's certificate verifies
+   * against.
+   */
+  async reissueDocuments(versionId: string, adminUserId: string, step?: VdclStepUp) {
+    await this.verifyActionOtp({
+      action: 'vdcl-reissue',
+      targetId: versionId,
+      adminUserId,
+      step,
+    });
+    return this.documents.issueDocuments(versionId);
+  }
+
+  /**
+   * Issue a step-up code for any other licence action.
+   *
+   * Every action on this screen either grants commercial rights over
+   * someone's voice, stops their work reaching subscribers, or sends their
+   * licence back -- and all of them were a single click. A misplaced click
+   * on `Suspend` cut a contributor off with no confirmation at all.
+   *
+   * The code is bound to the action AND its target, so a code issued to
+   * suspend one licence cannot withdraw another, and a code issued to
+   * suspend cannot be replayed to revoke.
+   */
+  async requestActionOtp(
+    params: { action: VdclAdminAction; targetId: string },
+    adminUserId: string,
+  ) {
+    const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminUserId } });
+    const { destination, channel } = await resolveOtpDestination(admin, this.settings);
+
+    return this.otp.issueForUser(
+      adminUserId,
+      OtpPurpose.VDCL_COUNTERSIGN,
+      destination,
+      adminActionContextHash({ action: params.action, targetId: params.targetId }),
+      channel,
+    );
+  }
+
+  /**
+   * Verify a step-up for a licence action, when step-ups are switched on.
+   *
+   * Gated on the same platform setting as every other admin step-up, so an
+   * admin who turns admin OTP off is not locked out of their own licence
+   * screen by a code they can no longer receive.
+   */
+  private async verifyActionOtp(
+    params: {
+      action: VdclAdminAction;
+      targetId: string;
+      adminUserId: string;
+      step?: VdclStepUp;
+    },
+  ) {
+    if (!(await this.settings.isAdminPayoutOtpEnabled())) {
+      return;
+    }
+    if (!params.step?.otpRequestId || !params.step.code) {
+      throw new UnprocessableEntityException(
+        `OTP verification is required to ${VDCL_ACTION_LABELS[params.action]}`,
+      );
+    }
+    await this.otp.verify({
+      otpRequestId: params.step.otpRequestId,
+      userId: params.adminUserId,
+      purpose: OtpPurpose.VDCL_COUNTERSIGN,
+      code: params.step.code,
+      // Bound to the action and its target, so a code cannot be moved
+      // between actions or between licences.
+      contextHash: adminActionContextHash({
+        action: params.action,
+        targetId: params.targetId,
+      }),
+    });
   }
 
   /**
@@ -192,7 +333,9 @@ export class VdclAdminService {
       await this.otp.verify({
         otpRequestId: step.otpRequestId,
         userId: adminUserId,
-        purpose: OtpPurpose.ADMIN_PAYOUT,
+        // Must match what requestCountersignOtp issued, or every
+        // countersignature fails verification.
+        purpose: OtpPurpose.VDCL_COUNTERSIGN,
         code: step.code,
         // Re-derived from the row as it stands NOW. If the manifest changed
         // since the code was issued, this differs and verification fails
@@ -284,7 +427,12 @@ export class VdclAdminService {
    * Takes effect immediately for new streams -- the rights check reads
    * status live, including on pinned manifest versions.
    */
-  async suspendVersion(versionId: string, adminUserId: string, reason: string) {
+  async suspendVersion(
+    versionId: string,
+    adminUserId: string,
+    reason: string,
+    step?: VdclStepUp,
+  ) {
     const version = await this.prisma.vdclVersion.findUnique({ where: { id: versionId } });
     if (!version) {
       throw new NotFoundException('VDCL version not found');
@@ -294,6 +442,12 @@ export class VdclAdminService {
         `Only an active version can be suspended (this one is ${version.status})`,
       );
     }
+    await this.verifyActionOtp({
+      action: 'vdcl-suspend',
+      targetId: versionId,
+      adminUserId,
+      step,
+    });
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const row = await tx.vdclVersion.update({
@@ -320,7 +474,7 @@ export class VdclAdminService {
   }
 
   /** Lift a suspension. The version returns to ACTIVE and starts granting again. */
-  async reinstateVersion(versionId: string, adminUserId: string) {
+  async reinstateVersion(versionId: string, adminUserId: string, step?: VdclStepUp) {
     const version = await this.prisma.vdclVersion.findUnique({
       where: { id: versionId },
       include: { agreement: { select: { withdrawnAt: true } } },
@@ -338,6 +492,12 @@ export class VdclAdminService {
         'This agreement has been withdrawn by the contributor and cannot be reinstated',
       );
     }
+    await this.verifyActionOtp({
+      action: 'vdcl-reinstate',
+      targetId: versionId,
+      adminUserId,
+      step,
+    });
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const row = await tx.vdclVersion.update({
@@ -364,6 +524,108 @@ export class VdclAdminService {
   }
 
   /**
+   * Revoke Dialect Library's countersignature and send the version back.
+   *
+   * Distinct from both of its neighbours, and the distinction is the point:
+   *
+   * - SUSPEND is an internal compliance hold on a licence that is otherwise
+   *   fine. It is reversible by reinstate and says nothing to the
+   *   contributor.
+   * - WITHDRAW is the CONTRIBUTOR's decision, and is theirs alone.
+   * - REVOKE is Dialect Library saying "we are not countersigning this, and
+   *   here is what to fix". It undoes only OUR signature. The contributor's
+   *   signature and the manifest it was bound to stay on the record -- we do
+   *   not get to erase the fact that they signed -- but the version no
+   *   longer grants anything, and they can compile and sign a fresh one.
+   *
+   * The reason is mandatory and contributor-facing. A rejection someone
+   * cannot act on is just a dead end, and the whole purpose of sending it
+   * back rather than suspending it is to let them address it.
+   */
+  async revokeCountersignature(
+    versionId: string,
+    adminUserId: string,
+    reason: string,
+    step?: VdclStepUp,
+  ) {
+    const trimmed = reason.trim();
+    if (trimmed.length < 3) {
+      throw new BadRequestException('A reason is required so the contributor can address it');
+    }
+
+    const version = await this.prisma.vdclVersion.findUnique({
+      where: { id: versionId },
+      include: { agreement: { select: { activeVersionId: true } } },
+    });
+    if (!version) {
+      throw new NotFoundException('VDCL version not found');
+    }
+    // Revocable from any state where DL has committed, or is about to.
+    // REJECTED is excluded so a second revoke cannot overwrite the first
+    // reason the contributor is already working from.
+    const revocable: VdclVersionStatus[] = [
+      VdclVersionStatus.ACTIVE,
+      VdclVersionStatus.SUSPENDED,
+      VdclVersionStatus.PENDING_COUNTERSIGNATURE,
+    ];
+    if (!revocable.includes(version.status)) {
+      throw new BadRequestException(
+        `Only a countersigned or awaiting-countersignature version can be revoked (this one is ${version.status})`,
+      );
+    }
+    await this.verifyActionOtp({
+      action: 'vdcl-revoke',
+      targetId: versionId,
+      adminUserId,
+      step,
+    });
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.vdclVersion.update({
+        where: { id: versionId },
+        data: {
+          status: VdclVersionStatus.REJECTED,
+          rejectionReason: trimmed,
+          rejectedAt: new Date(),
+          // Our signature is withdrawn; theirs is not touched.
+          countersignedAt: null,
+          countersignedById: null,
+        },
+      });
+      // Clear the pointer if this WAS the active version, so the rights
+      // check denies immediately rather than continuing to resolve a
+      // version that no longer grants anything.
+      if (version.agreement.activeVersionId === versionId) {
+        await tx.vdclAgreement.update({
+          where: { id: version.agreementId },
+          data: { activeVersionId: null },
+        });
+      }
+      await tx.vdclSignatureEvent.create({
+        data: {
+          versionId,
+          actorId: adminUserId,
+          eventType: 'countersign_revoked',
+          metadata: { reason: trimmed },
+        },
+      });
+      await tx.vdclAuditEvent.create({
+        data: {
+          agreementId: version.agreementId,
+          versionId,
+          actorId: adminUserId,
+          eventType: 'status_change',
+          detail: `countersignature revoked: ${trimmed}`,
+        },
+      });
+      return row;
+    });
+
+    await this.coverageNotifier.notifyForAgreement(version.agreementId, 'suspended');
+    return updated;
+  }
+
+  /**
    * Record a contributor's withdrawal.
    *
    * Withdrawal is the CONTRIBUTOR's decision. This admin route exists to
@@ -374,7 +636,12 @@ export class VdclAdminService {
    * It is prospective: it stops new access immediately but cannot retract a
    * model already trained or a dataset already delivered.
    */
-  async withdrawAgreement(agreementId: string, adminUserId: string, reason: string) {
+  async withdrawAgreement(
+    agreementId: string,
+    adminUserId: string,
+    reason: string,
+    step?: VdclStepUp,
+  ) {
     const agreement = await this.prisma.vdclAgreement.findUnique({
       where: { id: agreementId },
     });
@@ -384,6 +651,14 @@ export class VdclAdminService {
     if (agreement.withdrawnAt) {
       return agreement; // idempotent -- already withdrawn
     }
+    // After the idempotency check, so re-confirming an already-withdrawn
+    // agreement does not demand a code for a write that will not happen.
+    await this.verifyActionOtp({
+      action: 'vdcl-withdraw',
+      targetId: agreementId,
+      adminUserId,
+      step,
+    });
 
     const updated = await this.prisma.$transaction(async (tx) => {
       const row = await tx.vdclAgreement.update({

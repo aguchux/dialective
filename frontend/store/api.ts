@@ -2896,6 +2896,9 @@ export interface VdclVersionSummary {
   withdrawn: boolean;
   recordingCount: number | null;
   blockerMessage: string | null;
+  /** Why Dialect Library sent this version back, if it did. */
+  rejectionReason: string | null;
+  rejectedAt: string | null;
   signedAt: string | null;
   countersignedAt: string | null;
   createdAt: string;
@@ -2973,6 +2976,36 @@ export interface StartVdclDraftResult {
   manifestHash: string | null;
 }
 
+/** Licence actions that require a confirmation code. */
+export type VdclAdminActionName =
+  | 'vdcl-suspend'
+  | 'vdcl-reinstate'
+  | 'vdcl-revoke'
+  | 'vdcl-withdraw'
+  | 'vdcl-reissue';
+
+/** The step-up every guarded licence action carries. */
+export interface VdclStepUp {
+  otpRequestId?: string;
+  code?: string;
+}
+
+/** A version as the ADMIN agreements list describes it. */
+export interface VdclAdminVersionSummary {
+  id: string;
+  version: number;
+  status: VdclVersionStatus;
+  signedAt: string | null;
+  countersignedAt: string | null;
+  manifestHash: string | null;
+  rejectionReason: string | null;
+  rejectedAt: string | null;
+  /** Non-null once documents have been issued -- gates the certificate view. */
+  pdfKey: string | null;
+  pngKey: string | null;
+  _count: { grants: number };
+}
+
 export interface VdclAgreementSummary {
   id: string;
   licenceKey: string;
@@ -2980,15 +3013,13 @@ export interface VdclAgreementSummary {
   withdrawnAt: string | null;
   activeVersionId: string | null;
   createdAt: string;
-  activeVersion: {
-    id: string;
-    version: number;
-    status: VdclVersionStatus;
-    signedAt: string | null;
-    countersignedAt: string | null;
-    manifestHash: string | null;
-    _count: { grants: number };
-  } | null;
+  activeVersion: VdclAdminVersionSummary | null;
+  /**
+   * The most recent version whatever its status. activeVersion is null
+   * until countersignature, so it could never show the one version that
+   * actually needs an admin.
+   */
+  latestVersion: VdclAdminVersionSummary | null;
   _count: { versions: number };
 }
 
@@ -6667,30 +6698,75 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['VdclAgreements', 'VdclManifest'],
     }),
-    suspendVdclVersion: builder.mutation<unknown, { id: string; reason: string }>({
-      query: ({ id, reason }) => ({
+    suspendVdclVersion: builder.mutation<
+      unknown,
+      { id: string; reason: string } & VdclStepUp
+    >({
+      query: ({ id, ...body }) => ({
         url: `/admin/vdcl/versions/${id}/suspend`,
         method: 'POST',
-        body: { reason },
+        body,
       }),
       invalidatesTags: ['VdclAgreements'],
     }),
-    reinstateVdclVersion: builder.mutation<unknown, string>({
-      query: (id) => ({ url: `/admin/vdcl/versions/${id}/reinstate`, method: 'POST' }),
+    /**
+     * Admin's own copy of a licence document. Distinct from
+     * getVdclDocumentLink, which hits the contributor route and would 403
+     * for an admin who is not that contributor.
+     */
+    getAdminVdclDocumentLink: builder.query<VdclDocumentLink, { id: string; kind: 'pdf' | 'png' }>({
+      query: ({ id, kind }) => `/admin/vdcl/versions/${id}/documents/${kind}`,
+    }),
+    /**
+     * Issue a step-up code for a licence action other than countersignature.
+     * Bound server-side to the action AND its target, so a code cannot be
+     * moved between actions or between licences.
+     */
+    requestVdclActionOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      { scope: 'versions' | 'agreements'; id: string; action: VdclAdminActionName }
+    >({
+      query: ({ scope, id, action }) => ({
+        url: `/admin/vdcl/${scope}/${id}/action-otp`,
+        method: 'POST',
+        body: { action },
+      }),
+    }),
+    revokeVdclCountersignature: builder.mutation<
+      unknown,
+      { id: string; reason: string } & VdclStepUp
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/admin/vdcl/versions/${id}/revoke-countersignature`,
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['VdclAgreements', 'VdclMaker'],
+    }),
+    reinstateVdclVersion: builder.mutation<unknown, { id: string } & VdclStepUp>({
+      query: ({ id, ...body }) => ({
+        url: `/admin/vdcl/versions/${id}/reinstate`,
+        method: 'POST',
+        body,
+      }),
       invalidatesTags: ['VdclAgreements'],
     }),
-    withdrawVdclAgreement: builder.mutation<unknown, { id: string; reason: string }>({
-      query: ({ id, reason }) => ({
+    withdrawVdclAgreement: builder.mutation<
+      unknown,
+      { id: string; reason: string } & VdclStepUp
+    >({
+      query: ({ id, ...body }) => ({
         url: `/admin/vdcl/agreements/${id}/withdraw`,
         method: 'POST',
-        body: { reason },
+        body,
       }),
       invalidatesTags: ['VdclAgreements'],
     }),
-    reissueVdclDocuments: builder.mutation<unknown, string>({
-      query: (id) => ({
+    reissueVdclDocuments: builder.mutation<unknown, { id: string } & VdclStepUp>({
+      query: ({ id, ...body }) => ({
         url: `/admin/vdcl/versions/${id}/reissue-documents`,
         method: 'POST',
+        body,
       }),
       invalidatesTags: ['VdclAgreements'],
     }),
@@ -7130,7 +7206,10 @@ export const {
   useRequestVdclCountersignOtpMutation,
   useCountersignVdclVersionMutation,
   useSuspendVdclVersionMutation,
+  useLazyGetAdminVdclDocumentLinkQuery,
   useReinstateVdclVersionMutation,
+  useRequestVdclActionOtpMutation,
+  useRevokeVdclCountersignatureMutation,
   useWithdrawVdclAgreementMutation,
   useReissueVdclDocumentsMutation,
   useLazyGetVdclDocumentLinkQuery,

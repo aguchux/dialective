@@ -1,7 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertCircle, BadgeCheck, FileSignature, KeyRound, PauseCircle, RotateCcw } from 'lucide-react';
+import {
+  AlertCircle,
+  BadgeCheck,
+  FileSignature,
+  KeyRound,
+  PauseCircle,
+  RotateCcw,
+  ShieldX,
+} from 'lucide-react';
+import { OtpGuardedAction } from './OtpGuardedAction';
 import { cardClass } from '@/components/dashboard/shared';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { alertTone, fieldClass, primaryButton, secondaryButton } from '@/components/vdcl/vdcl-ui';
@@ -9,21 +18,33 @@ import {
   normalizeErrorMessage,
   useCountersignVdclVersionMutation,
   useGetVdclAgreementsQuery,
+  useLazyGetAdminVdclDocumentLinkQuery,
   useReinstateVdclVersionMutation,
   useReissueVdclDocumentsMutation,
+  useRequestVdclActionOtpMutation,
   useRequestVdclCountersignOtpMutation,
+  useRevokeVdclCountersignatureMutation,
   useSuspendVdclVersionMutation,
   useWithdrawVdclAgreementMutation,
+  type VdclAdminActionName,
   type VdclAgreementSummary,
 } from '@/store/api';
 
 /**
  * Admin lifecycle control over VDCL agreements.
  *
- * The backend has had activate/suspend/reinstate/withdraw since Phase 0,
- * but nothing in the UI called them -- countersignature, the single most
- * consequential action in the product, was reachable only by hand-crafting
- * an authenticated POST. This is that surface.
+ * Countersignature is the point of this screen, and it used to be the one
+ * thing it could not do. The row rendered from `activeVersion`, which is
+ * null until countersignature happens -- so a licence sitting in
+ * PENDING_COUNTERSIGNATURE showed "no active version" and offered a
+ * withdrawal form as its only action. An admin arriving to countersign was
+ * shown the control for the contributor's own decision instead.
+ *
+ * So the row now renders from the latest version whatever its status, and
+ * the actions are ordered by what the licence actually needs: countersign
+ * first when it is waiting, then the certificate once issued, then the
+ * corrective actions, with withdrawal last and folded away because it is
+ * not ours to take.
  *
  * Contributor identity is visible here. Dialect Library sits in the middle
  * and is the only party that sees both halves; none of this may be reused
@@ -90,17 +111,46 @@ function AgreementRow({
   const [countersign, signState] = useCountersignVdclVersionMutation();
   const [suspend, suspendState] = useSuspendVdclVersionMutation();
   const [reinstate, reinstateState] = useReinstateVdclVersionMutation();
+  const [revoke, revokeState] = useRevokeVdclCountersignatureMutation();
   const [withdraw, withdrawState] = useWithdrawVdclAgreementMutation();
   const [reissue, reissueState] = useReissueVdclDocumentsMutation();
+  const [fetchDocument, documentState] = useLazyGetAdminVdclDocumentLinkQuery();
+  const [requestActionOtp] = useRequestVdclActionOtpMutation();
 
   const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [reason, setReason] = useState('');
+  const [revokeReason, setRevokeReason] = useState('');
   const [confirmWithdraw, setConfirmWithdraw] = useState(false);
 
-  const version = agreement.activeVersion;
+  // The version to act on: the active one when there is one, otherwise the
+  // latest. Reading activeVersion alone is what hid every licence awaiting
+  // countersignature from this panel.
+  const version = agreement.activeVersion ?? agreement.latestVersion;
   const status = version?.status;
   const pendingCountersign = status === 'PENDING_COUNTERSIGNATURE';
+  const hasDocuments = Boolean(version?.pdfKey || version?.pngKey);
+
+  /**
+   * Issues a code for a licence action. Surfaces a failure as the panel
+   * error rather than leaving the control stuck on "Sending code...".
+   */
+  function requestCode(scope: 'versions' | 'agreements', id: string) {
+    return (action: VdclAdminActionName) => {
+      onError(null);
+      onNotice(null);
+      return requestActionOtp({ scope, id, action })
+        .unwrap()
+        .then((r) => {
+          onNotice('Confirmation code sent.');
+          return r.otpRequestId;
+        })
+        .catch((err) => {
+          onError(normalizeErrorMessage(err, 'Could not send the confirmation code.'));
+          throw err;
+        });
+    };
+  }
 
   function run(fn: () => Promise<unknown>, success: string, fallback: string) {
     onError(null);
@@ -108,6 +158,20 @@ function AgreementRow({
     return fn()
       .then(() => onNotice(success))
       .catch((err) => onError(normalizeErrorMessage(err, fallback)));
+  }
+
+  /** Opens the signed document in a new tab via its short-lived signed URL. */
+  function openDocument(kind: 'pdf' | 'png') {
+    return run(
+      () =>
+        fetchDocument({ id: version!.id, kind })
+          .unwrap()
+          .then((link) => {
+            window.open(link.url, '_blank', 'noopener,noreferrer');
+          }),
+      `Opened the ${kind.toUpperCase()}.`,
+      `Could not open the ${kind.toUpperCase()}.`,
+    );
   }
 
   return (
@@ -121,7 +185,7 @@ function AgreementRow({
           </span>
         </div>
         <StatusPill
-          status={agreement.withdrawnAt ? 'WITHDRAWN' : (status ?? 'NO ACTIVE VERSION')}
+          status={agreement.withdrawnAt ? 'WITHDRAWN' : (status ?? 'NO VERSION YET')}
         />
       </div>
 
@@ -142,8 +206,9 @@ function AgreementRow({
           </p>
           <p className="mt-1 text-sm leading-relaxed text-muted">
             The contributor signed{' '}
-            {version?.signedAt ? new Date(version.signedAt).toLocaleDateString() : ''}. This grants
-            commercial rights over their recordings and issues their licence documents.
+            {version?.signedAt ? new Date(version.signedAt).toLocaleDateString() : ''}. Countersigning
+            on behalf of Golojan Technologies LLC grants commercial rights over their recordings and
+            issues their licence documents.
           </p>
 
           {!otpRequestId ? (
@@ -213,6 +278,47 @@ function AgreementRow({
         </div>
       ) : null}
 
+      {/* Why this version was sent back. Shown to the admin too, so whoever
+          picks it up next can see what was asked for without digging
+          through the audit log. */}
+      {version?.rejectionReason ? (
+        <div className={`mt-4 rounded-lg px-3.5 py-3 text-sm ${alertTone.warning}`}>
+          <p className="font-black">Countersignature revoked</p>
+          <p className="mt-1 leading-relaxed">{version.rejectionReason}</p>
+          <p className="mt-1 text-xs opacity-80">
+            The contributor can see this and sign a new version.
+            {version.rejectedAt ? ` Revoked ${new Date(version.rejectedAt).toLocaleString()}.` : ''}
+          </p>
+        </div>
+      ) : null}
+
+      {/* The certificate, exactly as the contributor sees it. Only after
+          documents exist -- they are issued at countersignature, so before
+          that there is nothing to show. */}
+      {hasDocuments ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <ActionButton
+            className={primaryButton}
+            disabled={documentState.isLoading}
+            pending={documentState.isLoading}
+            pendingLabel="Opening..."
+            onClick={() => openDocument('png')}
+          >
+            <span className="inline-flex items-center gap-2">
+              <BadgeCheck className="size-4" aria-hidden="true" />
+              View certificate
+            </span>
+          </ActionButton>
+          <ActionButton
+            className={secondaryButton}
+            disabled={documentState.isLoading}
+            onClick={() => openDocument('pdf')}
+          >
+            Download licence PDF
+          </ActionButton>
+        </div>
+      ) : null}
+
       {status === 'ACTIVE' || status === 'SUSPENDED' ? (
         <div className="mt-4 grid gap-2">
           <label className="text-xs font-bold text-ink" htmlFor={`reason-${agreement.id}`}>
@@ -225,76 +331,117 @@ function AgreementRow({
             onChange={(e) => setReason(e.target.value)}
             placeholder="e.g. disputed ownership, compliance review"
           />
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-end gap-3">
             {status === 'ACTIVE' ? (
-              <ActionButton
-                className={secondaryButton}
-                disabled={reason.trim().length < 3 || suspendState.isLoading}
-                pending={suspendState.isLoading}
-                onClick={() =>
+              <OtpGuardedAction
+                action="vdcl-suspend"
+                disabled={reason.trim().length < 3}
+                icon={<PauseCircle className="size-4" aria-hidden="true" />}
+                label="Suspend"
+                onConfirm={(step) =>
                   run(
-                    () => suspend({ id: version!.id, reason }).unwrap().then(() => setReason('')),
+                    () =>
+                      suspend({ id: version!.id, reason, ...step })
+                        .unwrap()
+                        .then(() => setReason('')),
                     'Suspended. Streaming stops immediately.',
                     'Could not suspend this licence.',
                   )
                 }
-              >
-                <span className="inline-flex items-center gap-2">
-                  <PauseCircle className="size-4" aria-hidden="true" />
-                  Suspend
-                </span>
-              </ActionButton>
+                onRequestCode={requestCode('versions', version!.id)}
+                pending={suspendState.isLoading}
+              />
             ) : (
-              <ActionButton
-                className={secondaryButton}
-                disabled={reinstateState.isLoading}
-                pending={reinstateState.isLoading}
-                onClick={() =>
+              <OtpGuardedAction
+                action="vdcl-reinstate"
+                icon={<RotateCcw className="size-4" aria-hidden="true" />}
+                label="Reinstate"
+                onConfirm={(step) =>
                   run(
-                    () => reinstate(version!.id).unwrap(),
+                    () => reinstate({ id: version!.id, ...step }).unwrap(),
                     'Reinstated. The licence grants again.',
                     'Could not reinstate this licence.',
                   )
                 }
-              >
-                <span className="inline-flex items-center gap-2">
-                  <RotateCcw className="size-4" aria-hidden="true" />
-                  Reinstate
-                </span>
-              </ActionButton>
+                onRequestCode={requestCode('versions', version!.id)}
+                pending={reinstateState.isLoading}
+              />
             )}
 
-            <ActionButton
-              className={secondaryButton}
-              disabled={reissueState.isLoading}
-              pending={reissueState.isLoading}
-              onClick={() =>
+            <OtpGuardedAction
+              action="vdcl-reissue"
+              label="Re-issue documents"
+              onConfirm={(step) =>
                 run(
-                  () => reissue(version!.id).unwrap(),
+                  () => reissue({ id: version!.id, ...step }).unwrap(),
                   'Documents re-issued. The stored hashes have changed.',
                   'Could not re-issue the documents.',
                 )
               }
-            >
-              Re-issue documents
-            </ActionButton>
+              onRequestCode={requestCode('versions', version!.id)}
+              pending={reissueState.isLoading}
+            />
           </div>
         </div>
       ) : null}
 
-      {/* Withdrawal is the CONTRIBUTOR's decision. This actions one received
-          off-platform until the contributor control ships -- it is not an
-          admin revoke tool, which is what suspend is for. The confirm step
-          exists so nobody reaches for it by accident. */}
-      {!agreement.withdrawnAt ? (
+      {/* Revoke: undo OUR signature and tell the contributor what to fix.
+          Distinct from suspend (an internal hold that says nothing to them)
+          and from withdrawal (theirs alone). The reason is mandatory
+          because a rejection they cannot act on is a dead end. */}
+      {status === 'ACTIVE' || status === 'SUSPENDED' || pendingCountersign ? (
         <details className="mt-4 border-t border-line pt-3">
+          <summary className="cursor-pointer text-sm font-bold text-muted">
+            Revoke countersignature and send back
+          </summary>
+          <p className="mt-2 text-sm leading-relaxed text-muted">
+            Withdraws Dialect Library&apos;s signature and returns the licence to the contributor
+            with your reason. Their own signature stays on the record; the licence grants nothing
+            until they address this and sign a new version.
+          </p>
+          <div className="mt-2 flex flex-wrap items-end gap-3">
+            <input
+              className={`${fieldClass} max-w-md`}
+              value={revokeReason}
+              onChange={(e) => setRevokeReason(e.target.value)}
+              placeholder="What the contributor needs to fix"
+            />
+            <OtpGuardedAction
+              action="vdcl-revoke"
+              disabled={revokeReason.trim().length < 3}
+              icon={<ShieldX className="size-4" aria-hidden="true" />}
+              label="Revoke countersignature"
+              onConfirm={(step) =>
+                run(
+                  () =>
+                    revoke({ id: version!.id, reason: revokeReason, ...step })
+                      .unwrap()
+                      .then(() => setRevokeReason('')),
+                  'Countersignature revoked. The contributor can see why and sign a new version.',
+                  'Could not revoke the countersignature.',
+                )
+              }
+              onRequestCode={requestCode('versions', version!.id)}
+              pending={revokeState.isLoading}
+              pendingLabel="Revoking..."
+            />
+          </div>
+        </details>
+      ) : null}
+
+      {/* Withdrawal is the CONTRIBUTOR's decision. This actions one received
+          off-platform -- it is not an admin revoke tool, which is what the
+          control above is for. The confirm step exists so nobody reaches
+          for it by accident. */}
+      {!agreement.withdrawnAt ? (
+        <details className="mt-3 border-t border-line pt-3">
           <summary className="cursor-pointer text-sm font-bold text-muted">
             Action a withdrawal request
           </summary>
           <p className="mt-2 text-sm leading-relaxed text-muted">
             Only for a withdrawal the contributor asked for off-platform (support ticket, email).
-            To revoke a licence on Dialect Library&apos;s own initiative, use suspend instead.
-            Withdrawal cannot be reversed here.
+            To revoke on Dialect Library&apos;s own initiative, use the control above. Withdrawal
+            cannot be reversed here.
           </p>
           <label className="mt-2 flex cursor-pointer items-start gap-2 text-sm text-ink">
             <input
@@ -305,21 +452,21 @@ function AgreementRow({
             />
             I confirm this contributor requested withdrawal.
           </label>
-          <div className="mt-2 flex flex-wrap items-end gap-2">
+          <div className="mt-2 flex flex-wrap items-end gap-3">
             <input
               className={`${fieldClass} max-w-md`}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Where the request came from"
             />
-            <ActionButton
-              className={secondaryButton}
-              disabled={!confirmWithdraw || reason.trim().length < 3 || withdrawState.isLoading}
-              pending={withdrawState.isLoading}
-              onClick={() =>
+            <OtpGuardedAction
+              action="vdcl-withdraw"
+              disabled={!confirmWithdraw || reason.trim().length < 3}
+              label="Record withdrawal"
+              onConfirm={(step) =>
                 run(
                   () =>
-                    withdraw({ id: agreement.id, reason })
+                    withdraw({ id: agreement.id, reason, ...step })
                       .unwrap()
                       .then(() => {
                         setReason('');
@@ -329,9 +476,9 @@ function AgreementRow({
                   'Could not record the withdrawal.',
                 )
               }
-            >
-              Record withdrawal
-            </ActionButton>
+              onRequestCode={requestCode('agreements', agreement.id)}
+              pending={withdrawState.isLoading}
+            />
           </div>
         </details>
       ) : null}
@@ -347,7 +494,9 @@ function StatusPill({ status }: { status: string }) {
         ? 'bg-danger/15 text-danger'
         : status === 'SUSPENDED'
           ? 'bg-warning/15 text-warning'
-          : 'bg-surface-muted text-muted';
+          : status === 'PENDING_COUNTERSIGNATURE'
+            ? 'bg-accent-soft text-accent'
+            : 'bg-surface-muted text-muted';
   return (
     <span className={`rounded-full px-2.5 py-1 text-xs font-black uppercase tracking-wide ${tone}`}>
       {status.replace(/_/g, ' ').toLowerCase()}

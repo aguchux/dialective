@@ -815,6 +815,16 @@ function otpCopyForPurpose(purpose: OtpPurpose): { subject: string; intro: strin
         intro:
           'Enter this code to sign your Voice Dataset Contributor Licence. Only use it if you are signing your licence right now.',
       };
+    case 'VDCL_COUNTERSIGN':
+      // Names the counterparty, not just the act. Countersigning is
+      // executed on behalf of the parent company, and an admin receiving
+      // this code is binding Golojan Technologies LLC to a commercial
+      // licence over someone's voice -- the email should say so.
+      return {
+        subject: 'Countersign a contributor licence for Golojan Technologies LLC',
+        intro:
+          'Enter this code to countersign a Voice Dataset Contributor Licence on behalf of Golojan Technologies LLC. This grants commercial rights over a contributor’s recordings and issues their licence documents.',
+      };
   }
 }
 

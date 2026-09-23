@@ -667,6 +667,7 @@ enum OtpPurpose {
   SUBSCRIBER_LOGIN
   ACCOUNT_CLOSE
   VDCL_SIGN // step-up confirming a contributor's signature on a VDCL version; bound to the exact manifest hash and granted purposes being signed (see vdcl-signing-context.util.ts)
+  VDCL_COUNTERSIGN // step-up confirming Dialect Library's countersignature, executed on behalf of Golojan Technologies LLC. Previously borrowed ADMIN_PAYOUT, whose email said nothing about what was being authorised
 }
 
 enum ManualPhoneVerificationStatus {
@@ -5173,6 +5174,18 @@ model VdclVersion {
   /// Distinct from `version` -- the legal text can change without the
   /// dataset changing, and vice versa.
   termsVersion String?
+
+  /// Why Dialect Library refused or revoked its countersignature, in words
+  /// the CONTRIBUTOR reads. Unlike a suspension, which is an internal
+  /// compliance action, a revoked countersignature is an instruction to the
+  /// contributor to fix something and sign again -- so the reason has to
+  /// reach them, not just the audit log. Null on every version that was
+  /// never rejected.
+  rejectionReason String?
+  /// When the countersignature was refused or revoked. Kept separate from
+  /// status so a later re-signed version does not erase the fact that an
+  /// earlier one was sent back.
+  rejectedAt DateTime?
 
   signedAt          DateTime? // contributor signature
   countersignedAt   DateTime? // Dialect Library countersignature

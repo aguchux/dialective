@@ -1,5 +1,6 @@
 import {
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -33,6 +34,40 @@ export class VdclReasonDto {
   @MinLength(3)
   @MaxLength(500)
   reason!: string;
+
+  /**
+   * Step-up, same optional-at-the-DTO-level reasoning as CountersignVdclDto
+   * below: the gate is the adminPayoutOtpEnabled platform setting, and the
+   * service refuses when it is on and these are absent.
+   */
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  otpRequestId?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(4, 10)
+  code?: string;
+}
+
+/** A licence action that takes no reason, but still takes a step-up. */
+export class VdclStepUpDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  otpRequestId?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(4, 10)
+  code?: string;
+}
+
+/** Which action a requested step-up code is for. */
+export class RequestVdclActionOtpDto {
+  @IsIn(['vdcl-suspend', 'vdcl-reinstate', 'vdcl-revoke', 'vdcl-withdraw', 'vdcl-reissue'])
+  action!: 'vdcl-suspend' | 'vdcl-reinstate' | 'vdcl-revoke' | 'vdcl-withdraw' | 'vdcl-reissue';
 }
 
 /**

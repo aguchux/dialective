@@ -145,12 +145,28 @@ describe('CompilationTrackerService', () => {
     expect(states.slice(6).every((s) => s === 'pending')).toBe(true);
   });
 
-  it('explains a rejected version rather than showing it as merely stopped', async () => {
+  it('puts a rejected version back in the contributor hands, not support', async () => {
+    // Dialect Library sends a version back WITH a reason precisely so the
+    // contributor can address it and sign again. Telling them to wait on us
+    // stranded them in the one state they can resolve themselves.
     const { service } = makeService(
       defaultVersion({ status: VdclVersionStatus.REJECTED }),
     );
     const result = await service.track('v1', 'user-1');
-    expect(result.nextAction).toMatch(/support/i);
+    expect(result.waitingOn).toBe('you');
+    expect(result.nextAction).toMatch(/sign a new version/i);
+  });
+
+  it('surfaces the revocation reason as the failure to act on', async () => {
+    // It has nothing to do with the compilation job, so it must not be
+    // filtered out by the job-failed check.
+    const { service } = makeService(
+      defaultVersion({
+        status: VdclVersionStatus.REJECTED,
+        rejectionReason: 'Dialect tag looks wrong',
+      }),
+    );
+    expect((await service.track('v1', 'user-1')).failureReason).toBe('Dialect tag looks wrong');
   });
 
   it('explains a suspended licence', async () => {

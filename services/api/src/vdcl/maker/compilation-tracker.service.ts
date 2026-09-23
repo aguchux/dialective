@@ -80,7 +80,13 @@ export class CompilationTrackerService {
       waitingOn: waiting.waitingOn,
       nextAction: waiting.nextAction,
       blockerMessage: version.compilationJob?.blockerMessage ?? null,
-      failureReason: failed ? version.compilationJob?.failureReason ?? null : null,
+      // A revoked countersignature is a failure the contributor has to act
+      // on, and it has nothing to do with the compilation job -- so it takes
+      // precedence here. Without this a sent-back licence showed the
+      // tracker sitting at a stage with no explanation anywhere.
+      failureReason:
+        version.rejectionReason ??
+        (failed ? version.compilationJob?.failureReason ?? null : null),
       estimatedCompletionAt: version.compilationJob?.estimatedCompletionAt ?? null,
       compiledAt: version.manifest?.compiledAt ?? null,
       recordingCount: version.manifest?.recordingCount ?? null,
@@ -152,9 +158,13 @@ export class CompilationTrackerService {
       case VdclVersionStatus.ACTIVE:
         return { waitingOn: 'nobody', nextAction: null };
       case VdclVersionStatus.REJECTED:
+        // The move is the contributor's, not ours. Dialect Library sent
+        // this back with a reason precisely so they can address it and sign
+        // again -- telling them to wait on us, or to contact support, would
+        // strand them in the one state they are able to resolve themselves.
         return {
-          waitingOn: 'dialect_library',
-          nextAction: 'This version did not pass compliance review. Contact support.',
+          waitingOn: 'you',
+          nextAction: 'Dialect Library sent this back. Address the reason below, then create and sign a new version.',
         };
       case VdclVersionStatus.SUSPENDED:
         return {
@@ -195,6 +205,12 @@ export class CompilationTrackerService {
       withdrawn: Boolean(v.agreement.withdrawnAt),
       recordingCount: v.manifest?.recordingCount ?? null,
       blockerMessage: v.compilationJob?.blockerMessage ?? null,
+      // Why Dialect Library sent this version back. Without it a rejected
+      // licence just reads REJECTED, and the contributor has nothing to
+      // act on -- which defeats the point of sending it back rather than
+      // suspending it.
+      rejectionReason: v.rejectionReason,
+      rejectedAt: v.rejectedAt,
       signedAt: v.signedAt,
       countersignedAt: v.countersignedAt,
       createdAt: v.createdAt,

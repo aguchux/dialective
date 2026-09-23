@@ -194,7 +194,7 @@ describe('VdclAdminService', () => {
         expect(otp.verify).toHaveBeenCalledWith(
           expect.objectContaining({
             userId: 'admin-1',
-            purpose: 'ADMIN_PAYOUT',
+            purpose: 'VDCL_COUNTERSIGN',
             contextHash: expect.any(String),
           }),
         );
@@ -251,7 +251,7 @@ describe('VdclAdminService', () => {
 
         expect(otp.issueForUser).toHaveBeenCalledWith(
           'admin-1',
-          'ADMIN_PAYOUT',
+          'VDCL_COUNTERSIGN',
           'admin@example.com',
           expect.any(String),
           'EMAIL',
@@ -385,6 +385,304 @@ describe('VdclAdminService', () => {
 
       expect(tx.vdclVersion.update).not.toHaveBeenCalled();
       expect(tx.vdclAgreement.update).toHaveBeenCalled();
+    });
+  });
+
+  describe('listAgreements', () => {
+    /**
+     * The bug this panel existed to expose. activeVersionId is only set AT
+     * countersignature, so reading activeVersion alone meant the one state
+     * that needs an admin -- PENDING_COUNTERSIGNATURE -- was invisible, and
+     * the UI offered a withdrawal form for the licence it should have been
+     * countersigning.
+     */
+    it('surfaces a version awaiting countersignature even with no active version', async () => {
+      const { service, prisma } = makeService();
+      prisma.vdclAgreement.findMany.mockResolvedValue([
+        {
+          id: 'a1',
+          licenceKey: 'VDCL-NG-1',
+          activeVersionId: null,
+          activeVersion: null,
+          versions: [{ id: 'v1', version: 1, status: 'PENDING_COUNTERSIGNATURE' }],
+          _count: { versions: 1 },
+        },
+      ]);
+
+      const [row] = await service.listAgreements({});
+
+      expect(row.activeVersion).toBeNull();
+      expect(row.latestVersion).toMatchObject({
+        id: 'v1',
+        status: 'PENDING_COUNTERSIGNATURE',
+      });
+      // The raw relation is not leaked alongside the resolved field.
+      expect(row).not.toHaveProperty('versions');
+    });
+
+    it('still reports the active version when there is one', async () => {
+      const { service, prisma } = makeService();
+      prisma.vdclAgreement.findMany.mockResolvedValue([
+        {
+          id: 'a1',
+          licenceKey: 'VDCL-NG-1',
+          activeVersionId: 'v2',
+          activeVersion: { id: 'v2', version: 2, status: 'ACTIVE' },
+          versions: [{ id: 'v2', version: 2, status: 'ACTIVE' }],
+          _count: { versions: 2 },
+        },
+      ]);
+
+      const [row] = await service.listAgreements({});
+
+      expect(row.activeVersion).toMatchObject({ id: 'v2' });
+      expect(row.latestVersion).toMatchObject({ id: 'v2' });
+    });
+
+    it('reports no latest version for an agreement with none', async () => {
+      const { service, prisma } = makeService();
+      prisma.vdclAgreement.findMany.mockResolvedValue([
+        {
+          id: 'a1',
+          licenceKey: 'VDCL-NG-1',
+          activeVersionId: null,
+          activeVersion: null,
+          versions: [],
+          _count: { versions: 0 },
+        },
+      ]);
+
+      const [row] = await service.listAgreements({});
+
+      expect(row.latestVersion).toBeNull();
+    });
+  });
+
+  /**
+   * Every control on the licence screen used to be a single click.
+   * Suspending cut a contributor off, revoking sent their licence back,
+   * re-issuing changed what their certificate verifies against -- all with
+   * no confirmation. These lock the step-up in place.
+   */
+  describe('step-up on every licence action', () => {
+    const activeVersion = {
+      id: 'v1',
+      agreementId: 'a1',
+      status: 'ACTIVE',
+      agreement: { activeVersionId: 'v1', withdrawnAt: null },
+    };
+
+    it('refuses to suspend without a code when step-ups are on', async () => {
+      const { service } = makeService({ version: activeVersion, otpEnabled: true });
+
+      await expect(service.suspendVersion('v1', 'admin-1', 'compliance')).rejects.toThrow(
+        /OTP verification is required to suspend/i,
+      );
+    });
+
+    it('refuses to revoke without a code when step-ups are on', async () => {
+      const { service } = makeService({ version: activeVersion, otpEnabled: true });
+
+      await expect(
+        service.revokeCountersignature('v1', 'admin-1', 'dialect wrong'),
+      ).rejects.toThrow(/OTP verification is required to revoke/i);
+    });
+
+    it('refuses to re-issue documents without a code when step-ups are on', async () => {
+      const { service } = makeService({ version: activeVersion, otpEnabled: true });
+
+      await expect(service.reissueDocuments('v1', 'admin-1')).rejects.toThrow(
+        /OTP verification is required to re-issue/i,
+      );
+    });
+
+    it('refuses to withdraw without a code when step-ups are on', async () => {
+      const { service } = makeService({
+        version: activeVersion,
+        agreement: { id: 'a1', withdrawnAt: null },
+        otpEnabled: true,
+      });
+
+      await expect(service.withdrawAgreement('a1', 'admin-1', 'support ticket')).rejects.toThrow(
+        /OTP verification is required to record this withdrawal/i,
+      );
+    });
+
+    it('binds the code to the action and the target', async () => {
+      // A code issued to suspend one licence must not revoke it, and must
+      // not act on a different licence.
+      const { service, otp } = makeService({ version: activeVersion, otpEnabled: true });
+
+      await service.suspendVersion('v1', 'admin-1', 'compliance', {
+        otpRequestId: 'otp-1',
+        code: '123456',
+      });
+
+      const suspendHash = otp.verify.mock.calls[0][0].contextHash;
+
+      const revokeRun = makeService({ version: activeVersion, otpEnabled: true });
+      await revokeRun.service.revokeCountersignature('v1', 'admin-1', 'reason', {
+        otpRequestId: 'otp-1',
+        code: '123456',
+      });
+      const revokeHash = revokeRun.otp.verify.mock.calls[0][0].contextHash;
+
+      const otherTarget = makeService({
+        version: { ...activeVersion, id: 'v2' },
+        otpEnabled: true,
+      });
+      await otherTarget.service.suspendVersion('v2', 'admin-1', 'compliance', {
+        otpRequestId: 'otp-1',
+        code: '123456',
+      });
+      const otherHash = otherTarget.otp.verify.mock.calls[0][0].contextHash;
+
+      expect(suspendHash).not.toEqual(revokeHash);
+      expect(suspendHash).not.toEqual(otherHash);
+    });
+
+    it('lets the action through when step-ups are switched off', async () => {
+      // The gate is the platform setting. An admin who turns admin OTP off
+      // must not be locked out of their own licence screen.
+      const { service, tx } = makeService({ version: activeVersion, otpEnabled: false });
+
+      await service.suspendVersion('v1', 'admin-1', 'compliance');
+
+      expect(tx.vdclVersion.update).toHaveBeenCalled();
+    });
+
+    it('does not demand a code to re-confirm an already-withdrawn agreement', async () => {
+      // Idempotent, so there is no write to guard.
+      const { service } = makeService({
+        agreement: { id: 'a1', withdrawnAt: new Date() },
+        otpEnabled: true,
+      });
+
+      await expect(
+        service.withdrawAgreement('a1', 'admin-1', 'support ticket'),
+      ).resolves.toMatchObject({ id: 'a1' });
+    });
+  });
+
+  describe('revokeCountersignature', () => {
+    const activeVersion = {
+      id: 'v1',
+      agreementId: 'a1',
+      status: 'ACTIVE',
+      agreement: { activeVersionId: 'v1' },
+    };
+
+    it('undoes the Dialect Library signature but never the contributor one', async () => {
+      // The contributor signed. We are refusing to countersign; we do not
+      // get to erase the fact that they did.
+      const { service, tx } = makeService({ version: activeVersion });
+
+      await service.revokeCountersignature('v1', 'admin-1', 'Dialect tag looks wrong');
+
+      const data = tx.vdclVersion.update.mock.calls[0][0].data;
+      expect(data.status).toBe('REJECTED');
+      expect(data.countersignedAt).toBeNull();
+      expect(data.countersignedById).toBeNull();
+      expect(data).not.toHaveProperty('signedAt');
+    });
+
+    it('records the reason where the contributor can read it', async () => {
+      const { service, tx } = makeService({ version: activeVersion });
+
+      await service.revokeCountersignature('v1', 'admin-1', '  Dialect tag looks wrong  ');
+
+      const data = tx.vdclVersion.update.mock.calls[0][0].data;
+      expect(data.rejectionReason).toBe('Dialect tag looks wrong');
+      expect(data.rejectedAt).toBeInstanceOf(Date);
+    });
+
+    it('clears the active pointer so rights stop resolving immediately', async () => {
+      const { service, tx } = makeService({ version: activeVersion });
+
+      await service.revokeCountersignature('v1', 'admin-1', 'compliance');
+
+      expect(tx.vdclAgreement.update).toHaveBeenCalledWith({
+        where: { id: 'a1' },
+        data: { activeVersionId: null },
+      });
+    });
+
+    it('leaves another version active pointer alone', async () => {
+      const { service, tx } = makeService({
+        version: { ...activeVersion, agreement: { activeVersionId: 'v9' } },
+      });
+
+      await service.revokeCountersignature('v1', 'admin-1', 'compliance');
+
+      expect(tx.vdclAgreement.update).not.toHaveBeenCalled();
+    });
+
+    it('works on a version still awaiting countersignature', async () => {
+      // Refusing before signing is the same decision as revoking after it.
+      const { service, tx } = makeService({
+        version: {
+          ...activeVersion,
+          status: 'PENDING_COUNTERSIGNATURE',
+          agreement: { activeVersionId: null },
+        },
+      });
+
+      await service.revokeCountersignature('v1', 'admin-1', 'needs more recordings');
+
+      expect(tx.vdclVersion.update.mock.calls[0][0].data.status).toBe('REJECTED');
+    });
+
+    it('refuses without a usable reason', async () => {
+      const { service } = makeService({ version: activeVersion });
+
+      await expect(service.revokeCountersignature('v1', 'admin-1', '  ')).rejects.toThrow(
+        /reason is required/i,
+      );
+    });
+
+    it('refuses to overwrite an existing rejection', async () => {
+      // A second revoke would replace the reason the contributor is already
+      // working from.
+      const { service } = makeService({
+        version: { ...activeVersion, status: 'REJECTED' },
+      });
+
+      await expect(
+        service.revokeCountersignature('v1', 'admin-1', 'another reason'),
+      ).rejects.toThrow(/REJECTED/);
+    });
+
+    it('refuses a version that was never countersigned or reviewed', async () => {
+      const { service } = makeService({
+        version: { ...activeVersion, status: 'DRAFT' },
+      });
+
+      await expect(service.revokeCountersignature('v1', 'admin-1', 'nope')).rejects.toThrow(
+        /DRAFT/,
+      );
+    });
+
+    it('tells subscribers their access has stopped', async () => {
+      const { service, coverageNotifier } = makeService({ version: activeVersion });
+
+      await service.revokeCountersignature('v1', 'admin-1', 'compliance');
+
+      expect(coverageNotifier.notifyForAgreement).toHaveBeenCalledWith('a1', 'suspended');
+    });
+
+    it('writes an audit row naming the reason', async () => {
+      const { service, tx } = makeService({ version: activeVersion });
+
+      await service.revokeCountersignature('v1', 'admin-1', 'dialect tag wrong');
+
+      expect(tx.vdclAuditEvent.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            actorId: 'admin-1',
+            detail: expect.stringContaining('dialect tag wrong'),
+          }),
+        }),
+      );
     });
   });
 });

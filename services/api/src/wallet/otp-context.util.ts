@@ -158,7 +158,23 @@ export function adminActionContextHash(
     // 4,000 clips must not have that code complete a countersignature over
     // a different dataset if the manifest changed between issuing the code
     // and using it.
-    | { action: 'vdcl-countersign'; versionId: string; manifestHash: string },
+    | { action: 'vdcl-countersign'; versionId: string; manifestHash: string }
+    // The rest of the licence screen. Suspending, reinstating, revoking a
+    // countersignature, recording a withdrawal and re-issuing documents
+    // were each a single unconfirmed click, and all of them either stop a
+    // contributor's work reaching subscribers or change what their
+    // certificate verifies against. Bound to the action AND its target, so
+    // a code issued to suspend one licence cannot withdraw another, and a
+    // code issued to suspend cannot be replayed to revoke.
+    | {
+        action:
+          | 'vdcl-suspend'
+          | 'vdcl-reinstate'
+          | 'vdcl-revoke'
+          | 'vdcl-withdraw'
+          | 'vdcl-reissue';
+        targetId: string;
+      },
 ): string {
   return hashContext(input);
 }

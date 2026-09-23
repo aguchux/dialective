@@ -7,7 +7,9 @@ import { VdclAdminService } from './vdcl-admin.service';
 import {
   CountersignVdclDto,
   ListVdclAgreementsDto,
+  RequestVdclActionOtpDto,
   VdclReasonDto,
+  VdclStepUpDto,
 } from './dto/vdcl-lifecycle.dto';
 import { VdclDocumentsService } from '../documents/vdcl-documents.service';
 
@@ -73,12 +75,58 @@ export class VdclAdminController {
     @Body() dto: VdclReasonDto,
     @Req() req: AuthedRequest,
   ) {
-    return this.vdclAdmin.suspendVersion(id, req.user.sub, dto.reason);
+    return this.vdclAdmin.suspendVersion(id, req.user.sub, dto.reason, dto);
   }
 
   @Post('versions/:id/reinstate')
-  reinstateVersion(@Param('id') id: string, @Req() req: AuthedRequest) {
-    return this.vdclAdmin.reinstateVersion(id, req.user.sub);
+  reinstateVersion(
+    @Param('id') id: string,
+    @Body() dto: VdclStepUpDto,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.vdclAdmin.reinstateVersion(id, req.user.sub, dto);
+  }
+
+  /**
+   * Issue a step-up code for a licence action other than countersignature.
+   *
+   * Every action on this screen stops a contributor's work reaching
+   * subscribers, sends their licence back, or ends it -- and each used to
+   * be a single unconfirmed click.
+   */
+  @Post('versions/:id/action-otp')
+  requestVersionActionOtp(
+    @Param('id') id: string,
+    @Body() dto: RequestVdclActionOtpDto,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.vdclAdmin.requestActionOtp({ action: dto.action, targetId: id }, req.user.sub);
+  }
+
+  /** The same, for the agreement-scoped withdrawal action. */
+  @Post('agreements/:id/action-otp')
+  requestAgreementActionOtp(
+    @Param('id') id: string,
+    @Body() dto: RequestVdclActionOtpDto,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.vdclAdmin.requestActionOtp({ action: dto.action, targetId: id }, req.user.sub);
+  }
+
+  /**
+   * Revoke Dialect Library's countersignature and send the version back to
+   * the contributor with a reason they can act on.
+   *
+   * Not suspend (an internal hold that says nothing to the contributor) and
+   * not withdraw (which is theirs alone). This undoes only our signature.
+   */
+  @Post('versions/:id/revoke-countersignature')
+  revokeCountersignature(
+    @Param('id') id: string,
+    @Body() dto: VdclReasonDto,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.vdclAdmin.revokeCountersignature(id, req.user.sub, dto.reason, dto);
   }
 
   /**
@@ -97,8 +145,12 @@ export class VdclAdminController {
    * changed hash rather than a silent swap.
    */
   @Post('versions/:id/reissue-documents')
-  reissueDocuments(@Param('id') id: string) {
-    return this.documents.issueDocuments(id);
+  reissueDocuments(
+    @Param('id') id: string,
+    @Body() dto: VdclStepUpDto,
+    @Req() req: AuthedRequest,
+  ) {
+    return this.vdclAdmin.reissueDocuments(id, req.user.sub, dto);
   }
 
   /** Staff copy of a licence document, for support and compliance. */
@@ -122,6 +174,6 @@ export class VdclAdminController {
     @Body() dto: VdclReasonDto,
     @Req() req: AuthedRequest,
   ) {
-    return this.vdclAdmin.withdrawAgreement(id, req.user.sub, dto.reason);
+    return this.vdclAdmin.withdrawAgreement(id, req.user.sub, dto.reason, dto);
   }
 }
