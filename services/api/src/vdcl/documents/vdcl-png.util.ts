@@ -1,5 +1,6 @@
 import type * as CanvasModule from 'canvas';
 import type { VdclDocumentData } from './vdcl-pdf.util';
+import { formatDurationShort } from './vdcl-duration.util';
 import {
   ACCENT,
   ACCENT_DARK,
@@ -29,14 +30,6 @@ const PURPOSE_LABELS: Record<string, string> = {
   PUBLIC_PROMOTION: 'Demos and marketing',
   BIOMETRIC_PROCESSING: 'Speaker identification',
 };
-
-function formatDuration(ms: string): string {
-  const value = Number(ms);
-  if (!Number.isFinite(value) || value <= 0) return '0m';
-  const hours = Math.floor(value / 3_600_000);
-  const minutes = Math.round((value % 3_600_000) / 60_000);
-  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
-}
 
 type Ctx = CanvasModule.CanvasRenderingContext2D;
 
@@ -169,7 +162,7 @@ export async function renderVdclCertificatePng(data: VdclDocumentData): Promise<
   y += 68;
   const metrics: [string, string][] = [
     ['RECORDINGS', String(data.recordingCount)],
-    ['VALIDATED AUDIO', formatDuration(data.totalDurationMs)],
+    ['VALIDATED AUDIO', formatDurationShort(data.totalDurationMs)],
     ['WITH TRANSCRIPTS', `${data.transcriptCount}/${data.recordingCount}`],
     ['MEAN QUALITY', data.meanCompositeScore ? `${data.meanCompositeScore}/100` : '—'],
   ];

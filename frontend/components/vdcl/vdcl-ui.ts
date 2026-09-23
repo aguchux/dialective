@@ -27,3 +27,32 @@ export const alertTone = {
   success: 'border border-accent/30 bg-accent-soft text-accent',
   neutral: 'border border-line bg-surface-muted text-muted',
 } as const;
+
+/**
+ * How long a licensed dataset's audio is, written one way.
+ *
+ * Lived as two identical copies in VdclMaker and VdclSignPanel, both
+ * truncating with Math.floor -- so 92 seconds of audio (42 single-word
+ * recordings at ~2s each, a real contributor's dataset) displayed as "1m",
+ * silently dropping a third of it. The backend's document renderers had a
+ * third variant that rounded instead, printing "2 minutes" for the same
+ * data on the PDF the contributor's signature produced.
+ *
+ * Mirrors formatDurationShort in
+ * services/api/src/vdcl/documents/vdcl-duration.util.ts. The two cannot
+ * import from each other across the api/frontend boundary, so they are kept
+ * deliberately identical in behaviour and tested to the same cases; change
+ * one, change the other.
+ */
+export function formatDuration(ms: string | number | null | undefined): string {
+  const value = Number(ms ?? 0);
+  if (!Number.isFinite(value) || value <= 0) return '0s';
+  // Round to whole seconds first so the parts agree with each other.
+  const totalSeconds = Math.round(value / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}

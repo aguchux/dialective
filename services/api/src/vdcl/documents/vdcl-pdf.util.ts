@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import { formatDurationLong } from './vdcl-duration.util';
 import {
   ACCENT,
   ACCENT_DARK,
@@ -62,14 +63,6 @@ function formatDate(value: Date | null): string {
   return value
     ? value.toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' })
     : 'Not yet';
-}
-
-function formatDuration(ms: string): string {
-  const value = Number(ms);
-  if (!Number.isFinite(value) || value <= 0) return '0 minutes';
-  const hours = Math.floor(value / 3_600_000);
-  const minutes = Math.round((value % 3_600_000) / 60_000);
-  return hours > 0 ? `${hours} hours ${minutes} minutes` : `${minutes} minutes`;
 }
 
 /**
@@ -215,7 +208,7 @@ export function renderVdclPdf(data: VdclDocumentData): Promise<Buffer> {
     pair('Manifest', data.manifestKey);
     pair('Manifest hash (SHA-256)', data.manifestHash);
     pair('Recordings covered', String(data.recordingCount));
-    pair('Validated audio duration', formatDuration(data.totalDurationMs));
+    pair('Validated audio duration', formatDurationLong(data.totalDurationMs));
     pair('With transcripts', `${data.transcriptCount} of ${data.recordingCount}`);
     pair('Reviewed but excluded', String(data.excludedCount));
     if (data.meanCompositeScore) {

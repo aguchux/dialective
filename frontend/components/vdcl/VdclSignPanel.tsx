@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { cardClass } from '@/components/dashboard/shared';
 import { ActionButton } from '@/components/ui/ActionButton';
-import { alertTone, fieldClass, primaryButton } from '@/components/vdcl/vdcl-ui';
+import { alertTone, fieldClass, formatDuration, primaryButton } from '@/components/vdcl/vdcl-ui';
 import {
   normalizeErrorMessage,
   useGetVdclReviewQuery,
@@ -30,17 +30,6 @@ const PURPOSE_LABELS: Record<string, string> = {
   PUBLIC_PROMOTION: 'Demos and marketing',
   BIOMETRIC_PROCESSING: 'Speaker identification',
 };
-
-function formatDuration(ms: string | null | undefined): string {
-  const value = Number(ms ?? 0);
-  if (!Number.isFinite(value) || value <= 0) return '0m';
-  const hours = Math.floor(value / 3_600_000);
-  const minutes = Math.floor((value % 3_600_000) / 60_000);
-  const seconds = Math.floor((value % 60_000) / 1000);
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m`;
-  return `${seconds}s`;
-}
 
 /**
  * Review and sign.

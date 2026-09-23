@@ -20,19 +20,8 @@ import { VdclExplainer } from '@/components/vdcl/VdclExplainer';
 import { VdclSignPanel } from '@/components/vdcl/VdclSignPanel';
 import { VdclTracker } from '@/components/vdcl/VdclTracker';
 import { VdclCertificate } from '@/components/vdcl/VdclCertificate';
-import { primaryButton, secondaryButton } from '@/components/vdcl/vdcl-ui';
+import { formatDuration, primaryButton, secondaryButton } from '@/components/vdcl/vdcl-ui';
 import { useGetMyVdclVersionsQuery, useGetVdclReadinessQuery } from '@/store/api';
-
-function formatDuration(ms: string | null | undefined): string {
-  const value = Number(ms ?? 0);
-  if (!Number.isFinite(value) || value <= 0) return '0m';
-  const hours = Math.floor(value / 3_600_000);
-  const minutes = Math.floor((value % 3_600_000) / 60_000);
-  const seconds = Math.floor((value % 60_000) / 1000);
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  if (minutes > 0) return `${minutes}m`;
-  return `${seconds}s`;
-}
 
 const EXCLUSION_LABELS: Record<string, string> = {
   not_yet_scored: 'Still being scored — these will be picked up later',
