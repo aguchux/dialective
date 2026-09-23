@@ -17,9 +17,46 @@ import {
 } from './vdcl-theme';
 
 const WIDTH = 1200;
-const HEIGHT = 820;
+/**
+ * The canvas grows with the permitted-uses list rather than being fixed.
+ *
+ * It used to be a flat 820px with the verification panel pinned to
+ * HEIGHT - 232, so a licence granting all seven purposes rendered its list
+ * straight through the panel -- the two overlapped, and the last purposes
+ * were unreadable underneath it. A contributor could not tell what they
+ * had actually permitted, on the one document that exists to tell them.
+ *
+ * MIN_HEIGHT keeps the familiar proportions for the common case; anything
+ * taller extends downward.
+ */
+const MIN_HEIGHT = 820;
+const PURPOSE_LINE_H = 27;
 const PAD = 64;
 const RIGHT = WIDTH - PAD;
+
+/**
+ * Where the permitted-uses list starts, measured from the top.
+ *
+ * Follows the metric cards rather than sitting at an arbitrary offset:
+ * licence line (176) + identity block (46) + metrics gap (68) + card
+ * height (92) + breathing room (40). Pinning it lower left a visible dead
+ * band under the cards.
+ */
+const USES_TOP = 176 + 46 + 68 + 92 + 40;
+/** Panel block: the verification card, disclaimer and footer rule. */
+const FOOTER_BLOCK_H = 232;
+
+/**
+ * How tall this certificate needs to be for its own content.
+ *
+ * Derived from the same constants the renderer lays out with, so the two
+ * cannot disagree -- a height computed from a different assumption than
+ * the drawing code is how the overlap happened in the first place.
+ */
+function measureHeight(purposeCount: number): number {
+  const listBottom = USES_TOP + 30 + purposeCount * PURPOSE_LINE_H;
+  return Math.max(MIN_HEIGHT, listBottom + 24 + FOOTER_BLOCK_H);
+}
 
 const PURPOSE_LABELS: Record<string, string> = {
   ASR_TRAINING: 'Speech recognition',
@@ -95,6 +132,7 @@ function drawTick(ctx: Ctx, cx: number, cy: number, size: number, colour: string
 export async function renderVdclCertificatePng(data: VdclDocumentData): Promise<Buffer> {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const canvasLib = require('canvas') as typeof CanvasModule;
+  const HEIGHT = measureHeight(data.purposes.length);
   const canvas = canvasLib.createCanvas(WIDTH, HEIGHT);
   const ctx = canvas.getContext('2d');
 
@@ -141,13 +179,23 @@ export async function renderVdclCertificatePng(data: VdclDocumentData): Promise<
 
   // Identity block -- label only, never a name.
   y += 46;
+  // Measure in the font the value is actually DRAWN in. fitDialects was
+  // being called while ctx.font was still the 19px licence line, so it
+  // under-measured a bold 22px string and let "+2 more" run into the
+  // country column.
+  ctx.font = 'bold 22px sans-serif';
   const cols: [string, string][] = [
     ['CONTRIBUTOR', data.contributorLabel],
     [data.dialectTags.length === 1 ? 'DIALECT' : 'DIALECTS', fitDialects(ctx, data.dialectTags)],
     ['COUNTRY', data.countryName ?? '—'],
   ];
+  // Uneven tracks on purpose. Contributor and country are short and fixed
+  // in length; the dialect list is the only one that grows, so it gets the
+  // wide middle track rather than all three being an equal 336. With even
+  // tracks "Igbo, Nigerian Pidgin, Yoruba" collided with the country.
+  const COL_X = [0, 300, 760];
   cols.forEach(([label, value], i) => {
-    const x = PAD + i * 336;
+    const x = PAD + COL_X[i];
     ctx.fillStyle = MUTED;
     ctx.font = '15px sans-serif';
     ctx.fillText(label, x, y);
@@ -182,23 +230,28 @@ export async function renderVdclCertificatePng(data: VdclDocumentData): Promise<
 
   // Permitted uses. Ticks are green only when the licence is in force --
   // an unticked list on a withdrawn licence would still read as granting.
-  y += 132;
+  y = USES_TOP;
   ctx.fillStyle = MUTED;
   ctx.font = '15px sans-serif';
   ctx.fillText('PERMITTED USES', PAD, y);
   y += 30;
   ctx.font = '18px sans-serif';
   const markColour = inForce ? GREEN : MUTED;
-  for (const purpose of data.purposes.slice(0, 7)) {
+  // Every purpose, never a slice. This used to cap at 7 -- which happened
+  // to equal the number of offerable purposes, so it silently truncated
+  // the moment an eighth was ever offered. The canvas grows instead.
+  for (const purpose of data.purposes) {
     drawTick(ctx, PAD + 9, y - 6, 15, markColour);
     ctx.fillStyle = INK;
     ctx.fillText(PURPOSE_LABELS[purpose] ?? purpose, PAD + 30, y);
-    y += 27;
+    y += PURPOSE_LINE_H;
   }
 
   // Verification panel. Tinted green only when in force; otherwise it takes
   // the neutral surface so the document never implies a status it lacks.
-  const panelY = HEIGHT - 232;
+  // Below the list, always. Pinning this to HEIGHT - 232 is what let the
+  // permitted-uses list run through it.
+  const panelY = Math.max(y + 24, HEIGHT - FOOTER_BLOCK_H);
   const panelW = 660;
   ctx.fillStyle = inForce ? GREEN_SOFT : SURFACE_MUTED;
   roundRect(ctx, PAD, panelY, panelW, 118, 14);
@@ -269,18 +322,23 @@ export async function renderVdclCertificatePng(data: VdclDocumentData): Promise<
 }
 
 /**
- * Fit a dialect list into the certificate's fixed dialect column.
+ * Fit a dialect list into the certificate's dialect column.
  *
- * Falls back to "first +N more" rather than clipping mid-tag, so the
- * certificate never shows a truncated dialect code that reads as a
- * different dialect.
+ * Falls back to "first +N more" rather than clipping mid-name, so the
+ * certificate never shows a truncated dialect that reads as a different
+ * one. The budget is measured against the COUNTRY column's start (336px
+ * into the block, less a gutter) rather than a hardcoded 300: these are
+ * full names now, not two-letter tags, and "Arabic (Jordanian)" is far
+ * wider than "ar-jo".
  */
 function fitDialects(
   ctx: { measureText: (t: string) => { width: number } },
   tags: string[],
 ): string {
   if (tags.length === 0) return '—';
-  const MAX_WIDTH = 300;
+  // The dialect track is 760 - 300 = 460 wide; leave a 32px gutter before
+  // the country column so a long list never touches it.
+  const MAX_WIDTH = 428;
   const full = tags.join(', ');
   if (ctx.measureText(full).width <= MAX_WIDTH) return full;
   for (let keep = tags.length - 1; keep >= 1; keep -= 1) {

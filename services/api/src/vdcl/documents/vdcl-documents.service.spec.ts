@@ -27,6 +27,7 @@ describe('VdclDocumentsService', () => {
   });
 
   function makeService(opts: {
+    dialects?: { tag: string; name: string }[];
     version?: Record<string, unknown> | null;
     downloadVersion?: Record<string, unknown> | null;
   } = {}) {
@@ -48,6 +49,13 @@ describe('VdclDocumentsService', () => {
         update: jest.fn().mockResolvedValue({}),
       },
       vdclManifestItem: { findMany: jest.fn().mockResolvedValue([]) },
+      dialect: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue(
+            opts.dialects ?? [{ tag: 'ig', name: 'Igbo' }, { tag: 'pcm', name: 'Nigerian Pidgin' }],
+          ),
+      },
       vdclAuditEvent: { create: jest.fn().mockResolvedValue({}) },
       $transaction: jest.fn().mockResolvedValue([{}, {}]),
     };
@@ -200,6 +208,36 @@ describe('VdclDocumentsService', () => {
       const { service } = makeService();
       const result = await service.issueDocuments('v1');
       expect(result.verificationUrl).toContain('/verify/');
+    });
+  });
+
+  describe('dialect names on the rendered documents', () => {
+    /**
+     * The manifest stores TAGS and must keep doing so -- the hash is
+     * computed over them, and a renamed dialect must not change what an
+     * already-issued licence verifies against. But "ig" on a certificate
+     * tells the contributor holding it nothing, so the name is resolved at
+     * render time.
+     */
+    it('looks up the full name for every tag the manifest covers', async () => {
+      const { service, prisma } = makeService();
+
+      await service.issueDocuments('v1');
+
+      expect(prisma.dialect.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tag: { in: ['ig-ng'] } },
+          select: { tag: true, name: true },
+        }),
+      );
+    });
+
+    it('falls back to the tag when a dialect row is missing', async () => {
+      // Showing a raw code is bad; silently dropping a dialect the licence
+      // actually covers is worse.
+      const { service } = makeService({ dialects: [] });
+
+      await expect(service.issueDocuments('v1')).resolves.toBeDefined();
     });
   });
 

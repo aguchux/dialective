@@ -20,6 +20,15 @@ export interface VdclDocumentData {
   status: string;
   manifestKey: string;
   manifestHash: string;
+  /**
+   * DISPLAY NAMES, not tags -- "Igbo", not "ig". Resolved from the
+   * manifest's tags at render time by VdclDocumentsService, because the
+   * manifest must keep storing tags (the hash is computed over them and a
+   * renamed dialect must not change what an issued licence verifies
+   * against) while a contributor reading their own certificate needs a word
+   * they recognise. The field keeps its name so the hashed manifest shape
+   * and the rendered shape stay recognisably the same thing.
+   */
   dialectTags: string[];
   countryName: string | null;
   contributorLabel: string;

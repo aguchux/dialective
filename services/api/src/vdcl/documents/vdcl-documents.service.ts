@@ -91,7 +91,7 @@ export class VdclDocumentsService {
       width: 512,
     });
 
-    const data = this.toDocumentData(version, url, qrPng);
+    const data = await this.toDocumentData(version, url, qrPng);
 
     const [pdf, png] = await Promise.all([
       renderVdclPdf(data),
@@ -306,13 +306,41 @@ export class VdclDocumentsService {
     return version;
   }
 
-  private toDocumentData(
+  /**
+   * Full dialect names for the tags a manifest covers.
+   *
+   * The manifest stores TAGS, and must keep doing so -- they are the stable
+   * identifier the hash is computed over, and a renamed dialect must not
+   * change what an issued licence verifies against. But "ig" on a
+   * certificate tells the contributor holding it nothing, so the name is
+   * resolved at render time instead.
+   *
+   * A tag with no matching row falls back to the tag itself rather than
+   * being dropped: showing a raw code is bad, silently omitting a dialect
+   * the licence actually covers is worse.
+   */
+  private async resolveDialectNames(tags: string[]): Promise<string[]> {
+    if (tags.length === 0) return [];
+    const rows = await this.prisma.dialect.findMany({
+      where: { tag: { in: tags } },
+      select: { tag: true, name: true },
+    });
+    const byTag = new Map(rows.map((r) => [r.tag, r.name]));
+    // Sorted by the displayed name so a multi-dialect certificate reads
+    // alphabetically rather than in tag order, which looks arbitrary.
+    return tags
+      .map((tag) => byTag.get(tag) ?? tag)
+      .sort((a, b) => a.localeCompare(b));
+  }
+
+  private async toDocumentData(
     version: Awaited<ReturnType<VdclDocumentsService['loadForRender']>>,
     url: string,
     qrPng: Buffer,
-  ): VdclDocumentData {
+  ): Promise<VdclDocumentData> {
     const contributor = version.agreement.contributor;
     const name = [contributor.firstName, contributor.lastName].filter(Boolean).join(' ');
+    const dialectNames = await this.resolveDialectNames(version.manifest!.dialectTags);
     return {
       licenceKey: version.agreement.licenceKey,
       version: version.version,
@@ -321,7 +349,7 @@ export class VdclDocumentsService {
         : version.status,
       manifestKey: version.manifest!.manifestKey,
       manifestHash: version.manifestHash!,
-      dialectTags: version.manifest!.dialectTags,
+      dialectTags: dialectNames,
       countryName: version.agreement.country?.name ?? null,
       contributorLabel: `Contributor ${contributorShortId(
         version.agreement.contributorId,
