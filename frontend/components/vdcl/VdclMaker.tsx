@@ -250,8 +250,10 @@ export function VdclMaker() {
         <section className={`${cardClass} p-5`}>
           <h2 className="text-lg font-black text-ink">What a licence would cover today</h2>
           <p className="mt-1 text-sm text-muted">
-            Your eligible recordings in {readiness.data.dialectTag ?? 'your dialect'}, as they stand
-            right now.
+            {readiness.data.dialectTags.length > 0
+              ? `Your eligible recordings in ${readiness.data.dialectTags.join(', ')}, as they stand right now.`
+              : 'Your eligible recordings, as they stand right now.'}{' '}
+            One licence covers every dialect you record in.
           </p>
           <dl className="mt-4 grid gap-3 sm:grid-cols-3">
             <Stat

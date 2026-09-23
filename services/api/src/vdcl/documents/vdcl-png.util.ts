@@ -109,14 +109,17 @@ export async function renderVdclCertificatePng(data: VdclDocumentData): Promise<
   ctx.fillStyle = MUTED;
   ctx.font = '16px sans-serif';
   ctx.fillText('CONTRIBUTOR', 64, y);
-  ctx.fillText('DIALECT', 400, y);
+  ctx.fillText(data.dialectTags.length === 1 ? 'DIALECT' : 'DIALECTS', 400, y);
   ctx.fillText('COUNTRY', 700, y);
 
   y += 30;
   ctx.fillStyle = INK;
   ctx.font = 'bold 22px sans-serif';
   ctx.fillText(data.contributorLabel, 64, y);
-  ctx.fillText(data.dialectTag, 400, y);
+  // The column is a fixed 300px before COUNTRY starts, so a contributor
+  // with several dialects would otherwise render straight through the next
+  // heading. Truncate with a count rather than letting it collide.
+  ctx.fillText(fitDialects(ctx, data.dialectTags), 400, y);
   ctx.fillText(data.countryName ?? '—', 700, y);
 
   // Metrics
@@ -182,4 +185,23 @@ export async function renderVdclCertificatePng(data: VdclDocumentData): Promise<
   );
 
   return canvas.toBuffer('image/png');
+}
+
+/**
+ * Fit a dialect list into the certificate's fixed dialect column.
+ *
+ * Falls back to "first +N more" rather than clipping mid-tag, so the
+ * certificate never shows a truncated dialect code that reads as a
+ * different dialect.
+ */
+function fitDialects(ctx: { measureText: (t: string) => { width: number } }, tags: string[]): string {
+  if (tags.length === 0) return '—';
+  const MAX_WIDTH = 280;
+  const full = tags.join(', ');
+  if (ctx.measureText(full).width <= MAX_WIDTH) return full;
+  for (let keep = tags.length - 1; keep >= 1; keep -= 1) {
+    const candidate = `${tags.slice(0, keep).join(', ')} +${tags.length - keep} more`;
+    if (ctx.measureText(candidate).width <= MAX_WIDTH) return candidate;
+  }
+  return `${tags.length} dialects`;
 }

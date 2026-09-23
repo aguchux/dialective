@@ -259,7 +259,7 @@ export class VdclDocumentsService {
       manifestHash: version.manifestHash,
       pdfHash: version.pdfHash,
       pngHash: version.pngHash,
-      dialectTag: version.agreement.dialectTag,
+      dialectTags: version.manifest.dialectTags,
       purposes: version.grants.map((g) => g.purpose),
       signedAt: version.signedAt,
       countersignedAt: version.countersignedAt,
@@ -285,7 +285,6 @@ export class VdclDocumentsService {
           select: {
             licenceKey: true,
             contributorId: true,
-            dialectTag: true,
             withdrawnAt: true,
             country: { select: { name: true } },
             contributor: {
@@ -322,7 +321,7 @@ export class VdclDocumentsService {
         : version.status,
       manifestKey: version.manifest!.manifestKey,
       manifestHash: version.manifestHash!,
-      dialectTag: version.agreement.dialectTag,
+      dialectTags: version.manifest!.dialectTags,
       countryName: version.agreement.country?.name ?? null,
       contributorLabel: `Contributor ${contributorShortId(
         version.agreement.contributorId,

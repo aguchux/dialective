@@ -92,7 +92,8 @@ describe('VdclDocumentsService', () => {
       },
       manifest: {
         id: 'm1',
-        manifestKey: 'VDM-NG-IGNG-A1B2C3D4-1',
+        manifestKey: 'VDM-NG-A1B2C3D4-1',
+        dialectTags: ['ig-ng'],
         recordingCount: 120,
         totalDurationMs: 480000n,
         transcriptCount: 118,

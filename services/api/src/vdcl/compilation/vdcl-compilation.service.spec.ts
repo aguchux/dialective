@@ -140,12 +140,12 @@ describe('VdclCompilationService', () => {
       });
     });
 
-    it('builds the manifest key from country, dialect and contributor', async () => {
+    it('builds the manifest key from country and contributor, with no dialect', async () => {
       const { service, tx } = makeService();
       await service.compileVersion('v1');
       expect(tx.vdclManifest.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ manifestKey: expect.stringMatching(/^VDM-NG-IGNG-/) }),
+          data: expect.objectContaining({ manifestKey: expect.stringMatching(/^VDM-NG-USER1-/) }),
         }),
       );
     });
@@ -185,18 +185,38 @@ describe('VdclCompilationService', () => {
       });
     });
 
-    it("does not count another dialect's recordings as exclusions", async () => {
-      // Work covered by a different licence is not in scope here. Counting
-      // it would inflate the rejection figure on the contributor's review
-      // screen with recordings that are perfectly fine.
+    it('covers every dialect the contributor recorded in, under one licence', async () => {
+      // The whole point of a holistic licence. Previously the yo-ng
+      // recording was silently out of scope, so a contributor who changed
+      // dialect accumulated unlicensed work with nothing telling them.
       const { service } = makeService({
         recordings: [recordingRow({ id: 'ok' }), recordingRow({ id: 'yo', dialectTag: 'yo-ng' })],
       });
 
       const result = await service.compileVersion('v1');
 
-      expect(result.recordingCount).toBe(1);
+      expect(result.recordingCount).toBe(2);
       expect(result.excludedCount).toBe(0);
+    });
+
+    it('records the dialects it actually covered on the manifest', async () => {
+      // Derived from the items, never from the contributor's profile: the
+      // manifest is what makes the licence self-describing now that the key
+      // no longer names a dialect.
+      const { service, tx } = makeService({
+        recordings: [
+          recordingRow({ id: 'b', dialectTag: 'pcm' }),
+          recordingRow({ id: 'a', dialectTag: 'ig-ng' }),
+        ],
+      });
+
+      await service.compileVersion('v1');
+
+      expect(tx.vdclManifest.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ dialectTags: ['ig-ng', 'pcm'] }),
+        }),
+      );
     });
 
     it('aggregates duration, transcript coverage and mean score over covered items only', async () => {
@@ -289,10 +309,7 @@ describe('VdclCompilationService', () => {
       ];
       const { service } = makeService({ recordings });
 
-      const preview = await service.previewInventory({
-        contributorId: 'user-1',
-        dialectTag: 'ig-ng',
-      });
+      const preview = await service.previewInventory({ contributorId: 'user-1' });
       const compiled = await makeService({ recordings }).service.compileVersion('v1');
 
       expect(preview.eligibleCount).toBe(compiled.recordingCount);
@@ -307,10 +324,7 @@ describe('VdclCompilationService', () => {
         recordings: [recordingRow({ status: SubmissionStatus.PENDING })],
       });
 
-      const preview = await service.previewInventory({
-        contributorId: 'user-1',
-        dialectTag: 'ig-ng',
-      });
+      const preview = await service.previewInventory({ contributorId: 'user-1' });
 
       expect(preview.eligibleCount).toBe(0);
       expect(preview.meanCompositeScore).toBeNull();

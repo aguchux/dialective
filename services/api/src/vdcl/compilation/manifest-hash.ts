@@ -20,7 +20,13 @@ import { createHash } from 'crypto';
  * ever have to change, the version bumps and old hashes stay verifiable
  * under the old rules -- which is the entire point of writing it down.
  */
-export const CANONICAL_VERSION = 1;
+/**
+ * Bumped 1 -> 2 when agreements became holistic: `dialectTag: string`
+ * became `dialectTags: string[]`. Old hashes stay verifiable under the v1
+ * rules, which is the entire reason this constant is embedded in the
+ * hashed payload rather than assumed.
+ */
+export const CANONICAL_VERSION = 2;
 
 export interface CanonicalManifestItem {
   recordingId: string;
@@ -36,7 +42,8 @@ export interface CanonicalManifest {
   licenceKey: string;
   version: number;
   contributorId: string;
-  dialectTag: string;
+  /** Sorted by the caller; canonicalise re-sorts so order can never matter. */
+  dialectTags: string[];
   countryId: string | null;
   recordingCount: number;
   totalDurationMs: string;
@@ -109,7 +116,10 @@ export function canonicalise(manifest: CanonicalManifest): string {
     licenceKey: manifest.licenceKey,
     version: manifest.version,
     contributorId: manifest.contributorId,
-    dialectTag: manifest.dialectTag,
+    // Re-sorted here rather than trusting the caller, exactly like
+    // `purposes` below: the hash must not depend on the order a caller
+    // happened to collect them in.
+    dialectTags: [...manifest.dialectTags].sort(),
     countryId: manifest.countryId,
     recordingCount: manifest.recordingCount,
     totalDurationMs: manifest.totalDurationMs,

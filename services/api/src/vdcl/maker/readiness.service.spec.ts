@@ -34,6 +34,7 @@ describe('VdclReadinessService', () => {
           totalDurationMs: '96000',
           transcriptCount: 38,
           meanCompositeScore: 81.2,
+          dialectTags: ['ig-ng'],
         },
       ),
     };
@@ -117,13 +118,27 @@ describe('VdclReadinessService', () => {
     expect(blocker?.actionable).toBe(false);
   });
 
-  it('blocks a contributor with no dialect set, and does not guess one', async () => {
+  /**
+   * The profile dialect used to be a hard blocker. It no longer is: a
+   * licence covers every dialect the contributor has recorded in, so a
+   * profile field that can only name one of them is the wrong thing to gate
+   * on -- and gating on it blocked exactly the multi-dialect contributors
+   * this model exists to serve.
+   */
+  it('does not block a contributor whose profile dialect is unset', async () => {
     const { service, compilation } = makeService({ user: defaultUser({ dialect: null }) });
     const result = await service.check('user-1');
-    expect(reasons(result.blockers)).toContain('Active dialect profile');
-    expect(result.dialectTag).toBeNull();
-    // Without a dialect there is nothing to inventory against.
-    expect(compilation.previewInventory).not.toHaveBeenCalled();
+    expect(reasons(result.blockers)).not.toContain('Active dialect profile');
+    // The inventory is what decides, and it is scoped to the contributor.
+    expect(compilation.previewInventory).toHaveBeenCalledWith({ contributorId: 'user-1' });
+  });
+
+  it('reports every dialect the contributor has eligible recordings in', async () => {
+    const { service } = makeService({
+      inventory: { eligibleCount: 60, dialectTags: ['ig', 'pcm'] },
+    });
+    const result = await service.check('user-1');
+    expect(result.dialectTags).toEqual(['ig', 'pcm']);
   });
 
   it('blocks when no recordings are eligible yet', async () => {
@@ -206,8 +221,9 @@ describe('VdclReadinessService', () => {
       user: defaultUser({
         emailVerified: null,
         kycStatus: KycStatus.NOT_STARTED,
-        dialect: null,
       }),
+      // No eligible recordings either, so three separate things are wrong.
+      inventory: { eligibleCount: 0, excludedCount: 0, dialectTags: [] },
     });
     const result = await service.check('user-1');
     expect(result.blockers.length).toBeGreaterThanOrEqual(3);

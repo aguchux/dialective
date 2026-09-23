@@ -59,7 +59,7 @@ export class VdclMakerService {
     }
 
     const readiness = await this.readiness.check(params.contributorId);
-    if (!readiness.ready || !readiness.dialectTag) {
+    if (!readiness.ready) {
       throw new ForbiddenException({
         message: 'This account is not ready to sign a licence yet.',
         blockers: readiness.blockers,
@@ -68,7 +68,6 @@ export class VdclMakerService {
 
     const { agreement, version } = await this.drafts.createDraft({
       contributorId: params.contributorId,
-      dialectTag: readiness.dialectTag,
       purposes: params.purposes,
       wordingVersion: params.wordingVersion,
       termsVersion: params.termsVersion,
@@ -107,7 +106,7 @@ export class VdclMakerService {
       licenceKey: agreement.licenceKey,
       versionId: version.id,
       version: version.version,
-      dialectTag: readiness.dialectTag,
+      dialectTags: readiness.dialectTags,
       compiled: compilation !== null,
       compilationError,
       recordingCount: compilation?.recordingCount ?? null,

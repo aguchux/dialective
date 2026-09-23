@@ -98,14 +98,19 @@ describe('VdclMakerService', () => {
       });
     });
 
-    it("takes the dialect from the contributor's profile, never the request", async () => {
-      // A request body naming a dialect would let someone license
-      // recordings under a dialect they do not record in.
+    it('never lets the request name a dialect', async () => {
+      // A licence covers whatever the contributor actually recorded, derived
+      // at compile time from their own recordings. Accepting a dialect from
+      // the request body would let someone assert a scope rather than have
+      // one determined for them.
       const { service, drafts } = makeService();
       await service.startDraft(base);
-      expect(drafts.createDraft).toHaveBeenCalledWith(
-        expect.objectContaining({ dialectTag: 'ig-ng', contributorId: 'user-1' }),
+      const arg = drafts.createDraft.mock.calls[0][0];
+      expect(arg).toEqual(
+        expect.objectContaining({ contributorId: 'user-1' }),
       );
+      expect(arg).not.toHaveProperty('dialectTag');
+      expect(arg).not.toHaveProperty('dialectTags');
     });
 
     it('refuses to start when readiness is not met, and says why', async () => {

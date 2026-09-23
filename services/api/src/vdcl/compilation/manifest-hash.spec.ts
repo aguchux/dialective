@@ -15,7 +15,7 @@ describe('VDCL manifest hash', () => {
       licenceKey: 'VDCL-NG-IGNG-A1B2C3D4',
       version: 1,
       contributorId: 'user-1',
-      dialectTag: 'ig-ng',
+      dialectTags: ['ig-ng'],
       countryId: 'country-1',
       recordingCount: 2,
       totalDurationMs: '4800',
@@ -65,7 +65,7 @@ describe('VDCL manifest hash', () => {
         licenceKey: a.licenceKey,
         manifestKey: a.manifestKey,
         contributorId: a.contributorId,
-        dialectTag: a.dialectTag,
+        dialectTags: a.dialectTags,
         countryId: a.countryId,
         recordingCount: a.recordingCount,
         totalDurationMs: a.totalDurationMs,
@@ -114,7 +114,26 @@ describe('VDCL manifest hash', () => {
   });
 
   it('embeds the canonical version, so the rules can change without breaking old hashes', () => {
-    expect(canonicalise(manifest())).toContain('"canonicalVersion":1');
+    expect(canonicalise(manifest())).toContain('"canonicalVersion":2');
+  });
+
+  it('does not let dialect order change the hash', () => {
+    // dialectTags is derived from a Set, so callers could hand it over in
+    // any order. A hash that depended on that order would make two
+    // compilations of the same dataset disagree.
+    const a = manifest();
+    a.dialectTags = ['ig', 'pcm'];
+    const b = manifest();
+    b.dialectTags = ['pcm', 'ig'];
+    expect(hashManifest(a)).toBe(hashManifest(b));
+  });
+
+  it('treats a licence covering two dialects as different from one covering one', () => {
+    const one = manifest();
+    one.dialectTags = ['ig'];
+    const two = manifest();
+    two.dialectTags = ['ig', 'pcm'];
+    expect(hashManifest(one)).not.toBe(hashManifest(two));
   });
 
   it('distinguishes a null score from a zero score', () => {

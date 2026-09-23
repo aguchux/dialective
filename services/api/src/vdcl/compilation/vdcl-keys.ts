@@ -1,8 +1,18 @@
 /**
- * Licence and manifest identifiers, per the product plan section 9.2.
+ * Licence and manifest identifiers.
  *
- *   Licence:  VDCL-{COUNTRY}-{DIALECT}-{CONTRIBUTOR_SHORT_ID}
- *   Manifest: VDM-{COUNTRY}-{DIALECT}-{CONTRIBUTOR_SHORT_ID}-{VERSION}
+ *   Licence:  VDCL-{COUNTRY}-{CONTRIBUTOR_SHORT_ID}
+ *   Manifest: VDM-{COUNTRY}-{CONTRIBUTOR_SHORT_ID}-{VERSION}
+ *
+ * There is deliberately NO dialect segment, though the product plan's
+ * section 9.2 originally specified one. A licence covers every dialect its
+ * contributor records in, so a dialect in the key would be a claim about
+ * scope that the key cannot keep true: a contributor who signs covering
+ * Igbo and later records Pidgin would need the key to change, and any
+ * certificate already printed would then carry an identifier that no longer
+ * matches. The dialects covered live on each version's manifest
+ * (VdclManifest.dialectTags), where they can be stated accurately per
+ * version without the identifier ever going stale.
  *
  * The contributor short id is derived from the contributor's uuid rather
  * than being a counter: a sequential id would leak how many contributors
@@ -26,21 +36,17 @@ function segment(value: string | null | undefined): string {
 
 export function buildLicenceKey(params: {
   countryCode?: string | null;
-  dialectTag: string;
   contributorId: string;
 }): string {
-  return `VDCL-${segment(params.countryCode)}-${segment(params.dialectTag)}-${contributorShortId(
-    params.contributorId,
-  )}`;
+  return `VDCL-${segment(params.countryCode)}-${contributorShortId(params.contributorId)}`;
 }
 
 export function buildManifestKey(params: {
   countryCode?: string | null;
-  dialectTag: string;
   contributorId: string;
   version: number;
 }): string {
-  return `VDM-${segment(params.countryCode)}-${segment(params.dialectTag)}-${contributorShortId(
-    params.contributorId,
-  )}-${params.version}`;
+  return `VDM-${segment(params.countryCode)}-${contributorShortId(params.contributorId)}-${
+    params.version
+  }`;
 }

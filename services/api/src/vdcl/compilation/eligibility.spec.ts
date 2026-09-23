@@ -10,7 +10,7 @@ import { EligibilityCandidate, classify, isTransient } from './eligibility';
  * These tests pin the conservative direction at every branch.
  */
 describe('VDCL eligibility', () => {
-  const agreement = { contributorId: 'user-1', dialectTag: 'ig-ng' };
+  const agreement = { contributorId: 'user-1' };
 
   function recording(overrides: Partial<EligibilityCandidate> = {}): EligibilityCandidate {
     return {
@@ -46,12 +46,14 @@ describe('VDCL eligibility', () => {
     expect(result).toEqual({ eligible: false, reason: 'wrong_contributor' });
   });
 
-  it('excludes a recording in a different dialect', () => {
-    // An agreement is scoped to one dialect, because the rights a
-    // contributor grants may differ between them.
-    expect(classify(recording({ dialectTag: 'yo-ng' }), agreement).reason).toBe(
-      'dialect_mismatch',
-    );
+  it('includes every dialect the contributor recorded in', () => {
+    // A licence is holistic: it covers whatever its contributor has
+    // recorded. Someone who records Igbo and later Pidgin holds ONE licence
+    // covering both, rather than having their second dialect sit unlicensed
+    // behind a scope they were never told about.
+    for (const dialectTag of ['ig-ng', 'yo-ng', 'pcm']) {
+      expect(classify(recording({ dialectTag }), agreement).eligible).toBe(true);
+    }
   });
 
   it('excludes a recording whose audio was purged, even though its scores survive', () => {

@@ -2796,13 +2796,15 @@ export interface VdclInventoryPreview {
   totalDurationMs: string;
   transcriptCount: number;
   meanCompositeScore: number | null;
+  /** Distinct dialects among the eligible recordings, sorted. */
+  dialectTags: string[];
 }
 
 export interface VdclManifestInspection {
   versionId: string;
   status: VdclVersionStatus;
   licenceKey?: string;
-  dialectTag?: string;
+  dialectTags?: string[];
   country?: { code: string; name: string } | null;
   purposes?: VdclPurpose[];
   manifestHash?: string | null;
@@ -2870,7 +2872,8 @@ export interface VdclReadiness {
   ready: boolean;
   blockers: { requirement: string; detail: string; actionable: boolean }[];
   inventory: VdclInventoryPreview | null;
-  dialectTag: string | null;
+  /** Every dialect the contributor has eligible recordings in. */
+  dialectTags: string[];
   existingAgreement: {
     id: string;
     licenceKey: string;
@@ -2884,7 +2887,8 @@ export interface VdclVersionSummary {
   version: number;
   status: VdclVersionStatus;
   licenceKey: string;
-  dialectTag: string;
+  /** The dialects this VERSION covers, from its manifest. */
+  dialectTags: string[];
   withdrawn: boolean;
   recordingCount: number | null;
   blockerMessage: string | null;
@@ -2898,7 +2902,7 @@ export interface VdclReviewPayload {
   version: number;
   status: VdclVersionStatus;
   licenceKey: string;
-  dialectTag: string;
+  dialectTags: string[];
   termsVersion: string | null;
   manifestHash: string | null;
   signedAt: string | null;
@@ -2969,7 +2973,6 @@ export interface VdclAgreementSummary {
   id: string;
   licenceKey: string;
   contributorId: string;
-  dialectTag: string;
   withdrawnAt: string | null;
   activeVersionId: string | null;
   createdAt: string;

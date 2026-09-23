@@ -183,7 +183,10 @@ export default function AdminVdclPage() {
               />
             </dl>
             <p className="text-xs text-muted">
-              Licence {data.licenceKey} &middot; {data.dialectTag}
+              Licence {data.licenceKey}
+              {data.dialectTags && data.dialectTags.length > 0
+                ? ` · ${data.dialectTags.join(', ')}`
+                : ''}
               {data.country ? ` (${data.country.name})` : ''} &middot; ASR pipeline{' '}
               {data.manifest.asrPipelineVersion ?? 'n/a'}
             </p>

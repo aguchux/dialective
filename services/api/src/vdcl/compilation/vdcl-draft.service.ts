@@ -28,7 +28,6 @@ export class VdclDraftService {
 
   async createDraft(params: {
     contributorId: string;
-    dialectTag: string;
     countryId?: string;
     purposes: VdclPurpose[];
     wordingVersion: string;
@@ -63,20 +62,13 @@ export class VdclDraftService {
 
     return this.prisma.$transaction(async (tx) => {
       const agreement = await tx.vdclAgreement.upsert({
-        where: {
-          contributorId_dialectTag: {
-            contributorId: params.contributorId,
-            dialectTag: params.dialectTag,
-          },
-        },
+        where: { contributorId: params.contributorId },
         create: {
           licenceKey: buildLicenceKey({
             countryCode: country?.code,
-            dialectTag: params.dialectTag,
             contributorId: params.contributorId,
           }),
           contributorId: params.contributorId,
-          dialectTag: params.dialectTag,
           countryId,
         },
         update: {},
@@ -84,7 +76,7 @@ export class VdclDraftService {
 
       if (agreement.withdrawnAt) {
         throw new BadRequestException(
-          'This contributor has withdrawn their licence for this dialect. A new version cannot be drafted against a withdrawn agreement.',
+          'This contributor has withdrawn their licence. A new version cannot be drafted against a withdrawn agreement.',
         );
       }
 

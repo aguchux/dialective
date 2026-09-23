@@ -21,7 +21,7 @@ export interface ReadinessBlocker {
 export interface ReadinessResult {
   ready: boolean;
   blockers: ReadinessBlocker[];
-  /** What a licence would cover today. Null when the dialect is unknown. */
+  /** What a licence would cover today. */
   inventory: {
     eligibleCount: number;
     excludedCount: number;
@@ -30,7 +30,8 @@ export interface ReadinessResult {
     transcriptCount: number;
     meanCompositeScore: number | null;
   } | null;
-  dialectTag: string | null;
+  /** Every dialect the contributor has eligible recordings in. */
+  dialectTags: string[];
   existingAgreement: {
     id: string;
     licenceKey: string;
@@ -87,7 +88,7 @@ export class VdclReadinessService {
           },
         ],
         inventory: null,
-        dialectTag: null,
+        dialectTags: [],
         existingAgreement: null,
       };
     }
@@ -123,50 +124,43 @@ export class VdclReadinessService {
       });
     }
 
-    const dialectTag = user.dialect?.tag ?? null;
-    if (!dialectTag) {
-      blockers.push({
-        requirement: 'Active dialect profile',
-        detail: 'Set the dialect you record in on your profile before signing a licence.',
-        actionable: true,
-      });
-    }
-
-    const existingAgreement = dialectTag
-      ? await this.prisma.vdclAgreement.findUnique({
-          where: { contributorId_dialectTag: { contributorId, dialectTag } },
-          select: {
-            id: true,
-            licenceKey: true,
-            withdrawnAt: true,
-            activeVersionId: true,
-          },
-        })
-      : null;
+    // No "set your profile dialect" blocker any more. A licence covers
+    // every dialect the contributor has recorded in, so what matters is
+    // whether they have eligible recordings at all -- not whether one
+    // particular profile field is filled in. Requiring it would have
+    // blocked a contributor whose recordings span dialects on the basis of
+    // a field that can only name one of them.
+    const existingAgreement = await this.prisma.vdclAgreement.findUnique({
+      where: { contributorId },
+      select: {
+        id: true,
+        licenceKey: true,
+        withdrawnAt: true,
+        activeVersionId: true,
+      },
+    });
 
     if (existingAgreement?.withdrawnAt) {
       // Withdrawal is the contributor's own decision and it is not undone
       // by starting a new draft. Reinstating is a support conversation, so
       // it is not presented as something to click through here.
       blockers.push({
-        requirement: 'No withdrawn licence for this dialect',
+        requirement: 'No withdrawn licence',
         detail:
-          'You withdrew your licence for this dialect. Contact support if you want to license your recordings again.',
+          'You withdrew your licence. Contact support if you want to license your recordings again.',
         actionable: false,
       });
     }
 
-    const inventory = dialectTag
-      ? await this.compilation.previewInventory({ contributorId, dialectTag })
-      : null;
+    const inventory = await this.compilation.previewInventory({ contributorId });
 
-    if (inventory && inventory.eligibleCount < MIN_ELIGIBLE_RECORDINGS) {
+    if (inventory.eligibleCount < MIN_ELIGIBLE_RECORDINGS) {
       blockers.push({
         requirement: 'Eligible recordings',
         detail:
           inventory.excludedCount > 0
             ? 'None of your recordings are eligible yet. See the breakdown below for why.'
-            : 'You have no completed recordings in this dialect yet.',
+            : 'You have no completed recordings yet.',
         actionable: true,
       });
     }
@@ -175,7 +169,7 @@ export class VdclReadinessService {
       ready: blockers.length === 0,
       blockers,
       inventory,
-      dialectTag,
+      dialectTags: inventory.dialectTags,
       existingAgreement,
     };
   }

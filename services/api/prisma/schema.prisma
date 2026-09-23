@@ -5068,18 +5068,31 @@ enum VdclCompilationStage {
   FAILED
 }
 
-/// One agreement per contributor per dialect. Holds the pointer to the
-/// currently-active version; the versions themselves carry the substance.
-/// Scoped by dialect because a contributor recording in two dialects may
-/// reasonably want different terms for each, and the plan's identifier
-/// convention (VDCL-{COUNTRY}-{DIALECT}-{CONTRIBUTOR}-{VERSION}) already
-/// assumes per-dialect scoping.
+/// ONE agreement per contributor, covering every dialect they record in.
+/// Holds the pointer to the currently-active version; the versions
+/// themselves carry the substance.
+///
+/// This was originally scoped per dialect, on the reasoning that someone
+/// recording two dialects might want different terms for each. In practice
+/// that produced a licence key (VDCL-NG-IG-...) that branded the whole
+/// agreement as Igbo-only, and a contributor who later recorded Pidgin had
+/// their new work sit unlicensed with nothing prompting them. With 160
+/// contributors already recording in more than one dialect, the per-dialect
+/// model described the exception rather than the rule.
+///
+/// The dialects covered are now a property of each VERSION's manifest
+/// (VdclManifest.dialectTags), derived from the recordings it actually
+/// covers. New dialects are never auto-covered: the contributor is prompted
+/// to review and sign a new version, so the signed document always
+/// describes exactly what was licensed at the moment of signature.
 model VdclAgreement {
   id            String   @id @default(uuid())
-  licenceKey    String   @unique // "VDCL-{COUNTRY}-{DIALECT}-{CONTRIBUTOR_SHORT_ID}"
+  licenceKey    String   @unique // "VDCL-{COUNTRY}-{CONTRIBUTOR_SHORT_ID}"
   contributorId String
   contributor   User     @relation("VdclContributor", fields: [contributorId], references: [id], onDelete: Cascade)
-  dialectTag    String // matches WordRecording.dialectTag convention -- not an FK, same as everywhere else
+  /// Country, not dialect. A contributor has one country; the dialects they
+  /// record in change over time, which is exactly why the agreement is no
+  /// longer scoped to one. See the model doc comment above.
   countryId     String?
   country       Country? @relation(fields: [countryId], references: [id], onDelete: SetNull)
 
@@ -5100,9 +5113,15 @@ model VdclAgreement {
 
   versions VdclVersion[] @relation("VdclAgreementVersions")
 
-  @@unique([contributorId, dialectTag])
-  @@index([contributorId])
-  @@index([dialectTag])
+  /// ONE licence per contributor, covering everything they record.
+  ///
+  /// This replaced @@unique([contributorId, dialectTag]). A per-dialect
+  /// agreement meant a contributor who recorded Igbo and later Pidgin held
+  /// two licences whose keys each branded them as single-dialect, and their
+  /// second dialect sat unlicensed until they noticed. 160 contributors
+  /// already record in more than one dialect, so that was the normal case,
+  /// not an edge one.
+  @@unique([contributorId])
   @@map("vdcl_agreements")
 }
 
@@ -5191,7 +5210,14 @@ model VdclManifest {
   id          String      @id @default(uuid())
   versionId   String      @unique
   vdclVersion VdclVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
-  manifestKey String      @unique // "VDM-{COUNTRY}-{DIALECT}-{CONTRIBUTOR_SHORT_ID}-{VERSION}"
+  manifestKey String      @unique // "VDM-{COUNTRY}-{CONTRIBUTOR_SHORT_ID}-{VERSION}"
+  /// The dialects THIS version actually covers, derived from its items at
+  /// compile time and sorted. Lives on the manifest rather than the
+  /// agreement because it is a fact about a specific dataset: the licence
+  /// itself covers whatever the contributor has recorded, and each version
+  /// records what that was when it was signed. This is what lets the key
+  /// stay stable while the document still says exactly what is licensed.
+  dialectTags String[]
 
   recordingCount     Int
   totalDurationMs    BigInt

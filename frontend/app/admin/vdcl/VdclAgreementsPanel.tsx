@@ -116,7 +116,7 @@ function AgreementRow({
         <div className="grid gap-0.5">
           <span className="font-mono text-sm font-bold text-ink">{agreement.licenceKey}</span>
           <span className="text-xs text-muted">
-            {agreement.dialectTag} · {agreement._count.versions} version(s)
+            {agreement._count.versions} version(s)
             {version ? ` · v${version.version}` : ''}
           </span>
         </div>

@@ -10,7 +10,7 @@ export interface VdclDocumentData {
   status: string;
   manifestKey: string;
   manifestHash: string;
-  dialectTag: string;
+  dialectTags: string[];
   countryName: string | null;
   contributorLabel: string;
   /** Full legal name -- present only on the contributor/DL copy. */
@@ -130,7 +130,12 @@ export function renderVdclPdf(data: VdclDocumentData): Promise<Buffer> {
     pair('Status', data.status);
     pair('Issued', formatDate(data.countersignedAt));
     pair('Parties', `Dialect Library and ${data.contributorName ?? data.contributorLabel}`);
-    pair('Dialect', `${data.dialectTag}${data.countryName ? ` (${data.countryName})` : ''}`);
+    // Plural: a licence covers every dialect its contributor records in, so
+    // the document has to be able to name more than one.
+    pair(
+      data.dialectTags.length === 1 ? 'Dialect' : 'Dialects',
+      `${data.dialectTags.join(', ') || '--'}${data.countryName ? ` (${data.countryName})` : ''}`,
+    );
     if (data.termsVersion) pair('Terms version', data.termsVersion);
 
     // 2. Plain-language summary -- deliberately first among the substantive
@@ -138,7 +143,7 @@ export function renderVdclPdf(data: VdclDocumentData): Promise<Buffer> {
     // read the part that tells them what they agreed to.
     heading(2, 'Plain-language summary');
     body(
-      `You have licensed ${data.recordingCount} of your recordings in ${data.dialectTag} to Dialect Library, so they can be included in datasets licensed to organisations that train speech and language models. You have permitted only the uses listed in section 5. Anything not listed there is not permitted.`,
+      `You have licensed ${data.recordingCount} of your recordings in ${data.dialectTags.join(', ') || 'your dialects'} to Dialect Library, so they can be included in datasets licensed to organisations that train speech and language models. You have permitted only the uses listed in section 5. Anything not listed there is not permitted.`,
     );
     body(
       'You may withdraw this licence at any time. Withdrawal stops all future use immediately, but it cannot retract a model that has already been trained or a dataset already delivered. Your identity is never disclosed to the organisations that license your recordings.',

@@ -77,7 +77,8 @@ describe('ManifestInspectorService', () => {
       },
       manifest: {
         id: 'm1',
-        manifestKey: 'VDM-NG-IGNG-USER0001-1',
+        manifestKey: 'VDM-NG-USER0001-1',
+        dialectTags: ['ig-ng'],
         recordingCount: 1,
         totalDurationMs: 2400n,
         transcriptCount: 1,
@@ -229,7 +230,8 @@ describe('ManifestInspectorService', () => {
               countryId: 'c1',
             },
             manifest: {
-              manifestKey: 'VDM-NG-IGNG-USER0001-1',
+              manifestKey: 'VDM-NG-USER0001-1',
+        dialectTags: ['ig-ng'],
               recordingCount: items.length,
               totalDurationMs: 2400n,
               transcriptCount: 1,

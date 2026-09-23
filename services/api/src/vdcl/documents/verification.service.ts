@@ -26,7 +26,12 @@ export interface PublicVerification {
   licenceKey: string | null;
   version: number | null;
   issuedAt: Date | null;
-  dialectTag: string | null;
+  /**
+   * The dialects this VERSION covers. Same class of information as the
+   * single dialect it replaced -- it describes the dataset, not the person
+   * -- so it stays inside the anonymity boundary this interface enforces.
+   */
+  dialectTags: string[];
   country: string | null;
   /** Derived, never the contributor's name -- see contributorLabel below. */
   contributorLabel: string | null;
@@ -77,7 +82,7 @@ export class VdclVerificationService {
       licenceKey: null,
       version: null,
       issuedAt: null,
-      dialectTag: null,
+      dialectTags: [],
       country: null,
       contributorLabel: null,
       recordingCount: null,
@@ -97,7 +102,6 @@ export class VdclVerificationService {
           select: {
             licenceKey: true,
             contributorId: true,
-            dialectTag: true,
             withdrawnAt: true,
             activeVersionId: true,
             country: { select: { name: true } },
@@ -108,6 +112,7 @@ export class VdclVerificationService {
             recordingCount: true,
             totalDurationMs: true,
             transcriptCount: true,
+            dialectTags: true,
           },
         },
         grants: { select: { purpose: true } },
@@ -141,7 +146,7 @@ export class VdclVerificationService {
       licenceKey: version.agreement.licenceKey,
       version: version.version,
       issuedAt: version.countersignedAt ?? version.effectiveFrom,
-      dialectTag: version.agreement.dialectTag,
+      dialectTags: version.manifest?.dialectTags ?? [],
       country: version.agreement.country?.name ?? null,
       contributorLabel: this.label(version.agreement.contributorId),
       recordingCount: version.manifest?.recordingCount ?? null,

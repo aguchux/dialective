@@ -190,7 +190,6 @@ export class VdclCompilationService {
       agreementId: string;
       agreement: {
         contributorId: string;
-        dialectTag: string;
         countryId: string | null;
         licenceKey: string;
         country: { code: string } | null;
@@ -231,18 +230,14 @@ export class VdclCompilationService {
       cursor = batch[batch.length - 1].id;
 
       for (const recording of batch) {
-        const outcome = classify(recording, {
-          contributorId: agreement.contributorId,
-          dialectTag: agreement.dialectTag,
-        });
+        const outcome = classify(recording, { contributorId: agreement.contributorId });
         if (!outcome.eligible) {
           const reason = outcome.reason as ExclusionReason;
-          // A recording belonging to another dialect is not an "exclusion"
-          // from this licence in any sense the contributor would recognise
-          // -- it simply is not in scope. Counting it would inflate the
-          // rejection figure on their review screen with work that is
-          // perfectly fine and covered by a different licence.
-          if (reason !== 'dialect_mismatch' && reason !== 'wrong_contributor') {
+          // wrong_contributor is not an "exclusion" in any sense the
+          // contributor would recognise -- it is someone else's recording,
+          // and counting it would inflate the rejection figure on their
+          // review screen with work that was never theirs.
+          if (reason !== 'wrong_contributor') {
             exclusionsByReason[reason] = (exclusionsByReason[reason] ?? 0) + 1;
           }
           continue;
@@ -289,15 +284,19 @@ export class VdclCompilationService {
       // nothing, and would be signed as such. Refusing is the honest outcome:
       // there is nothing here to license yet.
       throw new BadRequestException(
-        'No eligible recordings were found for this contributor and dialect, so there is nothing to license',
+        'No eligible recordings were found for this contributor, so there is nothing to license',
       );
     }
 
     const excludedCount = Object.values(exclusionsByReason).reduce((a, b) => a + b, 0);
     const meanCompositeScore = scoreCount > 0 ? scoreSum / scoreCount : null;
+    // Derived from what was actually compiled, never from the contributor's
+    // profile. The licence covers whatever they recorded, so the only
+    // truthful answer to "which dialects does this version cover" comes from
+    // the items themselves. Sorted so the hash is order-independent.
+    const dialectTags = [...new Set(covered.map((item) => item.dialectTag))].sort();
     const manifestKey = buildManifestKey({
       countryCode: agreement.country?.code,
-      dialectTag: agreement.dialectTag,
       contributorId: agreement.contributorId,
       version: version.version,
     });
@@ -307,7 +306,7 @@ export class VdclCompilationService {
       licenceKey: agreement.licenceKey,
       version: version.version,
       contributorId: agreement.contributorId,
-      dialectTag: agreement.dialectTag,
+      dialectTags,
       countryId: agreement.countryId,
       recordingCount: covered.length,
       totalDurationMs: totalDurationMs.toString(),
@@ -329,6 +328,7 @@ export class VdclCompilationService {
         data: {
           versionId: version.id,
           manifestKey,
+          dialectTags,
           recordingCount: covered.length,
           totalDurationMs,
           transcriptCount,
@@ -387,15 +387,18 @@ export class VdclCompilationService {
    * the outcome -- a preview that promises 400 clips and delivers 300 is
    * worse than no preview.
    */
-  async previewInventory(params: { contributorId: string; dialectTag: string }): Promise<{
+  async previewInventory(params: { contributorId: string }): Promise<{
     eligibleCount: number;
     excludedCount: number;
     exclusionsByReason: Record<string, number>;
     totalDurationMs: string;
     transcriptCount: number;
     meanCompositeScore: number | null;
+    /** Distinct dialects among the ELIGIBLE recordings, sorted. */
+    dialectTags: string[];
   }> {
     const exclusionsByReason: Record<string, number> = {};
+    const dialectTags = new Set<string>();
     let eligibleCount = 0;
     let transcriptCount = 0;
     let totalDurationMs = 0n;
@@ -415,18 +418,16 @@ export class VdclCompilationService {
       cursor = batch[batch.length - 1].id;
 
       for (const recording of batch) {
-        const outcome = classify(recording, {
-          contributorId: params.contributorId,
-          dialectTag: params.dialectTag,
-        });
+        const outcome = classify(recording, { contributorId: params.contributorId });
         if (!outcome.eligible) {
           const reason = outcome.reason as ExclusionReason;
-          if (reason !== 'dialect_mismatch' && reason !== 'wrong_contributor') {
+          if (reason !== 'wrong_contributor') {
             exclusionsByReason[reason] = (exclusionsByReason[reason] ?? 0) + 1;
           }
           continue;
         }
         eligibleCount += 1;
+        dialectTags.add(recording.dialectTag);
         if (recording.transcript) transcriptCount += 1;
         if (recording.durationMs) totalDurationMs += BigInt(recording.durationMs);
         const composite = recording.compositeScore ?? recording.score;
@@ -445,6 +446,7 @@ export class VdclCompilationService {
       totalDurationMs: totalDurationMs.toString(),
       transcriptCount,
       meanCompositeScore: scoreCount > 0 ? Number((scoreSum / scoreCount).toFixed(2)) : null,
+      dialectTags: [...dialectTags].sort(),
     };
   }
 }

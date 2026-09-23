@@ -50,7 +50,6 @@ export class ManifestInspectorService {
             id: true,
             licenceKey: true,
             contributorId: true,
-            dialectTag: true,
             countryId: true,
             withdrawnAt: true,
             country: { select: { code: true, name: true } },
@@ -96,7 +95,9 @@ export class ManifestInspectorService {
       versionId,
       status: version.status,
       licenceKey: version.agreement.licenceKey,
-      dialectTag: version.agreement.dialectTag,
+      // From the manifest, not the agreement: the agreement covers whatever
+      // the contributor records, while each version covers a specific set.
+      dialectTags: version.manifest?.dialectTags ?? [],
       country: version.agreement.country,
       purposes: version.grants.map((g) => g.purpose),
       manifest: {
@@ -138,7 +139,7 @@ export class ManifestInspectorService {
     const version = await this.prisma.vdclVersion.findUnique({
       where: { id: versionId },
       include: {
-        agreement: { select: { contributorId: true, dialectTag: true } },
+        agreement: { select: { contributorId: true } },
         manifest: { select: { id: true } },
       },
     });
@@ -191,7 +192,7 @@ export class ManifestInspectorService {
           continue;
         }
         const reason = outcome.reason as ExclusionReason;
-        if (reason === 'dialect_mismatch' || reason === 'wrong_contributor') continue;
+        if (reason === 'wrong_contributor') continue;
         const entry = byReason.get(reason) ?? { count: 0, sampleRecordingIds: [] };
         entry.count += 1;
         if (entry.sampleRecordingIds.length < 10) {
@@ -241,7 +242,6 @@ export class ManifestInspectorService {
           select: {
             licenceKey: true,
             contributorId: true,
-            dialectTag: true,
             countryId: true,
           },
         },
@@ -270,7 +270,12 @@ export class ManifestInspectorService {
       licenceKey: version.agreement.licenceKey,
       version: version.version,
       contributorId: version.agreement.contributorId,
-      dialectTag: version.agreement.dialectTag,
+      // Read back from the stored manifest, exactly as compilation wrote
+      // it. Deriving this from the agreement instead would make verification
+      // disagree with compilation the moment a contributor records a new
+      // dialect -- every previously-issued document would start failing its
+      // own hash check.
+      dialectTags: version.manifest.dialectTags,
       countryId: version.agreement.countryId,
       recordingCount: version.manifest.recordingCount,
       totalDurationMs: version.manifest.totalDurationMs.toString(),

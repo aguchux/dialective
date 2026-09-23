@@ -180,8 +180,8 @@ export class CompilationTrackerService {
       where: { agreement: { contributorId } },
       orderBy: [{ createdAt: 'desc' }],
       include: {
-        agreement: { select: { licenceKey: true, dialectTag: true, withdrawnAt: true } },
-        manifest: { select: { recordingCount: true } },
+        agreement: { select: { licenceKey: true, withdrawnAt: true } },
+        manifest: { select: { recordingCount: true, dialectTags: true } },
         compilationJob: { select: { stage: true, blockerMessage: true } },
       },
     });
@@ -191,7 +191,7 @@ export class CompilationTrackerService {
       version: v.version,
       status: v.status,
       licenceKey: v.agreement.licenceKey,
-      dialectTag: v.agreement.dialectTag,
+      dialectTags: v.manifest?.dialectTags ?? [],
       withdrawn: Boolean(v.agreement.withdrawnAt),
       recordingCount: v.manifest?.recordingCount ?? null,
       blockerMessage: v.compilationJob?.blockerMessage ?? null,

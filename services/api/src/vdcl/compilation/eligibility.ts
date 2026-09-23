@@ -22,7 +22,6 @@ export type ExclusionReason =
   | 'not_yet_scored' // still PENDING; resolves on its own, unlike the others
   | 'misplaced_dialect' // flagged by validators as the wrong dialect
   | 'no_audio_flagged' // validators reported no audible content
-  | 'dialect_mismatch' // belongs to a different dialect than this agreement
   | 'wrong_contributor'; // not owned by this contributor
 
 export interface EligibilityOutcome {
@@ -82,17 +81,17 @@ export type EligibilityCandidate = {
  */
 export function classify(
   recording: EligibilityCandidate,
-  agreement: { contributorId: string; dialectTag: string },
+  agreement: { contributorId: string },
 ): EligibilityOutcome {
   if (recording.userId !== agreement.contributorId) {
     return { eligible: false, reason: 'wrong_contributor' };
   }
-  if (recording.dialectTag !== agreement.dialectTag) {
-    // An agreement is scoped to one dialect (schema: @@unique on
-    // [contributorId, dialectTag]). A contributor recording in two dialects
-    // signs two licences, because the rights they grant may differ.
-    return { eligible: false, reason: 'dialect_mismatch' };
-  }
+  // No dialect check. An agreement covers every dialect its contributor
+  // records in, so there is nothing for a recording's dialect to mismatch
+  // against -- the manifest records which dialects a version actually
+  // covered. `misplaced_dialect` below is unrelated: that is a recording
+  // flagged as not being the dialect it claims to be, which is a defect in
+  // the recording rather than a question of scope.
 
   // Audio first: without it there is nothing to license, regardless of how
   // good the scores are. The transcript and score survive the purge, which
@@ -153,6 +152,5 @@ export const EXCLUSION_REASON_LABELS: Record<ExclusionReason, string> = {
   not_yet_scored: 'Still awaiting scoring -- will be picked up by a later compilation',
   misplaced_dialect: 'Validators flagged this as a different dialect',
   no_audio_flagged: 'Validators reported no audible content',
-  dialect_mismatch: 'Belongs to a different dialect than this licence covers',
   wrong_contributor: 'Not owned by this contributor',
 };
