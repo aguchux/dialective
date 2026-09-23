@@ -1,0 +1,13 @@
+-- Reconcile the course compliance-gate index with the schema.
+--
+-- 20260923070000_course_required_since added
+-- (status, required, requiredSince) but never declared it in
+-- schema.prisma, so `prisma migrate diff` reported drift: the database had
+-- an index the schema did not know about. The schema now declares it.
+--
+-- Dropping the narrower (status, required) index rather than keeping both:
+-- a three-column btree already serves every query that could use the
+-- two-column one, since (status, required) is a strict prefix of it. Two
+-- overlapping indexes cost writes on every course insert and update and buy
+-- nothing on reads.
+DROP INDEX IF EXISTS "courses_status_required_idx";

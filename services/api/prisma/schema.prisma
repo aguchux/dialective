@@ -3527,7 +3527,10 @@ model Course {
   progress               CourseProgress[]
 
   @@index([status, sortOrder])
-  @@index([status, required])
+  /// Covers exactly what the compliance gate scans: published + required
+  /// courses, then requiredSince to decide who each one applies to. See
+  /// CoursesService.getIncompleteRequiredCourses.
+  @@index([status, required, requiredSince])
   @@map("courses")
 }
 
