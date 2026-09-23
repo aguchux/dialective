@@ -1,6 +1,7 @@
 import type * as CanvasModule from 'canvas';
 import type { VdclDocumentData } from './vdcl-pdf.util';
 import { formatDurationShort } from './vdcl-duration.util';
+import { loadWhiteLogoPng } from '../../common/brand-assets.util';
 import {
   ACCENT,
   ACCENT_DARK,
@@ -150,11 +151,35 @@ export async function renderVdclCertificatePng(data: VdclDocumentData): Promise<
   ctx.fillStyle = rail;
   ctx.fillRect(0, 0, WIDTH, 132);
 
+  // The brand mark, left of the wordmark. A certificate gets screenshotted
+  // and pasted into decks and posts far from anything else we control, so
+  // the mark is what makes it recognisable as ours at a glance.
+  //
+  // Degrades to the wordmark alone if the asset is missing -- loadLogoPng
+  // returns null rather than throwing, and a certificate that fails to
+  // render is far worse than one without a logo. The text shifts left to
+  // close the gap, so the absence reads as a design rather than a hole.
+  // White, not the asset's own purple -- see loadWhiteLogoPng. The PDF
+  // draws the same knockout, so the two mastheads match.
+  const logoPng = loadWhiteLogoPng();
+  let textX = PAD;
+  if (logoPng) {
+    const LOGO = 56;
+    try {
+      const logo = await canvasLib.loadImage(logoPng);
+      ctx.drawImage(logo, PAD, 38, LOGO, LOGO);
+      textX = PAD + LOGO + 20;
+    } catch {
+      // A corrupt asset must not take the whole document down with it.
+      textX = PAD;
+    }
+  }
+
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 32px sans-serif';
-  ctx.fillText('Dialect Library', PAD, 60);
+  ctx.fillText('Dialect Library', textX, 60);
   ctx.font = '20px sans-serif';
-  ctx.fillText('Voice Dataset Contributor Licence', PAD, 96);
+  ctx.fillText('Voice Dataset Contributor Licence', textX, 96);
 
   // Status badge, sitting in the masthead so it is the first thing read.
   ctx.font = 'bold 17px sans-serif';

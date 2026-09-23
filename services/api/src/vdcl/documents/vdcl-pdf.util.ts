@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import { formatDurationLong } from './vdcl-duration.util';
+import { loadWhiteLogoPng } from '../../common/brand-assets.util';
 import {
   ACCENT,
   ACCENT_DARK,
@@ -154,16 +155,35 @@ export function renderVdclPdf(data: VdclDocumentData): Promise<Buffer> {
     const band = doc.linearGradient(0, 0, pageW, 0);
     band.stop(0, ACCENT_DARK).stop(1, ACCENT);
     doc.rect(0, 0, pageW, 96).fill(band);
+
+    // The brand mark, matching the PNG certificate's masthead. White rather
+    // than the asset's own purple, which would be invisible on this band --
+    // pdfkit cannot composite, so the knockout is done once in
+    // loadWhiteLogoPng and both renderers draw the same bytes.
+    //
+    // Degrades to the wordmark alone when the asset is missing (the loader
+    // returns null rather than throwing), with the text shifting left to
+    // close the gap, so the absence reads as a design rather than a hole.
+    const logo = loadWhiteLogoPng();
+    const textX = doc.page.margins.left + (logo ? 52 : 0);
+    if (logo) {
+      try {
+        doc.image(logo, doc.page.margins.left, 26, { width: 40, height: 40 });
+      } catch {
+        // A corrupt asset must not take the whole licence down with it.
+      }
+    }
+
     doc
       .fillColor('#ffffff')
       .fontSize(20)
       .font('Helvetica-Bold')
-      .text('Dialect Library', doc.page.margins.left, 28);
+      .text('Dialect Library', textX, 28);
     doc
       .fillColor('#ffffff')
       .fontSize(12)
       .font('Helvetica')
-      .text('Voice Dataset Contributor Licence', doc.page.margins.left, 56);
+      .text('Voice Dataset Contributor Licence', textX, 56);
 
     // Status chip. Green ONLY when in force -- see vdcl-theme.
     const chipText = data.status.replace(/_/g, ' ');
