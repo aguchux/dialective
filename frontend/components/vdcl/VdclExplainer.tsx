@@ -9,6 +9,7 @@ import {
   Coins,
   FileSignature,
   Repeat2,
+  Scale,
   ShieldCheck,
   Undo2,
 } from 'lucide-react';
@@ -24,7 +25,7 @@ import { primaryButton, secondaryButton } from '@/components/vdcl/vdcl-ui';
  * themselves. An acknowledgement that cannot be tied to specific wording
  * is not evidence of anything.
  */
-export const VDCL_EXPLAINER_VERSION = 'vdcl-explainer-1.1';
+export const VDCL_EXPLAINER_VERSION = 'vdcl-explainer-2.0';
 
 interface Slide {
   icon: React.ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' | 'false' }>;
@@ -38,15 +39,25 @@ interface Slide {
  * Ordered by what a contributor needs in order to decide, not by what is
  * easiest to say. The facts that constrain them for good come before the
  * confirmation, never in a PDF clause afterwards: withdrawal being
- * prospective only and a trained model being unrecoverable (slide four),
- * and the reclaim dissolving the DL tokens those recordings already earned
- * (slide five).
+ * prospective only and a trained model being unrecoverable (slide four).
  *
- * Slide five is the one a contributor is most likely to feel misled about
- * later, because it takes something away that they already hold and that
- * they were originally told they could withdraw. It says so in those words,
- * up front, rather than being softened into a benefit -- and the
- * confirmation at the end names it explicitly for the same reason.
+ * Slides five and six draw ONE line that must not be blurred: the old
+ * programme ends here, and the new one starts here. They are separate
+ * matters and the copy says so explicitly.
+ *
+ * An earlier version of slide five told contributors that reclaiming
+ * dissolved the DL tokens their recordings had already earned. That was
+ * removed deliberately, and it must not come back in any form. A balance
+ * accrued under the terms that applied when the work was done is an
+ * obligation; retiring it inside a consent flow would have used a licensing
+ * decision as the mechanism for extinguishing a debt, and would have had
+ * contributors tick a box attesting to it. What is validly owed is
+ * determined and reconciled separately from this screen, and signing a VDCL
+ * neither settles nor reduces it.
+ *
+ * Nothing here may describe royalties as certain. They depend on enterprise
+ * demand and actual licensed use, which is why the slide titles say
+ * "participate" rather than "earn".
  */
 const SLIDES: Slide[] = [
   {
@@ -71,8 +82,13 @@ const SLIDES: Slide[] = [
   },
   {
     icon: Repeat2,
-    title: 'Your earned DL tokens are dissolved',
-    body: 'When you reclaim your recordings into your licensed dataset, the DL tokens those recordings already earned are dissolved as part of the transition, and the previous withdrawal system is not coming back. What you receive instead is the dataset itself: your qualifying recordings become yours to license through a Stream Deck, which can earn royalties each time a subscriber licenses it. That is an opportunity, not a guarantee — royalties depend on subscriber demand, and may be less than the tokens dissolved, or nothing at all.',
+    title: 'A new chapter, starting from here',
+    body: 'Dialect Library is moving from the previous task-and-withdrawal model to a contributor licensing model built around Stream. Going forward, new contributions no longer generate withdrawal rewards under the previous system. Instead, you can reclaim qualifying recordings and, if you choose, license them through Stream under this licence.',
+  },
+  {
+    icon: Scale,
+    title: 'Your existing balance is a separate matter',
+    body: 'This change is about how the platform works from now on. Balances and obligations from the previous contributor programme are being reconciled separately, and they are not converted into Stream royalties because the business model is changing. Signing this licence does not give up, reduce or settle anything you are already owed. We will contact affected contributors separately about their status and next steps.',
   },
   {
     icon: Coins,
@@ -213,10 +229,10 @@ export function VdclExplainer({
                 I have read this and understand what a VDCL means.
               </span>
               <span className="text-sm leading-relaxed text-muted">
-                In particular, that the DL tokens my reclaimed recordings already earned are
-                dissolved and the old withdrawal system is not returning, and that withdrawing my
-                licence stops future use but cannot untrain a model or recall copies already
-                distributed.
+                In particular, that royalties are not guaranteed and depend on actual licensed use,
+                and that withdrawing my licence stops future use but cannot untrain a model or
+                recall copies already distributed. I understand this licence does not affect any
+                balance I am already owed under the previous programme.
               </span>
             </span>
           </label>

@@ -7,6 +7,7 @@ import { AlertCircle, ArrowLeft, ArrowRight } from 'lucide-react';
 import { cardClass } from '@/components/dashboard/shared';
 import { ActionButton } from '@/components/ui/ActionButton';
 import { ConsentCards, CONSENT_WORDING_VERSION } from '@/components/vdcl/ConsentCards';
+import { VDCL_EXPLAINER_VERSION } from '@/components/vdcl/VdclExplainer';
 import { alertTone, primaryButton } from '@/components/vdcl/vdcl-ui';
 import {
   normalizeErrorMessage,
@@ -54,6 +55,13 @@ export function VdclCreateForm() {
       await startDraft({
         purposes,
         wordingVersion: CONSENT_WORDING_VERSION,
+        // The explainer wording this contributor actually read. Slide six
+        // states that signing does not settle any balance owed under the
+        // previous programme -- a promise the platform makes AT THIS
+        // MOMENT, so which words were on screen has to be recoverable
+        // later. Without it the version constant would document a
+        // distinction nobody could evidence.
+        termsVersion: VDCL_EXPLAINER_VERSION,
         locale: typeof navigator !== 'undefined' ? navigator.language : undefined,
       }).unwrap();
       // Back to the landing page: the tracker and sign panel live there, and
