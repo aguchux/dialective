@@ -1470,6 +1470,12 @@ export interface PublicClientSettings {
   dialectValidationTaskEnabled: boolean;
   /** Master gate for contributor licensing; false hides every VDCL surface. */
   vdclEnabled: boolean;
+  /**
+   * Master gate for the stake-and-payout training economy. False means
+   * recording costs nothing and earns no DL, so every token reference in the
+   * training flow is hidden rather than shown as zero.
+   */
+  trainingEconomyEnabled: boolean;
   sessionIdleTimeoutMinutes: number;
   sessionMaxHours: number;
   phoneVerificationRequired: boolean;
@@ -2063,6 +2069,7 @@ export interface PlatformSettings {
   testimonyTextRewardTokens: string;
   testimonyVideoRewardTokens: string;
   vdclEnabled: boolean;
+  trainingEconomyEnabled: boolean;
   vdclEnforcementEnabled: boolean;
   vdclRetentionExemptionEnabled: boolean;
   qualityGateEnabled: boolean;
@@ -2263,6 +2270,10 @@ export interface PlatformSettingsInput {
   testimonyTextRewardTokens?: number;
   testimonyVideoRewardTokens?: number;
   vdclEnabled?: boolean;
+  trainingEconomyEnabled?: boolean;
+  /** Step-up for trainingEconomyEnabled only; see SettingsController. */
+  trainingEconomyOtpRequestId?: string;
+  trainingEconomyOtpCode?: string;
   vdclEnforcementEnabled?: boolean;
   vdclRetentionExemptionEnabled?: boolean;
   qualityGateEnabled?: boolean;
@@ -6203,6 +6214,21 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['PlatformSettings'],
     }),
+    /**
+     * Step-up code for switching the training economy. Separate from the
+     * settings PATCH because that endpoint carries every setting on the
+     * page -- only this one field is guarded.
+     */
+    requestTrainingEconomyOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      { enabling: boolean }
+    >({
+      query: (body) => ({
+        url: '/admin/platform-settings/training-economy/otp',
+        method: 'POST',
+        body,
+      }),
+    }),
     // Admin-only presigned upload for the top banner image -- browser PUTs
     // the raw file bytes directly to `uploadUrl`, then the caller saves
     // {bucket, key} via updatePlatformSettings, same two-step flow as
@@ -7154,6 +7180,7 @@ export const {
   useUpdateFaqMutation,
   useDeleteFaqMutation,
   useUpdatePlatformSettingsMutation,
+  useRequestTrainingEconomyOtpMutation,
   useUploadTopBannerImageMutation,
   useUploadConnectHeroImageMutation,
   useGetApiAccessTokensQuery,

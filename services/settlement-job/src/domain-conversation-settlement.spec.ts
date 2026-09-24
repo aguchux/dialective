@@ -110,6 +110,7 @@ describe('SettlementService.settleDomainConversationRecordings', () => {
       50,
       0,
       false,
+      true,
     );
 
     expect(result.settledCount).toBe(1);
@@ -150,6 +151,7 @@ describe('SettlementService.settleDomainConversationRecordings', () => {
       50,
       0,
       false,
+      true,
     );
 
     expect(result.settledCount).toBe(0);
@@ -191,6 +193,7 @@ describe('SettlementService.settleDomainConversationRecordings', () => {
       50,
       0,
       false,
+      true,
     );
 
     const [[{ data }]] = prisma.domainConversationRecording.updateMany.mock.calls;
@@ -225,6 +228,7 @@ describe('SettlementService.settleDomainConversationRecordings', () => {
       50,
       0,
       false,
+      true,
     );
 
     expect(result.settledCount).toBe(0);

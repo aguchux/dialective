@@ -151,6 +151,11 @@ export function adminActionContextHash(
         tokenAmount: number;
       }
     | { action: 'audit-hold-release'; userId: string }
+    // Switching the stake-and-payout training economy on or off platform-wide.
+    // Binds the DIRECTION, not just the action: a code issued to switch the
+    // economy OFF must not be replayable to switch it back ON, which would
+    // silently resume creating withdrawal liabilities.
+    | { action: 'training-economy-toggle'; direction: 'enable' | 'disable' }
     | { action: 'phone-verification-revoke'; userId: string }
     // Countersigning a VDCL grants commercial rights over a real person's
     // voice, which is why it joins the step-up set. It binds the MANIFEST

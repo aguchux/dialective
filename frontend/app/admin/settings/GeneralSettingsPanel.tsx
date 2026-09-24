@@ -8,6 +8,7 @@ import {
   useUploadTopBannerImageMutation,
 } from '@/store/api';
 import { ActionButton } from '@/components/ui/ActionButton';
+import { TrainingEconomyPanel } from './TrainingEconomyPanel';
 
 const ALLOWED_BANNER_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -170,7 +171,11 @@ export function GeneralSettingsPanel() {
   }
 
   return (
-    <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
+    <div className="grid gap-4">
+      {/* Above the DL economics form on purpose: it decides whether any of
+          those numbers apply at all. */}
+      <TrainingEconomyPanel />
+      <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
       <div className="grid gap-1">
         <h2 className="text-2xl leading-snug">General</h2>
         <p className="leading-relaxed text-muted">
@@ -635,6 +640,7 @@ export function GeneralSettingsPanel() {
           {error}
         </p>
       )}
-    </section>
+      </section>
+    </div>
   );
 }

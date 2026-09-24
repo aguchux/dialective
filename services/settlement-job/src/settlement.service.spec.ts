@@ -12,7 +12,7 @@ jest.mock('@dialectiva/db', () => {
 });
 
 import { SettlementService } from './settlement.service';
-import { mintTrainingPayoutOps } from '@dialectiva/db';
+import { creditTrainingPayoutOps, mintTrainingPayoutOps } from '@dialectiva/db';
 
 /**
  * Covers the bug this file fixes: resolveTimedOutScoring used to score AND
@@ -336,7 +336,7 @@ describe('SettlementService settlement state', () => {
     // path, not Tokenomics minting (see the "mints into Tokenomics" tests
     // below for that).
     // @ts-expect-error -- private method under test
-    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true);
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true, true);
 
     expect(prisma.wordRecording.update).toHaveBeenCalledWith({
       where: { id: 'recording-1' },
@@ -367,7 +367,7 @@ describe('SettlementService settlement state', () => {
     );
 
     // @ts-expect-error -- private method under test
-    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true);
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true, true);
 
     expect(prisma.wallet.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -377,6 +377,51 @@ describe('SettlementService settlement state', () => {
         }),
       }),
     );
+  });
+
+  it('credits and mints nothing while the training economy is off', async () => {
+    // The switch from the task-and-withdrawal model. Skipped outright
+    // rather than run for a zero amount, so no zero-value TRAINING_PAYOUT
+    // (or the referral/distributor bonuses that hang off it) reaches the
+    // ledger, and no supply is minted against a payout that never happened.
+    const prisma = buildPrismaMock();
+    const service = new SettlementService(
+      prisma as never,
+      { deleteObject: jest.fn().mockResolvedValue(undefined) } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
+    (creditTrainingPayoutOps as jest.Mock).mockClear();
+    (mintTrainingPayoutOps as jest.Mock).mockClear();
+
+    // @ts-expect-error -- private method under test
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, false, false);
+
+    expect(creditTrainingPayoutOps).not.toHaveBeenCalled();
+    expect(mintTrainingPayoutOps).not.toHaveBeenCalled();
+  });
+
+  it('still marks recordings settled while the training economy is off', async () => {
+    // A recording with no money attached must not be stranded in SCORED.
+    const prisma = buildPrismaMock();
+    const service = new SettlementService(
+      prisma as never,
+      { deleteObject: jest.fn().mockResolvedValue(undefined) } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
+
+    // @ts-expect-error -- private method under test
+    const result = await service.settleWordRecordings(
+      1,
+      false,
+      qualityWeights,
+      0,
+      scoreRange,
+      0,
+      false,
+      false,
+    );
+
+    expect(result.settledCount).toBe(1);
   });
 
   it('mints into the Tokenomics ledger alongside the legacy payout when minting is not paused', async () => {
@@ -389,7 +434,7 @@ describe('SettlementService settlement state', () => {
     (mintTrainingPayoutOps as jest.Mock).mockClear();
 
     // @ts-expect-error -- private method under test
-    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, false);
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, false, true);
 
     expect(mintTrainingPayoutOps).toHaveBeenCalledWith(
       prisma,
@@ -423,7 +468,7 @@ describe('SettlementService settlement state', () => {
     );
 
     // @ts-expect-error -- private method under test
-    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true);
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true, true);
 
     expect(prisma.trainingPayoutClaim.create).toHaveBeenCalledWith({
       data: { userId: 'user-1', sourceKey: 'word:word-1', recordingId: 'recording-source-1' },
@@ -440,7 +485,7 @@ describe('SettlementService settlement state', () => {
     (mintTrainingPayoutOps as jest.Mock).mockClear();
 
     // @ts-expect-error -- private method under test
-    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true);
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true, true);
 
     expect(mintTrainingPayoutOps).not.toHaveBeenCalled();
     expect(prisma.wordRecording.update).toHaveBeenCalledWith(
@@ -470,7 +515,7 @@ describe('SettlementService settlement state', () => {
     );
 
     // @ts-expect-error -- private method under test
-    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true);
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true, true);
 
     expect(prisma.wordRecording.update).toHaveBeenCalledWith({
       where: { id: 'recording-sentence-1' },

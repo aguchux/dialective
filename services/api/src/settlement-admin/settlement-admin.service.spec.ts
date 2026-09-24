@@ -34,6 +34,7 @@ describe('SettlementAdminService', () => {
     };
     settings = {
       getSettlementDelayMinutes: jest.fn().mockResolvedValue(0),
+      isTrainingEconomyEnabled: jest.fn().mockResolvedValue(true),
       getTrainingPayoutBonusCapMultiple: jest.fn().mockResolvedValue(1),
       isQualityGateEnabled: jest.fn().mockResolvedValue(false),
       getQualityWeights: jest
@@ -265,6 +266,64 @@ describe('SettlementAdminService', () => {
       const result = await service.settleOne('rec-sentence-1', false);
       expect(result.id).toBe('rec-sentence-1');
       expect(prisma.wordRecording.update).toHaveBeenCalled();
+    });
+  });
+
+  describe('training economy gate', () => {
+    beforeEach(() => {
+      prisma.wordRecording.findUnique.mockResolvedValue({
+        id: 'rec-econ',
+        status: 'SCORED',
+        settledAt: null,
+        userId: 'user-1',
+        tokensSpent: decimal(0),
+        rawScore: null,
+        score: decimal(80),
+        noiseScore: null,
+        qualityScore: null,
+        livenessScore: null,
+        asrMatchScore: null,
+        scoredAt: new Date(),
+        createdAt: new Date(),
+      });
+      (creditTrainingPayoutOps as jest.Mock).mockClear();
+      (mintTrainingPayoutOps as jest.Mock).mockClear();
+    });
+
+    it('credits nothing and mints nothing while the economy is off', async () => {
+      // Skipped outright rather than run for zero: a zero-value
+      // TRAINING_PAYOUT row (and the zero referral/distributor bonuses that
+      // hang off it) would be ledger noise reconciliation has to explain.
+      settings.isTrainingEconomyEnabled.mockResolvedValue(false);
+
+      await service.settleOne('rec-econ', false);
+
+      expect(creditTrainingPayoutOps).not.toHaveBeenCalled();
+      expect(mintTrainingPayoutOps).not.toHaveBeenCalled();
+    });
+
+    it('still marks the recording settled while the economy is off', async () => {
+      // The recording must not be left stuck in SCORED forever just because
+      // there is no money attached to it.
+      settings.isTrainingEconomyEnabled.mockResolvedValue(false);
+
+      await service.settleOne('rec-econ', false);
+
+      expect(prisma.wordRecording.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'rec-econ' },
+          data: expect.objectContaining({ status: 'SETTLED' }),
+        }),
+      );
+    });
+
+    it('credits and mints again once the economy is switched back on', async () => {
+      settings.isTrainingEconomyEnabled.mockResolvedValue(true);
+
+      await service.settleOne('rec-econ', false);
+
+      expect(creditTrainingPayoutOps).toHaveBeenCalled();
+      expect(mintTrainingPayoutOps).toHaveBeenCalled();
     });
   });
 

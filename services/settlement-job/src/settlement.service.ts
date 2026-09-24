@@ -133,6 +133,7 @@ export class SettlementService {
       scoreRange,
       settlementDelayMinutes,
       mintingPaused,
+      economyEnabled,
     ] = await Promise.all([
       this.isQualityGateEnabled(),
       this.getQualityWeights(),
@@ -140,6 +141,7 @@ export class SettlementService {
       this.getScoreRange(),
       this.getSettlementDelayMinutes(),
       this.isTokenomicsMintingPaused(),
+      this.isTrainingEconomyEnabled(),
     ]);
 
     const wordRecordingResult = await this.settleWordRecordings(
@@ -150,6 +152,7 @@ export class SettlementService {
       scoreRange,
       settlementDelayMinutes,
       mintingPaused,
+      economyEnabled,
     );
     const rejectedWordRecordingRefundCount = await this.refundRejectedWordRecordings();
     const stuckRefundCount = await this.refundStuckWordRecordings();
@@ -164,6 +167,7 @@ export class SettlementService {
       domainConversationMinQualityScoreForPayout,
       settlementDelayMinutes,
       mintingPaused,
+      economyEnabled,
     );
     const rejectedDomainConversationRefundCount =
       await this.refundRejectedDomainConversationRecordings();
@@ -219,6 +223,7 @@ export class SettlementService {
     scoreRange: { min: number; max: number },
     settlementDelayMinutes: number,
     mintingPaused: boolean,
+    economyEnabled: boolean,
   ) {
     const recordings = await this.prisma.wordRecording.findMany({
       where: {
@@ -270,17 +275,22 @@ export class SettlementService {
         const payoutScore = qualityGateEnabled ? compositeScore : recording.score;
         const payout = computeTrainingPayout(recording.tokensSpent, payoutScore, bonusCapMultiple);
         const sourceKey = trainingPayoutSourceKey(recording.wordId, recording.sentenceId);
-        const { ops, result } = await creditTrainingPayoutOps(
-          this.prisma,
-          userId,
-          payout,
-          recording.id,
-        );
+        // With the training economy off there is no payout to credit, so
+        // the credit is skipped outright rather than run for a zero amount.
+        // A zero-value TRAINING_PAYOUT row (plus zero-value referral and
+        // distributor bonus rows, which are rate * gross) would be noise in
+        // the ledger that reconciliation has to explain forever after.
+        // Skipping also stops the mint, so no supply is recorded against a
+        // payout that never happened.
+        const { ops, result } = economyEnabled
+          ? await creditTrainingPayoutOps(this.prisma, userId, payout, recording.id)
+          : { ops: [], result: null };
         // Same Tokenomics-mint-alongside-legacy-credit pattern as
         // settleSubmissions -- see mintTrainingPayoutOps's doc comment.
-        const mintOps = mintingPaused
-          ? []
-          : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;
+        const mintOps =
+          mintingPaused || !economyEnabled
+            ? []
+            : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;
 
         // Same lock-release-alongside-payout pattern as settleSubmissions,
         // same legacy-row guard.
@@ -335,7 +345,7 @@ export class SettlementService {
           await this.settleDuplicateSourceWithoutReward({ ...recording, userId });
         }
 
-        if (result.referrerUserId && Number(result.referralPayoutBonus) > 0) {
+        if (result?.referrerUserId && Number(result.referralPayoutBonus) > 0) {
           void this.smsNotifier.notifyReferralPayoutBonus(
             result.referrerUserId,
             result.referralPayoutBonus,
@@ -697,6 +707,22 @@ export class SettlementService {
     return row.scoringSlaMinutes || 60;
   }
 
+  /**
+   * Whether the stake-and-payout training economy is running.
+   *
+   * Read here rather than imported from PlatformSettingsService: settlement
+   * -job is a separate Nest tree with no access to it, same as every other
+   * setting this file reads.
+   */
+  private async isTrainingEconomyEnabled(): Promise<boolean> {
+    const row = await this.prisma.platformSettings.upsert({
+      where: { id: 'default' },
+      update: {},
+      create: { id: 'default' },
+    });
+    return row.trainingEconomyEnabled;
+  }
+
   private async isNoFailOnTrainEnabled(): Promise<boolean> {
     const row = await this.prisma.platformSettings.upsert({
       where: { id: 'default' },
@@ -903,6 +929,7 @@ export class SettlementService {
     minQualityScoreForPayout: number,
     settlementDelayMinutes: number,
     mintingPaused: boolean,
+    economyEnabled: boolean,
   ) {
     const recordings = await this.prisma.domainConversationRecording.findMany({
       where: {
@@ -964,15 +991,15 @@ export class SettlementService {
           compositeScore,
           bonusCapMultiple,
         );
-        const { ops, result } = await creditTrainingPayoutOps(
-          this.prisma,
-          userId,
-          payout,
-          recording.id,
-        );
-        const mintOps = mintingPaused
-          ? []
-          : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;
+        // See settleWordRecordings -- skipped outright when the training
+        // economy is off, credit and mint alike.
+        const { ops, result } = economyEnabled
+          ? await creditTrainingPayoutOps(this.prisma, userId, payout, recording.id)
+          : { ops: [], result: null };
+        const mintOps =
+          mintingPaused || !economyEnabled
+            ? []
+            : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;
         const lockOps = (await this.isStakeStillLocked(recording.id))
           ? [
               this.prisma.wallet.updateMany({
@@ -1000,7 +1027,7 @@ export class SettlementService {
           }),
         ]);
 
-        if (result.referrerUserId && Number(result.referralPayoutBonus) > 0) {
+        if (result?.referrerUserId && Number(result.referralPayoutBonus) > 0) {
           void this.smsNotifier.notifyReferralPayoutBonus(
             result.referrerUserId,
             result.referralPayoutBonus,

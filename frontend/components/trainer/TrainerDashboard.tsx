@@ -291,6 +291,10 @@ export function TrainerDashboard({ forcedView }: { forcedView?: DashboardView } 
       session?.user.role === 'VALIDATOR',
   });
   const { data: publicSettings } = useGetPublicClientSettingsQuery();
+  // Defaults to true so a settings fetch that has not landed yet behaves
+  // like the long-standing economy rather than briefly implying recording
+  // is free.
+  const trainingEconomyEnabled = publicSettings?.trainingEconomyEnabled ?? true;
 
   // Same "check client-side first, server is still the authoritative
   // backstop" pattern as the balance check below -- WordsService.
@@ -302,7 +306,14 @@ export function TrainerDashboard({ forcedView }: { forcedView?: DashboardView } 
       setRequiredCoursesOpen(true);
       return;
     }
-    if (data && Number(data.balance) < Number(data.taskTokenCost)) {
+    // Only meaningful while recording costs something. With the training
+    // economy off the task is free, so a low balance is no reason to stop
+    // someone starting it.
+    if (
+      trainingEconomyEnabled &&
+      data &&
+      Number(data.balance) < Number(data.taskTokenCost)
+    ) {
       setLowBalanceOpen(true);
       return;
     }

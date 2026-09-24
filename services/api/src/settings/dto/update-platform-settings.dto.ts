@@ -444,6 +444,29 @@ export class UpdatePlatformSettingsDto {
   vdclEnabled?: boolean;
 
   /**
+   * Master switch for the stake-and-payout training economy. Turning it OFF
+   * stops charging trainers to record and stops crediting training payouts,
+   * which is how new withdrawal liabilities stop forming under the move to
+   * VDCL/Stream. Step-up guarded -- see SettingsController.updateSettings.
+   */
+  @IsOptional()
+  @IsBoolean()
+  trainingEconomyEnabled?: boolean;
+
+  /**
+   * Step-up for trainingEconomyEnabled only. Carried on this DTO rather than
+   * a dedicated endpoint so the toggle saves with the rest of the panel;
+   * SettingsController verifies them only when the flag actually changes.
+   */
+  @IsOptional()
+  @IsString()
+  trainingEconomyOtpRequestId?: string;
+
+  @IsOptional()
+  @IsString()
+  trainingEconomyOtpCode?: string;
+
+  /**
    * VDCL commercial lock. Turning this ON denies any subscriber stream of a
    * recording not covered by an ACTIVE VDCL granting the requested purpose.
    * It is a HARD gate: with no manifests in existence it denies everything,

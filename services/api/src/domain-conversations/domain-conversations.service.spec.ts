@@ -86,6 +86,7 @@ describe('DomainConversationsService', () => {
     settings = {
       isDomainConversationTaskEnabled: jest.fn().mockResolvedValue(true),
       getDomainConversationTaskTokenCost: jest.fn().mockResolvedValue(3),
+      isTrainingEconomyEnabled: jest.fn().mockResolvedValue(true),
       getDomainConversationMinDurationSeconds: jest.fn().mockResolvedValue(15),
       getDomainConversationMaxDurationSeconds: jest.fn().mockResolvedValue(60),
       getAuditHoldEveryNSubmissions: jest.fn().mockResolvedValue(0),

@@ -16,6 +16,9 @@ describe('WordsService', () => {
   };
   const settings = {
     getTaskTokenCost: jest.fn(),
+    // Defaults to the long-standing behaviour so every existing expectation
+    // about stakes and locks still describes the economy being ON.
+    isTrainingEconomyEnabled: jest.fn().mockResolvedValue(true),
     isReverseWordTrainingEnabled: jest.fn(),
     isPhraseEscalationEnabled: jest.fn(),
     isWordTrainingEnabled: jest.fn(),
@@ -1407,6 +1410,101 @@ describe('WordsService', () => {
       await expect(service.nextAssignment(trainer.id, session.id)).rejects.toThrow(
         'NO_WORDS_AVAILABLE',
       );
+    });
+  });
+
+  describe('training economy gate', () => {
+    const assignment = {
+      id: 'assignment-econ',
+      consumedAt: null,
+      direction: 'ENGLISH_TO_DIALECT',
+      uploadBucket: 'b',
+      uploadKey: 'k',
+      word: { text: 'welcome' },
+      wordId: 'word-1',
+      sourceRecordingId: null,
+      session: { id: session.id, userId: trainer.id, user: trainer },
+    };
+    const recordingBody = {
+      bucket: 'b',
+      audioKey: 'k',
+      responseText: 'welcome',
+      durationMs: 1000,
+      noiseRating: 'QUIET',
+    };
+
+    let walletUpdateMany: jest.Mock;
+    let ledgerCreate: jest.Mock;
+    let recordingCreate: jest.Mock;
+
+    beforeEach(() => {
+      walletUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
+      ledgerCreate = jest.fn().mockResolvedValue({});
+      recordingCreate = jest.fn().mockResolvedValue({ id: 'recording-econ' });
+      prisma.wordTrainingAssignment.findUnique.mockResolvedValue(assignment);
+      prisma.$transaction.mockImplementation(async (fn: any) =>
+        fn({
+          wordTrainingAssignment: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          wallet: { updateMany: walletUpdateMany },
+          wordRecording: { create: recordingCreate },
+          ledgerEntry: { create: ledgerCreate },
+        }),
+      );
+      prisma.wordRecording.count.mockResolvedValue(0);
+      prisma.wordRecording.findUnique.mockResolvedValue(null);
+      settings.getTaskTokenCost.mockResolvedValue(3);
+      // This suite has no global clearMocks, so call history accumulates
+      // across tests in the file. Cleared here so "was the cost read?" is a
+      // question about THIS call, not about everything that ran before it.
+      settings.getTaskTokenCost.mockClear();
+    });
+
+    it('locks the stake and writes a TASK_LOCK while the economy is on', async () => {
+      settings.isTrainingEconomyEnabled.mockResolvedValue(true);
+
+      await service.createRecording(trainer.id, recordingBody as any);
+
+      expect(walletUpdateMany).toHaveBeenCalled();
+      expect(ledgerCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ type: 'TASK_LOCK', amount: -3 }) }),
+      );
+      expect(recordingCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ tokensSpent: 3 }) }),
+      );
+    });
+
+    it('takes no stake and writes no ledger row while the economy is off', async () => {
+      settings.isTrainingEconomyEnabled.mockResolvedValue(false);
+
+      await service.createRecording(trainer.id, recordingBody as any);
+
+      // No wallet movement at all -- not a zero-value one.
+      expect(walletUpdateMany).not.toHaveBeenCalled();
+      expect(ledgerCreate).not.toHaveBeenCalled();
+    });
+
+    it('stamps tokensSpent 0 so settlement computes a zero payout', async () => {
+      // The payout formula is stake + (stake * score * cap), so a zero
+      // stake is what makes the payout zero without settlement needing a
+      // rule of its own.
+      settings.isTrainingEconomyEnabled.mockResolvedValue(false);
+
+      await service.createRecording(trainer.id, recordingBody as any);
+
+      expect(recordingCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ tokensSpent: 0 }) }),
+      );
+    });
+
+    it('never reads the task cost while the economy is off', async () => {
+      // getTaskTokenCost throws on a cost of <= 0, so "just set it to zero"
+      // is not a workaround -- the gate has to skip the charge, not price it
+      // at nothing.
+      settings.isTrainingEconomyEnabled.mockResolvedValue(false);
+
+      await service.createRecording(trainer.id, recordingBody as any);
+
+      expect(settings.getTaskTokenCost).not.toHaveBeenCalled();
     });
   });
 

@@ -815,6 +815,16 @@ function otpCopyForPurpose(purpose: OtpPurpose): { subject: string; intro: strin
         intro:
           'Enter this code to sign your Voice Dataset Contributor Licence. Only use it if you are signing your licence right now.',
       };
+    case 'TRAINING_ECONOMY_TOGGLE':
+      // Says which DIRECTION is being authorised, because the two are not
+      // equally consequential: stopping payouts changes what every trainer
+      // earns from their next recording onward, and resuming them starts
+      // creating new withdrawal liabilities again.
+      return {
+        subject: 'Change the training payout system platform-wide',
+        intro:
+          'Enter this code to switch the stake-and-payout training economy on or off for every trainer. While it is off, recording costs nothing and earns no DL. This does not affect any balance already earned.',
+      };
     case 'VDCL_COUNTERSIGN':
       // Names the counterparty, not just the act. Countersigning is
       // executed on behalf of the parent company, and an admin receiving

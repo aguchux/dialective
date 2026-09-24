@@ -101,20 +101,25 @@ export class DomainConversationsService {
     }
 
     const trainer = await this.getTrainer(userId);
-    const [taskTokenCost, wallet] = await Promise.all([
-      this.settings.getDomainConversationTaskTokenCost(),
+    // See WordsService.nextAssignment: the balance gate only applies while
+    // recording costs something.
+    const [economyEnabled, wallet] = await Promise.all([
+      this.settings.isTrainingEconomyEnabled(),
       this.prisma.wallet.upsert({
         where: { userId },
         update: {},
         create: { userId },
       }),
     ]);
-    if (wallet.balance.lt(taskTokenCost)) {
-      throw new UnprocessableEntityException({
-        message: `Insufficient balance: this task costs ${taskTokenCost} tokens`,
-        insufficientBalance: true,
-        taskTokenCost,
-      });
+    if (economyEnabled) {
+      const taskTokenCost = await this.settings.getDomainConversationTaskTokenCost();
+      if (wallet.balance.lt(taskTokenCost)) {
+        throw new UnprocessableEntityException({
+          message: `Insufficient balance: this task costs ${taskTokenCost} tokens`,
+          insufficientBalance: true,
+          taskTokenCost,
+        });
+      }
     }
 
     await this.assertPoolNotExhaustedForTrainer(userId);
@@ -204,7 +209,12 @@ export class DomainConversationsService {
       );
     }
 
-    const taskTokenCost = await this.settings.getDomainConversationTaskTokenCost();
+    // See WordsService.createRecording -- zero stake when the training
+    // economy is switched off, and no TASK_LOCK row written for it.
+    const economyEnabled = await this.settings.isTrainingEconomyEnabled();
+    const taskTokenCost = economyEnabled
+      ? await this.settings.getDomainConversationTaskTokenCost()
+      : 0;
     const wallet = await this.prisma.wallet.upsert({
       where: { userId },
       update: {},
@@ -221,17 +231,19 @@ export class DomainConversationsService {
         throw new ConflictException('This recording has already been submitted');
       }
 
-      const lock = await tx.wallet.updateMany({
-        where: { id: wallet.id, balance: { gte: taskTokenCost } },
-        data: {
-          balance: { decrement: taskTokenCost },
-          lockedBalance: { increment: taskTokenCost },
-        },
-      });
-      if (lock.count === 0) {
-        throw new UnprocessableEntityException(
-          `Insufficient balance: this task costs ${taskTokenCost} tokens`,
-        );
+      if (economyEnabled) {
+        const lock = await tx.wallet.updateMany({
+          where: { id: wallet.id, balance: { gte: taskTokenCost } },
+          data: {
+            balance: { decrement: taskTokenCost },
+            lockedBalance: { increment: taskTokenCost },
+          },
+        });
+        if (lock.count === 0) {
+          throw new UnprocessableEntityException(
+            `Insufficient balance: this task costs ${taskTokenCost} tokens`,
+          );
+        }
       }
 
       const created = await tx.domainConversationRecording.create({
@@ -250,14 +262,16 @@ export class DomainConversationsService {
         },
       });
 
-      await tx.ledgerEntry.create({
-        data: {
-          walletId: wallet.id,
-          type: 'TASK_LOCK',
-          amount: -taskTokenCost,
-          reference: created.id,
-        },
-      });
+      if (economyEnabled) {
+        await tx.ledgerEntry.create({
+          data: {
+            walletId: wallet.id,
+            type: 'TASK_LOCK',
+            amount: -taskTokenCost,
+            reference: created.id,
+          },
+        });
+      }
 
       return created;
     });

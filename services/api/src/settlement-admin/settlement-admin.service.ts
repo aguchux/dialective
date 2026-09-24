@@ -160,6 +160,7 @@ export class SettlementAdminService {
       scoreRange,
       settlementDelayMinutes,
       mintingPaused,
+      economyEnabled,
     ] = await Promise.all([
       this.settings.getTrainingPayoutBonusCapMultiple(),
       this.settings.isQualityGateEnabled(),
@@ -168,6 +169,7 @@ export class SettlementAdminService {
       this.settings.getScoreRange(),
       this.settings.getSettlementDelayMinutes(),
       this.tokenomics.isMintingPaused(),
+      this.settings.isTrainingEconomyEnabled(),
     ]);
 
     return this.settleWordRecording(id, force, {
@@ -178,6 +180,7 @@ export class SettlementAdminService {
       scoreRange,
       settlementDelayMinutes,
       mintingPaused,
+      economyEnabled,
     });
   }
 
@@ -196,6 +199,7 @@ export class SettlementAdminService {
       scoreRange,
       settlementDelayMinutes,
       mintingPaused,
+      economyEnabled,
     ] = await Promise.all([
       this.settings.getTrainingPayoutBonusCapMultiple(),
       this.settings.isQualityGateEnabled(),
@@ -204,6 +208,7 @@ export class SettlementAdminService {
       this.settings.getScoreRange(),
       this.settings.getSettlementDelayMinutes(),
       this.tokenomics.isMintingPaused(),
+      this.settings.isTrainingEconomyEnabled(),
     ]);
 
     let settledCount = 0;
@@ -228,6 +233,7 @@ export class SettlementAdminService {
           scoreRange,
           settlementDelayMinutes,
           mintingPaused,
+          economyEnabled,
         });
         settledCount += 1;
       } catch (err) {
@@ -259,6 +265,7 @@ export class SettlementAdminService {
       scoreRange: { min: number; max: number };
       settlementDelayMinutes: number;
       mintingPaused: boolean;
+      economyEnabled: boolean;
     },
   ) {
     const recording = await this.prisma.wordRecording.findUnique({ where: { id } });
@@ -296,15 +303,16 @@ export class SettlementAdminService {
     const payoutScore = ctx.qualityGateEnabled ? compositeScore : recording.score;
     const payout = computeTrainingPayout(recording.tokensSpent, payoutScore, ctx.bonusCapMultiple);
     const sourceKey = trainingPayoutSourceKey(recording.wordId, recording.sentenceId);
-    const { ops, result } = await creditTrainingPayoutOps(
-      this.prisma,
-      userId,
-      payout,
-      recording.id,
-    );
-    const mintOps = ctx.mintingPaused
-      ? []
-      : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;
+    // See SettlementService.settleWordRecordings -- with the training
+    // economy off there is nothing to credit, so credit and mint are both
+    // skipped rather than run for zero.
+    const { ops, result } = ctx.economyEnabled
+      ? await creditTrainingPayoutOps(this.prisma, userId, payout, recording.id)
+      : { ops: [], result: null };
+    const mintOps =
+      ctx.mintingPaused || !ctx.economyEnabled
+        ? []
+        : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;
     const lockOps = (await this.isStakeStillLocked(recording.id))
       ? [
           this.prisma.wallet.updateMany({
@@ -354,7 +362,7 @@ export class SettlementAdminService {
     }
 
     this.logger.log(`Manually settled wordRecording=${recording.id} payout=${payout.toString()}`);
-    if (result.referrerUserId && Number(result.referralPayoutBonus) > 0) {
+    if (result?.referrerUserId && Number(result.referralPayoutBonus) > 0) {
       void this.notifyReferralPayoutBonusSms(result.referrerUserId, result.referralPayoutBonus);
     }
     return { id: recording.id, payoutTokenAmount: payout.toString() };

@@ -668,6 +668,7 @@ enum OtpPurpose {
   ACCOUNT_CLOSE
   VDCL_SIGN // step-up confirming a contributor's signature on a VDCL version; bound to the exact manifest hash and granted purposes being signed (see vdcl-signing-context.util.ts)
   VDCL_COUNTERSIGN // step-up confirming Dialect Library's countersignature, executed on behalf of Golojan Technologies LLC. Previously borrowed ADMIN_PAYOUT, whose email said nothing about what was being authorised
+  TRAINING_ECONOMY_TOGGLE // step-up confirming the stake-and-payout training economy is being switched on or off platform-wide; bound to the DIRECTION so a code issued to switch it off cannot be replayed to switch it back on
 }
 
 enum ManualPhoneVerificationStatus {
@@ -3073,6 +3074,33 @@ model PlatformSettings {
   wordTrainingRecordingMaxTimeoutSeconds     Int? // overrides WORD_TRAINING_RECORDING_MAX_TIMEOUT_SECONDS when set; hard ceiling on the total per-round countdown after the per-word multiplication, so an unusually long prompt can't produce a runaway timer
   trainingPayoutBonusCapMultiple             Decimal?  @db.Decimal(5, 2) // overrides TRAINING_PAYOUT_BONUS_CAP_MULTIPLE when set; caps the score-scaled bonus at this multiple of tokensSpent (see computeTrainingPayout)
   taskTokenCost                              Decimal?  @db.Decimal(20, 8) // overrides TASK_TOKEN_COST when set; tokens debited from a trainer's wallet per submission
+  /// Master switch for the stake-and-payout training economy.
+  ///
+  /// ON (the default, and how the platform has always run): submitting a
+  /// recording locks taskTokenCost from the trainer's wallet, and settlement
+  /// returns that stake plus a score-scaled bonus -- see computeTrainingPayout,
+  /// where payout = stake + (stake * score * capMultiple).
+  ///
+  /// OFF: no stake is taken and no payout is credited. Recording, scoring,
+  /// ASR and quality gating are untouched; only the money stops. This is the
+  /// switch from the task-and-withdrawal model to the VDCL/Stream licensing
+  /// model -- its purpose is to stop NEW withdrawal liabilities forming from
+  /// a chosen date forward.
+  ///
+  /// It is ONE flag rather than separate charge/payout flags on purpose. The
+  /// payout returns the stake, so the two cannot be switched independently:
+  /// stopping payouts alone would leave trainers paying to record and
+  /// receiving nothing, which is the one combination that must never ship.
+  ///
+  /// Turning it off does NOT settle, reduce or convert any balance already
+  /// earned. Those are reconciled separately; this flag only governs what
+  /// happens from now on.
+  ///
+  /// In-flight work is safe either way. Recordings that already hold a stake
+  /// carry a TASK_LOCK ledger row, so settlement still releases them
+  /// normally; recordings created while this is off have none, so settlement
+  /// takes its legacy pre-locking branch and credits tokensSpent, which is 0.
+  trainingEconomyEnabled                     Boolean   @default(true)
   reverseWordTrainingEnabled                 Boolean   @default(false)
   adminPayoutOtpEnabled                      Boolean   @default(false) // when true, admin/training-payouts and admin/withdrawals/:id/resolve require the acting admin to verify an emailed OTP first
   sessionIdleTimeoutMinutes                  Int       @default(30) // minutes of inactivity before any authenticated session (trainer or admin) is force-signed-out and must reauthenticate -- enforced both client-side (activity-tracking sign-out) and server-side (frontend/proxy.ts compares against the JWT's lastActiveAt claim, so it can't be bypassed by disabling client JS)

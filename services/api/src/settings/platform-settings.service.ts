@@ -512,6 +512,19 @@ export class PlatformSettingsService {
   }
 
   /**
+   * Whether the stake-and-payout training economy is running.
+   *
+   * fetchRow, not getRow: this decides whether a trainer is charged and
+   * whether a payout is owed, so a cached read would keep creating
+   * liabilities for the life of the TTL after an admin switched it off.
+   * Immediacy is the entire point of the switch.
+   */
+  async isTrainingEconomyEnabled(): Promise<boolean> {
+    const row = await this.fetchRow();
+    return row.trainingEconomyEnabled;
+  }
+
+  /**
    * The VDCL commercial lock. Off by default so the enforcement code ships
    * dark -- see the column doc comment in schema.prisma.
    */
@@ -1275,6 +1288,7 @@ export class PlatformSettingsService {
       submissionRateLimitEnabled: row.submissionRateLimitEnabled,
       submissionRateLimitPerHour: row.submissionRateLimitPerHour,
       vdclEnabled: row.vdclEnabled,
+      trainingEconomyEnabled: row.trainingEconomyEnabled,
       vdclEnforcementEnabled: row.vdclEnforcementEnabled,
       vdclRetentionExemptionEnabled: row.vdclRetentionExemptionEnabled,
       submissionDailyLimitEnabled: row.submissionDailyLimitEnabled,
@@ -1530,6 +1544,7 @@ export class PlatformSettingsService {
     submissionRateLimitEnabled?: boolean;
     submissionRateLimitPerHour?: number;
     vdclEnabled?: boolean;
+    trainingEconomyEnabled?: boolean;
     vdclEnforcementEnabled?: boolean;
     vdclRetentionExemptionEnabled?: boolean;
     submissionDailyLimitEnabled?: boolean;
@@ -2285,6 +2300,7 @@ export class PlatformSettingsService {
       submissionRateLimitEnabled: row.submissionRateLimitEnabled,
       submissionRateLimitPerHour: row.submissionRateLimitPerHour,
       vdclEnabled: row.vdclEnabled,
+      trainingEconomyEnabled: row.trainingEconomyEnabled,
       vdclEnforcementEnabled: row.vdclEnforcementEnabled,
       vdclRetentionExemptionEnabled: row.vdclRetentionExemptionEnabled,
       submissionDailyLimitEnabled: row.submissionDailyLimitEnabled,
@@ -2478,6 +2494,7 @@ export class PlatformSettingsService {
       // without an admin-only call. The backend guard is the actual gate --
       // this only stops us advertising a door that would refuse.
       vdclEnabled: row.vdclEnabled,
+      trainingEconomyEnabled: row.trainingEconomyEnabled,
       dialectValidationPayoutTokens: row.dialectValidationPayoutTokens?.toString() ?? null,
       misplacedDialectFlagThreshold: row.misplacedDialectFlagThreshold,
       noAudioClawbackFlagThreshold: row.noAudioClawbackFlagThreshold,

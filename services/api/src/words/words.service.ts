@@ -175,20 +175,26 @@ export class WordsService {
 
     const trainer = await this.getTrainer(userId);
 
-    const [taskTokenCost, wallet] = await Promise.all([
-      this.settings.getTaskTokenCost(),
+    // The balance gate only applies while recording costs something. With
+    // the training economy off, turning away a trainer with an empty wallet
+    // would block them from a task that is now free.
+    const [economyEnabled, wallet] = await Promise.all([
+      this.settings.isTrainingEconomyEnabled(),
       this.prisma.wallet.upsert({
         where: { userId },
         update: {},
         create: { userId },
       }),
     ]);
-    if (wallet.balance.lt(taskTokenCost)) {
-      throw new UnprocessableEntityException({
-        message: `Insufficient balance: this task costs ${taskTokenCost} tokens`,
-        insufficientBalance: true,
-        taskTokenCost,
-      });
+    if (economyEnabled) {
+      const taskTokenCost = await this.settings.getTaskTokenCost();
+      if (wallet.balance.lt(taskTokenCost)) {
+        throw new UnprocessableEntityException({
+          message: `Insufficient balance: this task costs ${taskTokenCost} tokens`,
+          insufficientBalance: true,
+          taskTokenCost,
+        });
+      }
     }
 
     // Live-evaluated every call, never cached/session-fixed -- same posture
@@ -488,7 +494,11 @@ export class WordsService {
         : null;
     const score = validationScore !== null ? validationScore * 100 : null;
 
-    const taskTokenCost = await this.settings.getTaskTokenCost();
+    // Zero when the training economy is switched off: no stake is taken,
+    // and the recording is stamped tokensSpent: 0 so settlement computes a
+    // zero payout from the same formula rather than needing its own rule.
+    const economyEnabled = await this.settings.isTrainingEconomyEnabled();
+    const taskTokenCost = economyEnabled ? await this.settings.getTaskTokenCost() : 0;
     const wallet = await this.prisma.wallet.upsert({
       where: { userId },
       update: {},
@@ -509,17 +519,24 @@ export class WordsService {
       // covers the whole attempt even for DIALECT_TO_ENGLISH, which also
       // inserts a second redo recording below -- presented to the trainer
       // as a single exercise, not two separate charges.
-      const lock = await tx.wallet.updateMany({
-        where: { id: wallet.id, balance: { gte: taskTokenCost } },
-        data: {
-          balance: { decrement: taskTokenCost },
-          lockedBalance: { increment: taskTokenCost },
-        },
-      });
-      if (lock.count === 0) {
-        throw new UnprocessableEntityException(
-          `Insufficient balance: this task costs ${taskTokenCost} tokens`,
-        );
+      // Skipped entirely rather than locking zero: a TASK_LOCK row is what
+      // settlement's isStakeStillLocked looks for, so writing one for a
+      // zero stake would make settlement try to release a lock that holds
+      // nothing. With no row it takes its legacy pre-locking branch and
+      // credits tokensSpent, which is 0 -- a clean no-op.
+      if (economyEnabled) {
+        const lock = await tx.wallet.updateMany({
+          where: { id: wallet.id, balance: { gte: taskTokenCost } },
+          data: {
+            balance: { decrement: taskTokenCost },
+            lockedBalance: { increment: taskTokenCost },
+          },
+        });
+        if (lock.count === 0) {
+          throw new UnprocessableEntityException(
+            `Insufficient balance: this task costs ${taskTokenCost} tokens`,
+          );
+        }
       }
 
       const created = await tx.wordRecording.create({
@@ -550,14 +567,16 @@ export class WordsService {
         },
       });
 
-      await tx.ledgerEntry.create({
-        data: {
-          walletId: wallet.id,
-          type: 'TASK_LOCK',
-          amount: -taskTokenCost,
-          reference: created.id,
-        },
-      });
+      if (economyEnabled) {
+        await tx.ledgerEntry.create({
+          data: {
+            walletId: wallet.id,
+            type: 'TASK_LOCK',
+            amount: -taskTokenCost,
+            reference: created.id,
+          },
+        });
+      }
 
       return created;
     });
