@@ -57,6 +57,7 @@ import {
 } from '@/lib/format';
 import { resolveDialectName, useDialectName } from '@/lib/dialect-name';
 import { WordTrainingDialog } from '@/components/trainer/WordTrainingDialog';
+import { ContributorDecksPanel } from '@/components/vdcl/ContributorDecksPanel';
 import { TaskPickerDialog } from '@/components/trainer/TaskPickerDialog';
 import { DomainConversationDialog } from '@/components/trainer/DomainConversationDialog';
 import { DialectValidationDialog } from '@/components/trainer/DialectValidationDialog';
@@ -1614,7 +1615,7 @@ export function formatDurationLabel(ms: number): string {
   return `${hours}h ${minutes}m`;
 }
 
-type TrainingTab = 'training' | 'tasks';
+type TrainingTab = 'training' | 'tasks' | 'decks';
 
 function TrainingView({
   dialectTag,
@@ -1629,6 +1630,8 @@ function TrainingView({
 }) {
   const [tab, setTab] = useState<TrainingTab>('tasks');
   const dialectName = useDialectName(dialectTag);
+  const { data: trainingPublicSettings } = useGetPublicClientSettingsQuery();
+  const vdclEnabled = trainingPublicSettings?.vdclEnabled ?? false;
 
   return (
     <div>
@@ -1666,7 +1669,18 @@ function TrainingView({
         >
           Training
         </button>
+        <button
+          aria-selected={tab === 'decks'}
+          className={`min-h-9 rounded-md px-4 text-sm font-extrabold transition-colors ${tab === 'decks' ? 'bg-accent text-white' : 'text-muted hover:text-ink'}`}
+          onClick={() => setTab('decks')}
+          role="tab"
+          type="button"
+        >
+          Stream Deck
+        </button>
       </div>
+
+      {tab === 'decks' ? <ContributorDecksPanel vdclEnabled={vdclEnabled} /> : null}
 
       {tab === 'training' ? (
         <div className="grid gap-5 md:grid-cols-2">
@@ -1770,9 +1784,9 @@ function TrainingView({
             </article>
           )}
         </div>
-      ) : (
+      ) : tab === 'tasks' ? (
         <MyTasksView />
-      )}
+      ) : null}
     </div>
   );
 }

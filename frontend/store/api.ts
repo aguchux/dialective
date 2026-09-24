@@ -2872,6 +2872,29 @@ export interface VdclHashVerification {
   matches: boolean;
 }
 
+/**
+ * One dialect's worth of a contributor's licensed recordings. A contributor
+ * holds ONE licence covering every dialect they record in, but one deck per
+ * dialect -- they are different datasets.
+ */
+export interface ContributorDeck {
+  dialectTag: string;
+  dialectName: string;
+  recordingCount: number;
+  totalDurationMs: number;
+  transcriptCount: number;
+  meanCompositeScore: number | null;
+  /** Eligible recordings made after signing, so not yet in the frozen manifest. */
+  uncoveredCount: number;
+}
+
+export interface ContributorDeckList {
+  licenceKey: string | null;
+  version: number | null;
+  countersignedAt: string | null;
+  decks: ContributorDeck[];
+}
+
 export interface VdclReadiness {
   ready: boolean;
   blockers: { requirement: string; detail: string; actionable: boolean }[];
@@ -6635,6 +6658,10 @@ export const dialectivaApi = createApi({
       query: () => '/vdcl/versions',
       providesTags: ['VdclMaker'],
     }),
+    getMyVdclDecks: builder.query<ContributorDeckList, void>({
+      query: () => '/vdcl/decks',
+      providesTags: ['VdclMaker'],
+    }),
     startVdclDraft: builder.mutation<StartVdclDraftResult, StartVdclDraftInput>({
       query: (body) => ({ url: '/vdcl/drafts', method: 'POST', body }),
       invalidatesTags: ['VdclMaker'],
@@ -7193,6 +7220,7 @@ export const {
   useVerifyVdclManifestHashQuery,
   useGetVdclReadinessQuery,
   useGetMyVdclVersionsQuery,
+  useGetMyVdclDecksQuery,
   useStartVdclDraftMutation,
   useGetVdclReviewQuery,
   useGetVdclVersionStatusQuery,

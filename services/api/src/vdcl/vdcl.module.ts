@@ -20,6 +20,8 @@ import { VdclVerificationService } from './documents/verification.service';
 import { VdclVerificationController } from './documents/verification.controller';
 import { StorageModule } from '../storage/storage.module';
 import { VdclEnabledGuard } from './vdcl-enabled.guard';
+import { ContributorDecksController } from './decks/contributor-decks.controller';
+import { ContributorDecksService } from './decks/contributor-decks.service';
 
 /**
  * Voice Dataset Contributor Licence (VDCL).
@@ -45,6 +47,7 @@ import { VdclEnabledGuard } from './vdcl-enabled.guard';
     VdclAdminController,
     VdclCompilationController,
     VdclMakerController,
+    ContributorDecksController,
     VdclVerificationController,
   ],
   providers: [
@@ -60,6 +63,7 @@ import { VdclEnabledGuard } from './vdcl-enabled.guard';
     VdclReadinessService,
     VdclSigningService,
     CompilationTrackerService,
+    ContributorDecksService,
     VdclDocumentsService,
     VdclVerificationService,
   ],
