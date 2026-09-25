@@ -21,6 +21,7 @@ import { RequestLoggerMiddleware } from './common/middleware/request-logger.midd
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { SettingsModule } from './settings/settings.module';
+import { TrainingEconomyModule } from './training-economy/training-economy.module';
 import { BlogModule } from './blog/blog.module';
 import { CoursesModule } from './courses/courses.module';
 import { P2PModule } from './p2p/p2p.module';
@@ -66,6 +67,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     LeadsModule,
     AuthModule,
     SettingsModule,
+    TrainingEconomyModule,
     AnalyticsModule,
     BlogModule,
     CoursesModule,

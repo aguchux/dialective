@@ -5,9 +5,9 @@ import { AlertTriangle, KeyRound } from 'lucide-react';
 import { ActionButton } from '@/components/ui/ActionButton';
 import {
   normalizeErrorMessage,
+  useApplyTrainingEconomyMutation,
   useGetPlatformSettingsQuery,
   useRequestTrainingEconomyOtpMutation,
-  useUpdatePlatformSettingsMutation,
 } from '@/store/api';
 
 const cardClass = 'rounded-xl border border-line bg-surface';
@@ -30,7 +30,7 @@ const fieldClass =
  */
 export function TrainingEconomyPanel() {
   const { data: settings } = useGetPlatformSettingsQuery();
-  const [updateSettings, { isLoading: isSaving }] = useUpdatePlatformSettingsMutation();
+  const [applyTrainingEconomy, { isLoading: isSaving }] = useApplyTrainingEconomyMutation();
   const [requestOtp, { isLoading: isRequesting }] = useRequestTrainingEconomyOtpMutation();
 
   const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
@@ -72,10 +72,10 @@ export function TrainingEconomyPanel() {
     setMessage(null);
     setError(null);
     try {
-      await updateSettings({
-        trainingEconomyEnabled: target,
-        trainingEconomyOtpRequestId: otpRequestId ?? undefined,
-        trainingEconomyOtpCode: code.trim() || undefined,
+      await applyTrainingEconomy({
+        enabled: target,
+        otpRequestId: otpRequestId ?? undefined,
+        code: code.trim() || undefined,
       }).unwrap();
       setMessage(
         target

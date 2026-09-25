@@ -2270,10 +2270,6 @@ export interface PlatformSettingsInput {
   testimonyTextRewardTokens?: number;
   testimonyVideoRewardTokens?: number;
   vdclEnabled?: boolean;
-  trainingEconomyEnabled?: boolean;
-  /** Step-up for trainingEconomyEnabled only; see SettingsController. */
-  trainingEconomyOtpRequestId?: string;
-  trainingEconomyOtpCode?: string;
   vdclEnforcementEnabled?: boolean;
   vdclRetentionExemptionEnabled?: boolean;
   qualityGateEnabled?: boolean;
@@ -6229,6 +6225,21 @@ export const dialectivaApi = createApi({
         body,
       }),
     }),
+    /**
+     * Apply the training-economy switch. Its own endpoint rather than a
+     * field on the settings PATCH: one atomic step-up-guarded action.
+     */
+    applyTrainingEconomy: builder.mutation<
+      PlatformSettings,
+      { enabled: boolean; otpRequestId?: string; code?: string }
+    >({
+      query: (body) => ({
+        url: '/admin/platform-settings/training-economy',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['PlatformSettings'],
+    }),
     // Admin-only presigned upload for the top banner image -- browser PUTs
     // the raw file bytes directly to `uploadUrl`, then the caller saves
     // {bucket, key} via updatePlatformSettings, same two-step flow as
@@ -7181,6 +7192,7 @@ export const {
   useDeleteFaqMutation,
   useUpdatePlatformSettingsMutation,
   useRequestTrainingEconomyOtpMutation,
+  useApplyTrainingEconomyMutation,
   useUploadTopBannerImageMutation,
   useUploadConnectHeroImageMutation,
   useGetApiAccessTokensQuery,

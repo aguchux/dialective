@@ -1,6 +1,6 @@
 import { UnprocessableEntityException } from '@nestjs/common';
 import { OtpPurpose } from '@dialectiva/db';
-import { SettingsController } from './settings.controller';
+import { TrainingEconomyStepUpService } from './training-economy-step-up.service';
 import { adminActionContextHash } from '../wallet/otp-context.util';
 
 const ADMIN = { user: { sub: 'admin-1' } };
@@ -13,8 +13,8 @@ const ADMIN = { user: { sub: 'admin-1' } };
  * is asked for, but that the RIGHT code is: one bound to the direction, and
  * demanded only when the value actually changes.
  */
-describe('SettingsController training economy step-up', () => {
-  let controller: SettingsController;
+describe('Training economy step-up', () => {
+  let service: TrainingEconomyStepUpService;
   let settings: {
     isTrainingEconomyEnabled: jest.Mock;
     isAdminPayoutOtpEnabled: jest.Mock;
@@ -43,15 +43,15 @@ describe('SettingsController training economy step-up', () => {
       },
     };
 
-    controller = new SettingsController(
-      settings as never,
+    service = new TrainingEconomyStepUpService(
       prisma as never,
       otp as never,
+      settings as never,
     );
   });
 
   it('issues a code bound to the direction being applied', async () => {
-    await controller.requestTrainingEconomyOtp({ enabling: false }, ADMIN as never);
+    await service.requestOtp(ADMIN.user.sub, false);
 
     expect(otp.issueForUser).toHaveBeenCalledWith(
       'admin-1',
@@ -78,21 +78,18 @@ describe('SettingsController training economy step-up', () => {
   });
 
   it('refuses to change the flag without a code', async () => {
-    await expect(
-      controller.updateSettings({ trainingEconomyEnabled: false } as never, ADMIN as never),
-    ).rejects.toBeInstanceOf(UnprocessableEntityException);
+    await expect(service.apply(ADMIN.user.sub, { enabled: false })).rejects.toBeInstanceOf(
+      UnprocessableEntityException,
+    );
     expect(settings.update).not.toHaveBeenCalled();
   });
 
   it('verifies against the direction being applied, not the current value', async () => {
-    await controller.updateSettings(
-      {
-        trainingEconomyEnabled: false,
-        trainingEconomyOtpRequestId: 'otp-1',
-        trainingEconomyOtpCode: '123456',
-      } as never,
-      ADMIN as never,
-    );
+    await service.apply(ADMIN.user.sub, {
+      enabled: false,
+      otpRequestId: 'otp-1',
+      code: '123456',
+    });
 
     expect(otp.verify).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -112,20 +109,11 @@ describe('SettingsController training economy step-up', () => {
     // prompt as noise.
     settings.isTrainingEconomyEnabled.mockResolvedValue(true);
 
-    await controller.updateSettings(
-      { trainingEconomyEnabled: true, tokenUsdRate: 2 } as never,
-      ADMIN as never,
-    );
+    await service.apply(ADMIN.user.sub, { enabled: true });
 
     expect(otp.verify).not.toHaveBeenCalled();
-    expect(settings.update).toHaveBeenCalled();
-  });
-
-  it('does not demand a code for unrelated settings', async () => {
-    await controller.updateSettings({ tokenUsdRate: 2 } as never, ADMIN as never);
-
-    expect(otp.verify).not.toHaveBeenCalled();
-    expect(settings.update).toHaveBeenCalled();
+    // A no-op returns current state rather than writing.
+    expect(settings.update).not.toHaveBeenCalled();
   });
 
   it('skips the step-up when admin OTP is switched off platform-wide', async () => {
@@ -133,10 +121,7 @@ describe('SettingsController training economy step-up', () => {
     // OTP off is not locked out by a code they can no longer receive.
     settings.isAdminPayoutOtpEnabled.mockResolvedValue(false);
 
-    await controller.updateSettings(
-      { trainingEconomyEnabled: false } as never,
-      ADMIN as never,
-    );
+    await service.apply(ADMIN.user.sub, { enabled: false });
 
     expect(otp.verify).not.toHaveBeenCalled();
     expect(settings.update).toHaveBeenCalled();
@@ -146,14 +131,11 @@ describe('SettingsController training economy step-up', () => {
     otp.verify.mockRejectedValue(new UnprocessableEntityException('bad code'));
 
     await expect(
-      controller.updateSettings(
-        {
-          trainingEconomyEnabled: false,
-          trainingEconomyOtpRequestId: 'otp-1',
-          trainingEconomyOtpCode: '000000',
-        } as never,
-        ADMIN as never,
-      ),
+      service.apply(ADMIN.user.sub, {
+        enabled: false,
+        otpRequestId: 'otp-1',
+        code: '000000',
+      }),
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
     expect(settings.update).not.toHaveBeenCalled();
   });
