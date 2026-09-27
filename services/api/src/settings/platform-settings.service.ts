@@ -578,6 +578,18 @@ export class PlatformSettingsService {
   }
 
   /**
+   * The per-run DL ceiling a royalty settlement refuses to exceed.
+   *
+   * fetchRow, not getRow: this is a blast-radius limit on a money path, so an
+   * admin lowering it must take effect on the next run rather than after a
+   * cache TTL.
+   */
+  async getRoyaltyMaxRunAccrualDl(): Promise<number> {
+    const row = await this.fetchRow();
+    return row.royaltyMaxRunAccrualDl.toNumber();
+  }
+
+  /**
    * Whether catalogue search is narrowed to manifest-covered recordings.
    *
    * getRow, not fetchRow: this shapes a browse listing, not a money or

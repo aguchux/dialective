@@ -20,7 +20,8 @@
     "prisma:release": "npm run prisma:deploy && npm run prisma:seed",
     "test": "jest",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "royalty-pools": "node dist/royalty-pools.js"
+    "royalty-pools": "node dist/royalty-pools.js",
+    "royalty-settlement": "node dist/royalty-settlement.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",

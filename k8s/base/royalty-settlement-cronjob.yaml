@@ -1,0 +1,71 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: royalty-settlement
+spec:
+  # 09:00 UTC on the 2nd of each month -- three hours after royalty-pools, on
+  # the same closed period.
+  #
+  # THIS JOB MOVES MONEY. It credits Wallet.royaltyBalance and records revenue as
+  # a reserve inflow. Three switches stand in front of it, all checked before
+  # anything moves: royaltiesEnabled (false in production), royaltyShadowMode
+  # (true in production) and TokenomicsPolicy.mintingPaused. With the shipped
+  # defaults it connects, logs that shadow mode is on, and changes nothing.
+  #
+  # Deliberately a separate schedule from royalty-pools rather than the same
+  # entrypoint: computing what is owed and paying it are different decisions with
+  # different blast radii, and an operator must be able to run the first for a
+  # period without the second. The gap also means a pool can be inspected between
+  # the two.
+  schedule: '0 9 2 * *'
+  # Forbid: two concurrent runs would race on pool claims. The claim guard makes
+  # that safe rather than double-crediting, but a race is not something to
+  # schedule on purpose -- least of all on a money path.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # No retries. Every other job here retries freely because it recomputes;
+      # this one credits balances. The claim guard means a retry cannot
+      # double-credit, but a settlement that failed deserves a human looking at
+      # WHY before it runs again.
+      backoffLimit: 0
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: royalty-settlement
+              image: golojan/dialect-api:latest
+              command: ['node', 'dist/royalty-settlement.js']
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-creds
+                      key: connection_string
+                # Booting AppModule starts this repo's Redis Streams consumers,
+                # which this job does not use but which connect anyway. Without
+                # the password they emit a dozen NOAUTH errors per run -- noise
+                # that would mask a real failure, and on this job the output is
+                # the audit trail for money having moved.
+                - name: REDIS_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: redis-auth
+                      key: password
+
+              # Explicit sizing so this is Burstable, not BestEffort -- an
+              # unsized container is the first thing the kernel OOM-kills under
+              # node memory pressure, and this node pool is shared with the
+              # unrelated `bitocard` namespace. See api-deployment.yaml for the
+              # incident this came from.
+              #
+              # Lighter than the aggregation jobs: this reads pools and accruals
+              # for one period, not a month of access-log rows.
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  memory: 512Mi

@@ -3210,6 +3210,18 @@ model PlatformSettings {
   /// makes a late or re-run settlement produce the same answer as a timely one
   /// across a rate change -- see 5.4 of the design doc.
   royaltySharePercent                        Decimal   @default(30.00) @db.Decimal(5, 2)
+  /// Maximum total DL a single royalty settlement run may accrue.
+  ///
+  /// A blast-radius ceiling, not a business rule. A pool is priced from an FX
+  /// rate, a share percent and a token rate, and a mistake in any of them
+  /// scales the payout rather than breaking it -- treating NGN as USD would
+  /// overprice by three orders of magnitude and still look like a valid run.
+  /// A run that computes more than this refuses to settle ANY of it and logs,
+  /// so the error is caught before balances move rather than after.
+  ///
+  /// Deliberately per-run rather than per-pool: the failure modes that matter
+  /// (a wrong rate, a wrong token price) affect every pool in the run at once.
+  royaltyMaxRunAccrualDl                     Decimal   @default(100000) @db.Decimal(20, 8)
   reverseWordTrainingEnabled                 Boolean   @default(false)
   adminPayoutOtpEnabled                      Boolean   @default(false) // when true, admin/training-payouts and admin/withdrawals/:id/resolve require the acting admin to verify an emailed OTP first
   sessionIdleTimeoutMinutes                  Int       @default(30) // minutes of inactivity before any authenticated session (trainer or admin) is force-signed-out and must reauthenticate -- enforced both client-side (activity-tracking sign-out) and server-side (frontend/proxy.ts compares against the JWT's lastActiveAt claim, so it can't be bypassed by disabling client JS)

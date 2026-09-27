@@ -608,6 +608,7 @@ forward.
 | `royaltyShadowMode` | `true` | Aggregate and compute pools, mint nothing |
 | `royaltySharePercent` | `30.00` | Contributor share of collected revenue. Writing it schedules a `RoyaltyRatePeriod` from the next period; settlement reads the schedule, never this value (§5.4) |
 | `royaltyMinimumPayout` | — | DL floor below which balance rolls forward |
+| `royaltyMaxRunAccrualDl` | `100000` | Blast-radius ceiling. A settlement run whose total exceeds this settles **nothing** — added in Phase 6, not in the original design (§5.3a) |
 
 Both switches OTP-guarded, as `trainingEconomyEnabled` already is. Leaving
 shadow mode is the moment money starts moving and deserves the same step-up as
@@ -659,11 +660,11 @@ stopping payouts.
 | **3** ✅ | Usage aggregation → `RecordingUsagePeriod`; live estimates | None |
 | **4** ✅ | Pool computation in **shadow mode** (`settledAt: null`, no mint) + `RoyaltyRatePeriod` schedule | None |
 | **5** ✅ | `royaltyBalance` column + the five integration fixes in §6.1 | Column exists, unused |
-| **6** | Accrual settlement: reserve inflow + mint + ledger + credit, plus refund reversal (§5.5) | **Money.** Gated off |
+| **6** ✅ | Accrual settlement: reserve inflow + ledger + credit (**no mint** — see §5.3a), plus refund reversal (§5.5) | **Money.** Gated off |
 | **7** | Royalty withdrawal (own model, existing rails, KYC + OTP) | **Money.** Gated off |
 | **8** | Contributor dashboard: accrued vs estimated | None |
 
-**Shipped:** 0 through 5 are built, deployed and migrated (see git history from
+**Shipped:** 0 through 6 are built, deployed and migrated (see git history from
 `64fa907d`). Phase 1 made 9,861 domain-conversation recordings across 939
 contributors licensable for the first time; Phase 2 records money received but
 moves none. Nothing is contributor-visible yet: VDCL remains gated off.
@@ -737,7 +738,68 @@ from the original audit:
 Each of (a), (b) and (d) was mutation-tested — the behaviour reverted, the
 specific test confirmed failing.
 
-**Phase 6's open questions are now answered** (§5.4 rate changes, §5.5
-chargebacks). What remains before it is *enabled* -- not merely written -- is the
-reserve-and-mint review in §5.3, which couples token issuance to collected
-revenue and is the one place a mistake dilutes backing silently.
+**§5.3's reserve-and-mint review happened, and it changed the design.** See
+§5.3a below. Phase 6 ships settlement WITHOUT the mint, and the settings table's
+`royaltyMaxRunAccrualDl` is a new blast-radius ceiling that did not exist in the
+original design.
+
+Also settled in the build: settlement honours `TokenomicsPolicy.mintingPaused`,
+the existing platform-wide kill switch on token issuance. Royalty DL is real
+issued DL, and a kill switch some credit paths ignore is not a kill switch.
+`royaltiesEnabled` (false) and `royaltyShadowMode` (true) are unchanged in
+production, so nothing settles today.
+
+### 5.3a The mint is deferred: Stripe cannot reach the coverage numerator
+
+**Finding, verified against production 2026-09-27.** `TokenomicsService.getStatus`
+computes `eligibleReserveUsd` -- the coverage *numerator* -- by summing
+`ReserveBalanceSnapshot`, which `reserve-balance-poll.ts` fills from
+**Flutterwave and NOWPayments only**. Voice Stream revenue arrives through
+**Stripe**, which is not polled and had no `ReserveAccount` at all.
+
+So minting royalty DL would raise `redeemable` -- the coverage *denominator*,
+which now includes `royaltyBalance` after §6.1(b) -- while the cash backing it
+stayed structurally invisible to the numerator. **Coverage would fall on every
+settlement.** That is exactly the dilution the reserve engine exists to prevent,
+so implementing §5.3 literally would have violated its own stated purpose.
+
+Production context that made this urgent rather than theoretical: reserve is
+**$0.0296** against **75,745.87 DL redeemable at the pinned $0.16 = ~$12,119 of
+liability**, a coverage ratio around **0.0000024** — already CRITICAL, and
+visible only because `pinnedValueUsd` is holding the published value at $0.16.
+`mintingPaused` is false, so minting is live.
+
+**What ships instead.** Settlement records the collected revenue as a
+`BUSINESS_REVENUE` `ReserveTransaction` against a new `stripe/USD` reserve
+account, and credits `royaltyBalance` as a real platform liability. The inflow is
+on the books and auditable; the DL is issued in the sense that a contributor
+holds and can withdraw it. It is simply not yet mirrored into
+`TokenAccount`/`TokenOperation`.
+
+**Nothing is lost in the meantime**, because §6.1(b) already counts
+`royaltyBalance` in `totalMinted` and `redeemable` — so supply does not
+under-report while the mint is absent. Adding the mint is a small change once
+Stripe is a polled reserve source; note that Stripe's balance is net of payouts
+and fees, so it is not a clean stand-in for collected revenue and deserves its
+own design pass rather than a quick addition.
+
+### 5.5a What the recovery build settled
+
+Two details the design left open, both resolved by the code:
+
+- **No zero-amount ledger row.** When a contributor had already withdrawn
+  everything, recovery writes *no* `ROYALTY_ADJUSTMENT` at all rather than a
+  0 DL one. A zero entry would assert money moved when none did, and the ledger
+  is the source of truth for exactly that. The write-off is visible in the run's
+  shortfall figure and its `warn` log — where a platform loss belongs — not as a
+  phantom balance change on the contributor's statement.
+- **Completion is marked by the reserve reversal, not by ledger rows.** Which
+  follows from the above: a fully-withdrawn pool writes no ledger rows, so a
+  ledger-based "already reversed" check would reselect it forever. The
+  `REVERSAL` reserve transaction is written exactly once per pool regardless of
+  how much was recovered, which makes it the honest marker. A boolean column on
+  the pool was rejected as a third source of truth that could disagree.
+
+Recovery also runs **before** settlement in the job, so a payment reversed since
+the last run is clawed back before new pools settle — closing the window where a
+contributor could withdraw a royalty that had already been charged back.
