@@ -39,6 +39,26 @@ export function fiatWithdrawalContextHash(input: {
 }
 
 /**
+ * Binds a ROYALTY withdrawal OTP to its amount and destination.
+ *
+ * Deliberately distinct from fiatWithdrawalContextHash even though the fields
+ * match: the `kind` discriminator means a code issued to move ordinary DL cannot
+ * be replayed to move royalty DL, and vice versa. The two rails debit different
+ * balance columns, so an interchangeable code would let a step-up for one
+ * authorise a spend from the other.
+ */
+export function royaltyWithdrawalContextHash(input: {
+  tokenAmount: number;
+  payoutAccountId: string;
+}): string {
+  return hashContext({
+    kind: 'royalty',
+    tokenAmount: input.tokenAmount,
+    payoutAccountId: input.payoutAccountId,
+  });
+}
+
+/**
  * Binds a payout-account-deletion OTP to the exact account being deleted --
  * both the /otp request route and the executing DELETE route call this with
  * the same payoutAccountId, so a code issued to confirm deleting one account

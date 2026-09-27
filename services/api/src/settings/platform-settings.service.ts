@@ -578,6 +578,17 @@ export class PlatformSettingsService {
   }
 
   /**
+   * The DL floor below which a royalty balance rolls forward.
+   *
+   * fetchRow, not getRow: it gates a fund-moving request, so an admin raising
+   * it must bind on the next attempt rather than after a cache TTL.
+   */
+  async getRoyaltyMinimumPayout(): Promise<number> {
+    const row = await this.fetchRow();
+    return row.royaltyMinimumPayout.toNumber();
+  }
+
+  /**
    * The per-run DL ceiling a royalty settlement refuses to exceed.
    *
    * fetchRow, not getRow: this is a blast-radius limit on a money path, so an

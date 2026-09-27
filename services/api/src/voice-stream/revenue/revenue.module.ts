@@ -6,25 +6,32 @@ import { RoyaltyPoolService } from './royalty-pool.service';
 import { RoyaltySettlementService } from './royalty-settlement.service';
 import { RoyaltyRecoveryService } from './royalty-recovery.service';
 import { TokenomicsModule } from '../../tokenomics/tokenomics.module';
+import { OtpModule } from '../../otp/otp.module';
+import { RoyaltyWithdrawalService } from './royalty-withdrawal.service';
+import { RoyaltyWithdrawalController } from './royalty-withdrawal.controller';
 
 /**
  * Revenue sharing: usage accounting, pool computation, settlement and recovery.
  *
  * No longer a leaf: settlement imports TokenomicsModule for the mintingPaused
- * kill switch. That is the one edge it has beyond the global PrismaService and
- * SettingsModule, and it is deliberately the only one -- money-moving code is
- * easier to reason about the fewer modules it can reach.
+ * kill switch, and the withdrawal controller imports OtpModule for the step-up.
+ * Those are its only two edges beyond the global PrismaService and
+ * SettingsModule -- money-moving code is easier to reason about the fewer
+ * modules it can reach. Neither import reaches back into SettingsModule, so the
+ * @Global sink invariant module-graph.spec.ts guards is untouched.
  *
- * Registered in AppModule rather than inside VoiceStreamModule: the aggregator
- * and the pool computer both run from standalone CronJob entrypoints that
- * resolve them from an application context, and VoiceStreamModule only composes
- * request-serving children. None of these services has an HTTP surface yet.
+ * Registered in AppModule rather than inside VoiceStreamModule: the aggregator,
+ * the pool computer and the settlement job all run from standalone CronJob
+ * entrypoints that resolve them from an application context, and
+ * VoiceStreamModule only composes request-serving children. The royalty payout
+ * routes are the module's first HTTP surface.
  */
 @Module({
   // TokenomicsModule for the mintingPaused kill switch that settlement honours.
   // A plain leaf-to-leaf import: TokenomicsModule exports its service and
   // imports nothing from here, so no cycle.
-  imports: [TokenomicsModule],
+  imports: [TokenomicsModule, OtpModule],
+  controllers: [RoyaltyWithdrawalController],
   providers: [
     UsageAggregationService,
     UsageEstimateService,
@@ -32,6 +39,7 @@ import { TokenomicsModule } from '../../tokenomics/tokenomics.module';
     RoyaltyPoolService,
     RoyaltySettlementService,
     RoyaltyRecoveryService,
+    RoyaltyWithdrawalService,
   ],
   exports: [
     UsageAggregationService,
@@ -40,6 +48,7 @@ import { TokenomicsModule } from '../../tokenomics/tokenomics.module';
     RoyaltyPoolService,
     RoyaltySettlementService,
     RoyaltyRecoveryService,
+    RoyaltyWithdrawalService,
   ],
 })
 export class RevenueModule {}

@@ -672,6 +672,7 @@ enum OtpPurpose {
   VDCL_COUNTERSIGN // step-up confirming Dialect Library's countersignature, executed on behalf of Golojan Technologies LLC. Previously borrowed ADMIN_PAYOUT, whose email said nothing about what was being authorised
   TRAINING_ECONOMY_TOGGLE // step-up confirming the stake-and-payout training economy is being switched on or off platform-wide; bound to the DIRECTION so a code issued to switch it off cannot be replayed to switch it back on
   VDCL_PAYOUT_SUPPRESSION_TOGGLE // step-up confirming per-contributor token payouts are being switched off (or back on) for trainers holding an ACTIVE VDCL; bound to the DIRECTION, same as TRAINING_ECONOMY_TOGGLE
+  ROYALTY_WITHDRAWAL // step-up confirming a Stream revenue-sharing payout. Its own purpose rather than borrowing WITHDRAWAL: the two debit DIFFERENT balance columns, and a code issued to move ordinary DL must not be replayable to move royalty DL
 }
 
 enum ManualPhoneVerificationStatus {
@@ -2395,9 +2396,10 @@ model Wallet {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  entries     LedgerEntry[]
-  deposits    Deposit[]
-  withdrawals WithdrawalRequest[]
+  entries              LedgerEntry[]
+  deposits             Deposit[]
+  withdrawals          WithdrawalRequest[]
+  royaltyWithdrawals   RoyaltyWithdrawalRequest[]
 
   @@map("wallets")
 }
@@ -2703,6 +2705,7 @@ model PayoutAccount {
   updatedAt  DateTime  @updatedAt
 
   withdrawals            WithdrawalRequest[]
+  royaltyWithdrawals     RoyaltyWithdrawalRequest[]
   p2pOffers              P2PTokenOffer[]         @relation("P2POfferPayoutAccount")
   p2pSellerTrades        P2PTokenTrade[]         @relation("P2PTradeSellerPaymentMethod")
   p2pOfferPaymentMethods P2POfferPaymentMethod[]
@@ -3222,6 +3225,13 @@ model PlatformSettings {
   /// Deliberately per-run rather than per-pool: the failure modes that matter
   /// (a wrong rate, a wrong token price) affect every pool in the run at once.
   royaltyMaxRunAccrualDl                     Decimal   @default(100000) @db.Decimal(20, 8)
+  /// DL floor below which a royalty balance rolls forward instead of paying out.
+  ///
+  /// Its own floor rather than reusing minWithdrawalTokens: royalties accrue
+  /// monthly in small amounts, and a floor tuned for ordinary withdrawals would
+  /// either strand a contributor's earnings indefinitely or wave through payouts
+  /// whose provider fee exceeds them.
+  royaltyMinimumPayout                       Decimal   @default(500) @db.Decimal(20, 8)
   reverseWordTrainingEnabled                 Boolean   @default(false)
   adminPayoutOtpEnabled                      Boolean   @default(false) // when true, admin/training-payouts and admin/withdrawals/:id/resolve require the acting admin to verify an emailed OTP first
   sessionIdleTimeoutMinutes                  Int       @default(30) // minutes of inactivity before any authenticated session (trainer or admin) is force-signed-out and must reauthenticate -- enforced both client-side (activity-tracking sign-out) and server-side (frontend/proxy.ts compares against the JWT's lastActiveAt claim, so it can't be bypassed by disabling client JS)
@@ -5888,4 +5898,66 @@ model RoyaltyRatePeriod {
   createdAt DateTime @default(now())
 
   @@map("royalty_rate_periods")
+}
+
+enum RoyaltyWithdrawalStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  PAID
+  FAILED
+  REJECTED
+}
+
+/// A payout request against Wallet.royaltyBalance.
+///
+/// Its own model rather than a flag on WithdrawalRequest, per section 8 of
+/// docs/Stream-Revenue-Sharing-Engine.md. The two debit different columns and
+/// write different ledger types, and the existing withdrawal path's
+/// compensating-delete block clears ledger rows by `reference` with NO type
+/// filter -- so sharing a table would let one rail's rollback delete the other
+/// rail's ledger row. Separate tables make that impossible rather than merely
+/// unlikely.
+///
+/// Reuses PayoutAccount unchanged: a contributor receiving royalties is the same
+/// User who already withdraws DL, and their bank or wallet details do not differ
+/// by which balance funded the payout.
+model RoyaltyWithdrawalRequest {
+  id       String @id @default(uuid())
+  walletId String
+  wallet   Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  /// DL debited from royaltyBalance. Never split across columns -- section 8
+  /// forbids it, because a two-column debit cannot be one atomic updateMany.
+  tokenAmount Decimal @db.Decimal(20, 8)
+  /// USD value at request time, using the rate then in force. Snapshot, not
+  /// recomputed: what a contributor was told they would receive.
+  usdAmount   Decimal @db.Decimal(20, 8)
+
+  /// Where the money goes. Snapshot pointer, matching how
+  /// WithdrawalRequest.payoutAccountId already works -- the account may later be
+  /// deleted without erasing what this payout targeted.
+  payoutAccountId String?
+  payoutAccount   PayoutAccount? @relation(fields: [payoutAccountId], references: [id], onDelete: SetNull)
+
+  status            RoyaltyWithdrawalStatus @default(PENDING)
+  approvedByAdminId String?
+  approvedAt        DateTime?
+  adminNote         String?
+
+  /// Provider-side state, mirroring WithdrawalRequest's shape so an admin
+  /// screen can present both rails the same way.
+  provider         String?
+  providerPayoutId String?   @unique
+  providerStatus   String?
+  providerError    String?
+  providerSettledAt DateTime?
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolvedAt DateTime?
+
+  @@index([walletId, createdAt])
+  @@index([status, createdAt])
+  @@map("royalty_withdrawal_requests")
 }

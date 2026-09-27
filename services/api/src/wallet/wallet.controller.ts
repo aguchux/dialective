@@ -79,6 +79,7 @@ function maskWithdrawalReviewPhone(phoneNumber: string | null): string | null {
 import { GetEarningsChartDto } from './dto/get-earnings-chart.dto';
 import { GetWithdrawalMinAmountDto } from './dto/get-withdrawal-min-amount.dto';
 import { planWithdrawalReversal } from './withdrawal-reversal.util';
+import { REJECTED_KYC_STATUSES } from './kyc-withdrawal-gate.util';
 import { ListWithdrawalsAdminDto } from './dto/list-withdrawals-admin.dto';
 import { BulkResolveWithdrawalsDto } from './dto/bulk-resolve-withdrawals.dto';
 import { GetTrainerReportDto } from './dto/get-trainer-report.dto';
@@ -105,7 +106,7 @@ import { TokenomicsService } from '../tokenomics/tokenomics.service';
 
 /** Resolved negative KYC verdicts -- always block withdrawal, unlike
  * NOT_STARTED/IN_PROGRESS/IN_REVIEW which just mean no verdict yet. */
-const REJECTED_KYC_STATUSES = new Set(['DECLINED', 'ABANDONED', 'EXPIRED']);
+
 
 // Course completion bonuses fold into "training earnings" everywhere this
 // list is used -- see trainer-report.service.ts's identical comment. Keep

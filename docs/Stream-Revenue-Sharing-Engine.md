@@ -600,6 +600,51 @@ Gating: KYC at the existing threshold, OTP step-up as with any fund-moving
 action, and a `royaltyMinimumPayout` floor below which the balance rolls
 forward.
 
+### 8a What the withdrawal build settled
+
+**The compensating-delete hazard is real, and worse than §8 states.** The
+existing wallet path clears its rollback rows with
+`ledgerEntry.deleteMany({ where: { reference: withdrawalId } })` — **no type
+filter at all**. Sharing a table between the two rails would mean one rail's
+rollback could delete the other rail's ledger row for the same reference. The
+separate `RoyaltyWithdrawalRequest` model makes that impossible rather than
+merely unlikely.
+
+**The royalty rail avoids needing a compensating delete at all.** Where the
+wallet path creates rows and then deletes them when the debit misses, this one
+checks the guarded debit FIRST inside the transaction and writes the request only
+if it succeeded. Nothing to compensate, so no untyped delete to get wrong.
+
+**`ROYALTY_WITHDRAWAL` is its own `OtpPurpose`**, and
+`royaltyWithdrawalContextHash` carries a `kind: 'royalty'` discriminator. Without
+it the hash is byte-identical to `fiatWithdrawalContextHash` for the same amount
+and account — so a step-up code issued to move ordinary DL would satisfy a
+royalty payout and vice versa. Verified by removing the discriminator and
+confirming the test fails.
+
+**KYC gates exactly as hard as the wallet rail**, from a now-shared
+`REJECTED_KYC_STATUSES` (extracted from a private constant in
+`wallet.controller.ts`). A contributor who must verify their identity to withdraw
+DL they earned by recording must also verify it to withdraw DL they earned by
+being streamed — if the two lists could drift, the softer rail becomes a route
+around the harder one. Note the threshold direction: amounts **below**
+`kycMinWithdrawalTokens` are exempt, at or above require verification. An early
+draft of this had it inverted, which would have waved the **largest** payouts
+through unverified.
+
+**`royaltyMinimumPayout` defaults to 500 DL**, its own floor rather than reusing
+`minWithdrawalTokens`: royalties accrue monthly in small amounts, and a floor
+tuned for ordinary withdrawals would either strand earnings indefinitely or wave
+through payouts whose provider fee exceeds them. The refusal message says the
+balance *keeps accruing*, because nothing is lost — a contributor must not read a
+floor as a refusal.
+
+**`GET royalties/me` returns no money estimate.** Balance, minimum, a
+`canWithdraw` boolean and the period's usage — with `subscriberCount` as a count,
+never identities. Converting usage to expected DL needs a pool, and a pool only
+exists against collected revenue, so a figure here would be the stale promise
+§7 warns about.
+
 ### Settings
 
 | Setting | Default | Purpose |
@@ -607,7 +652,7 @@ forward.
 | `royaltiesEnabled` | `false` | Master switch. Off means no aggregation, no pools, no accrual |
 | `royaltyShadowMode` | `true` | Aggregate and compute pools, mint nothing |
 | `royaltySharePercent` | `30.00` | Contributor share of collected revenue. Writing it schedules a `RoyaltyRatePeriod` from the next period; settlement reads the schedule, never this value (§5.4) |
-| `royaltyMinimumPayout` | — | DL floor below which balance rolls forward |
+| `royaltyMinimumPayout` | `500` | DL floor below which balance rolls forward |
 | `royaltyMaxRunAccrualDl` | `100000` | Blast-radius ceiling. A settlement run whose total exceeds this settles **nothing** — added in Phase 6, not in the original design (§5.3a) |
 
 Both switches OTP-guarded, as `trainingEconomyEnabled` already is. Leaving
@@ -661,10 +706,10 @@ stopping payouts.
 | **4** ✅ | Pool computation in **shadow mode** (`settledAt: null`, no mint) + `RoyaltyRatePeriod` schedule | None |
 | **5** ✅ | `royaltyBalance` column + the five integration fixes in §6.1 | Column exists, unused |
 | **6** ✅ | Accrual settlement: reserve inflow + ledger + credit (**no mint** — see §5.3a), plus refund reversal (§5.5) | **Money.** Gated off |
-| **7** | Royalty withdrawal (own model, existing rails, KYC + OTP) | **Money.** Gated off |
+| **7** ✅ | Royalty withdrawal (own model, existing rails, KYC + OTP) | **Money.** Gated on `royaltiesEnabled` |
 | **8** | Contributor dashboard: accrued vs estimated | None |
 
-**Shipped:** 0 through 6 are built, deployed and migrated (see git history from
+**Shipped:** 0 through 7 are built, deployed and migrated (see git history from
 `64fa907d`). Phase 1 made 9,861 domain-conversation recordings across 939
 contributors licensable for the first time; Phase 2 records money received but
 moves none. Nothing is contributor-visible yet: VDCL remains gated off.

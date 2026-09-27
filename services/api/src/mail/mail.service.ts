@@ -876,6 +876,16 @@ function otpCopyForPurpose(purpose: OtpPurpose): { subject: string; intro: strin
         intro:
           'Enter this code to countersign a Voice Dataset Contributor Licence on behalf of Golojan Technologies LLC. This grants commercial rights over a contributor’s recordings and issues their licence documents.',
       };
+    case 'ROYALTY_WITHDRAWAL':
+      // Says WHICH balance is moving. A contributor holds two separate
+      // balances, and a code that just said "confirm your withdrawal" would
+      // not tell them whether their recording earnings or their Stream
+      // royalties were about to leave.
+      return {
+        subject: 'Confirm your Stream royalty payout',
+        intro:
+          'Enter this code to confirm a payout from your Stream revenue-sharing balance. This is separate from your main DL balance, which is not affected.',
+      };
   }
 }
 
