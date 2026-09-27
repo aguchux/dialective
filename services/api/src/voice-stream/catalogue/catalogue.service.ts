@@ -21,6 +21,30 @@ const CONFIDENCE_RANK: Record<IsvcConfidence, number> = {
 /** Doc section 62's "Premium Verified classification" threshold -- tunable, not load-bearing elsewhere. */
 const PREMIUM_VERIFIED_MIN_ORG_COUNT = 3;
 
+/**
+ * One licensed dialect's coverage, as the subscriber showcase reports it.
+ *
+ * Every field is measured. There is deliberately no cover image, no preview
+ * sample and no growth delta: those existed only in the mock data this
+ * replaces, and none of them has a source of truth.
+ */
+export interface CatalogueCollectionSummary {
+  id: string;
+  dialectTag: string;
+  dialectName: string;
+  countryName: string | null;
+  countryCode: string | null;
+  subdialects: string[];
+  recordings: number;
+  /** A count. Never a list of ids -- see `collections()`. */
+  contributors: number;
+  durationMs: number;
+  /** null when nothing in the group carries a score, rather than 0. */
+  averageScore: number | null;
+  averageQualityScore: number | null;
+  lastUpdated: Date;
+}
+
 export type QualityTier = 'standard' | 'high' | 'premium_verified';
 
 export function qualityTierFor(
@@ -32,6 +56,18 @@ export function qualityTierFor(
   }
   if (confidence === 'HIGH') return 'high';
   return 'standard';
+}
+
+/**
+ * Mean of a Decimal column, to two places, or null when there is nothing to
+ * average. Returning null rather than 0 keeps "not scored yet" distinct from
+ * "scored zero" in the showcase.
+ */
+function mean(values: Array<Prisma.Decimal | null>): number | null {
+  const present = values.filter((v): v is Prisma.Decimal => v !== null);
+  if (present.length === 0) return null;
+  const total = present.reduce((sum, v) => sum.plus(v), new Prisma.Decimal(0));
+  return total.dividedBy(present.length).toDecimalPlaces(2).toNumber();
 }
 
 /** Takes the stricter (higher-ranked) of two optional confidence floors. */
@@ -651,4 +687,100 @@ export class CatalogueService {
     if (!current) return false;
     return CONFIDENCE_RANK[current.aggregation.confidence] >= CONFIDENCE_RANK[floor];
   }
+
+  /**
+   * Per-dialect coverage for the subscriber app's landing showcase.
+   *
+   * **Counts only what a subscriber could actually stream**: SETTLED, audio
+   * still present, AND covered by a signed VDCL licence. That last condition
+   * is applied unconditionally here, unlike `search()`, which applies it only
+   * when `vdclCatalogueCoverageFilterEnabled` is on. The difference is
+   * deliberate: search is a browsing surface whose audio gate refuses
+   * unlicensed rows anyway, but this endpoint produces the headline numbers
+   * the product is advertised on. If it followed the flag, the figure would
+   * silently jump from "what is licensed" to "everything collected" the moment
+   * an unrelated setting was toggled -- a number that changes meaning without
+   * changing name is worse than a small one.
+   *
+   * At the time of writing that is 42 recordings from 1 contributor. The
+   * shape below returns real emptiness rather than rounding it up: there is no
+   * synthesised hour count, no invented growth delta, and no per-contributor
+   * identity of any kind (see `contributors`, a count and never a list --
+   * subscribers must never learn who recorded what).
+   */
+  async collections(): Promise<CatalogueCollectionSummary[]> {
+    const covered = await this.coveredRecordingIds(StreamRecordKind.WORD_RECORDING);
+    if (covered.length === 0) return [];
+
+    const rows = await this.prisma.wordRecording.findMany({
+      where: {
+        id: { in: covered },
+        status: SubmissionStatus.SETTLED,
+        audioBucket: { not: null },
+        audioKey: { not: null },
+        audioDeletedAt: null,
+      },
+      select: {
+        userId: true,
+        durationMs: true,
+        score: true,
+        qualityScore: true,
+        createdAt: true,
+        dialectTag: true,
+        dialectVariant: {
+          select: {
+            tag: true,
+            name: true,
+            dialect: { select: { tag: true, name: true, country: { select: { code: true, name: true } } } },
+          },
+        },
+      },
+    });
+
+    // Grouped in memory rather than by `groupBy`: the set is bounded by what
+    // is licensed (tens today, and every row is already needed for the
+    // distinct-contributor count, which groupBy cannot express).
+    const groups = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const key = row.dialectTag ?? row.dialectVariant?.dialect?.tag ?? 'unknown';
+      const bucket = groups.get(key);
+      if (bucket) bucket.push(row);
+      else groups.set(key, [row]);
+    }
+
+    const summaries = [...groups.entries()].map(([tag, items]) => {
+      const first = items[0];
+      const dialect = first.dialectVariant?.dialect;
+      const scored = items.filter((i) => i.score !== null);
+      const quality = items.filter((i) => i.qualityScore !== null);
+      return {
+        id: tag,
+        dialectTag: tag,
+        dialectName: dialect?.name ?? tag,
+        countryName: dialect?.country?.name ?? null,
+        countryCode: dialect?.country?.code ?? null,
+        subdialects: [...new Set(items.map((i) => i.dialectVariant?.name).filter((n): n is string => Boolean(n)))],
+        recordings: items.length,
+        // A COUNT of distinct contributors, never their ids. Mutual anonymity
+        // runs both ways: a subscriber learns how much coverage exists, never
+        // whose voice it is.
+        contributors: new Set(items.map((i) => i.userId)).size,
+        durationMs: items.reduce((sum, i) => sum + (i.durationMs ?? 0), 0),
+        // null, not 0, when nothing is scored -- 0 reads as "scored badly"
+        // rather than "not yet scored", and most licensed dialects have no
+        // ASR-derived score at all today.
+        //
+        // `score`/`qualityScore` are Prisma Decimal, so each is converted
+        // before arithmetic; summing them as numbers is a type error the
+        // compiler catches, and coercing with `Number(...)` inside the reduce
+        // would quietly drop precision the column was declared to keep.
+        averageScore: mean(scored.map((i) => i.score)),
+        averageQualityScore: mean(quality.map((i) => i.qualityScore)),
+        lastUpdated: items.reduce<Date>((latest, i) => (i.createdAt > latest ? i.createdAt : latest), items[0].createdAt),
+      };
+    });
+
+    return summaries.sort((a, b) => b.recordings - a.recordings);
+  }
+
 }

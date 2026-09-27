@@ -589,4 +589,104 @@ describe('CatalogueService', () => {
       expect(prisma.wordRecording.count.mock.calls[0][0].where.id).toEqual({ in: [] });
     });
   });
+
+  describe('collections (subscriber showcase)', () => {
+    const rec = (over: Record<string, unknown> = {}) => ({
+      userId: 'user-1',
+      durationMs: 2000,
+      score: null,
+      qualityScore: null,
+      createdAt: new Date('2026-09-01T00:00:00.000Z'),
+      dialectTag: 'ig',
+      dialectVariant: {
+        tag: 'awka',
+        name: 'Awka',
+        dialect: { tag: 'ig', name: 'Igbo', country: { code: 'NG', name: 'Nigeria' } },
+      },
+      ...over,
+    });
+
+    it('counts ONLY licensed recordings, even with the coverage filter off', async () => {
+      // THE property this endpoint exists for. search() applies VDCL coverage
+      // only when the flag is on; the showcase must apply it always, or its
+      // headline number silently changes meaning when an unrelated setting is
+      // toggled.
+      const { prisma, settings, service } = setup();
+      settings.isVdclCatalogueCoverageFilterEnabled.mockResolvedValue(false);
+      prisma.vdclManifestItem.findMany.mockResolvedValue([{ recordingId: 'r1' }]);
+      prisma.wordRecording.findMany.mockResolvedValue([rec()]);
+
+      await service.collections();
+
+      const where = prisma.wordRecording.findMany.mock.calls[0][0].where;
+      expect(where.id).toEqual({ in: ['r1'] });
+    });
+
+    it('returns nothing when no recording is licensed, rather than the whole catalogue', async () => {
+      const { prisma, service } = setup();
+      prisma.vdclManifestItem.findMany.mockResolvedValue([]);
+
+      await expect(service.collections()).resolves.toEqual([]);
+      // Must not fall through to an unfiltered query.
+      expect(prisma.wordRecording.findMany).not.toHaveBeenCalled();
+    });
+
+    it('requires audio to still be present', async () => {
+      // audio-retention-job nulls audioKey and stamps audioDeletedAt; a purged
+      // recording is not streamable and must not be advertised as coverage.
+      const { prisma, service } = setup();
+      prisma.vdclManifestItem.findMany.mockResolvedValue([{ recordingId: 'r1' }]);
+      prisma.wordRecording.findMany.mockResolvedValue([]);
+
+      await service.collections();
+
+      const where = prisma.wordRecording.findMany.mock.calls[0][0].where;
+      expect(where.audioKey).toEqual({ not: null });
+      expect(where.audioDeletedAt).toBeNull();
+      expect(where.status).toBe('SETTLED');
+    });
+
+    it('reports contributors as a COUNT and never exposes an identity', async () => {
+      // Mutual anonymity runs both ways: a subscriber learns how much coverage
+      // exists, never whose voice it is.
+      const { prisma, service } = setup();
+      prisma.vdclManifestItem.findMany.mockResolvedValue([{ recordingId: 'r1' }]);
+      prisma.wordRecording.findMany.mockResolvedValue([
+        rec({ userId: 'user-1' }),
+        rec({ userId: 'user-2' }),
+        rec({ userId: 'user-1' }),
+      ]);
+
+      const [group] = await service.collections();
+
+      expect(group.contributors).toBe(2);
+      expect(JSON.stringify(group)).not.toContain('user-1');
+    });
+
+    it('leaves the average score null when nothing is scored', async () => {
+      // 0 would read as "scored badly" rather than "not scored yet", and most
+      // licensed dialects have no ASR score at all today.
+      const { prisma, service } = setup();
+      prisma.vdclManifestItem.findMany.mockResolvedValue([{ recordingId: 'r1' }]);
+      prisma.wordRecording.findMany.mockResolvedValue([rec({ score: null })]);
+
+      const [group] = await service.collections();
+
+      expect(group.averageScore).toBeNull();
+    });
+
+    it('sums real duration instead of synthesising an hour count', async () => {
+      const { prisma, service } = setup();
+      prisma.vdclManifestItem.findMany.mockResolvedValue([{ recordingId: 'r1' }]);
+      prisma.wordRecording.findMany.mockResolvedValue([
+        rec({ durationMs: 1500 }),
+        rec({ durationMs: 2500 }),
+      ]);
+
+      const [group] = await service.collections();
+
+      expect(group.durationMs).toBe(4000);
+      expect(group.recordings).toBe(2);
+    });
+  });
 });

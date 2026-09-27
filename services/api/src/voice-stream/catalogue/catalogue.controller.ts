@@ -27,6 +27,25 @@ export class CatalogueController {
     });
   }
 
+  /**
+   * Per-dialect coverage for the subscriber app's showcase.
+   *
+   * Declared BEFORE `:recordingId/preview` -- Nest matches routes in
+   * declaration order, so a later `collections` would be swallowed by the
+   * parameterised route and arrive as a preview request for a recording named
+   * "collections".
+   *
+   * No RequireActiveSubscriptionGuard: this is the surface a subscriber sees
+   * while deciding whether to subscribe, so gating it on an active
+   * subscription would make it permanently empty for exactly the audience it
+   * is for. It exposes aggregate counts only, never a recording id or
+   * contributor identity, so there is nothing here to withhold behind payment.
+   */
+  @Get('collections')
+  collections() {
+    return this.catalogue.collections();
+  }
+
   @Get(':recordingId/preview')
   @UseGuards(RequireActiveSubscriptionGuard)
   preview(
