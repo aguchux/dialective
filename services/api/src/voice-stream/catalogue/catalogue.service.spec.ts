@@ -27,11 +27,11 @@ function setup() {
     mayUse: jest.fn().mockResolvedValue({ allowed: true, entitlementDecision: 'allowed' }),
     recordDecision: jest.fn().mockResolvedValue(undefined),
   };
-  // Enforcement OFF by default, matching the production default -- the
-  // coverage filter is inert, so every existing assertion here stays about
-  // catalogue behaviour rather than VDCL. The filter has its own tests.
+  // The coverage filter is OFF by default, matching the production default,
+  // so every existing assertion here stays about catalogue behaviour rather
+  // than VDCL. The filter has its own tests below.
   const settings = {
-    isVdclEnforcementEnabled: jest.fn().mockResolvedValue(false),
+    isVdclCatalogueCoverageFilterEnabled: jest.fn().mockResolvedValue(false),
   };
   const service = new CatalogueService(
     prisma as any,
@@ -473,6 +473,27 @@ describe('CatalogueService', () => {
   });
 
   describe('VDCL coverage filter', () => {
+    it('is NOT driven by vdclEnforcementEnabled', async () => {
+      // Guards a real near-miss: vdclEnforcementEnabled is already true in
+      // production, where it denies AUDIO for an uncovered recording while the
+      // catalogue stays whole. Wiring the listing filter to it would have cut
+      // the subscriber catalogue from ~191,800 recordings to the handful
+      // covered by a manifest. If someone "simplifies" these back to one flag,
+      // this fails.
+      const { prisma, settings, service } = setup();
+      (settings as unknown as Record<string, jest.Mock>).isVdclEnforcementEnabled = jest
+        .fn()
+        .mockResolvedValue(true);
+      settings.isVdclCatalogueCoverageFilterEnabled.mockResolvedValue(false);
+      prisma.wordRecording.count.mockResolvedValue(0);
+      prisma.wordRecording.findMany.mockResolvedValue([]);
+
+      await service.search({ page: 1, pageSize: 20 });
+
+      expect(prisma.vdclManifestItem.findMany).not.toHaveBeenCalled();
+      expect(prisma.wordRecording.count.mock.calls[0][0].where.AND).toBeUndefined();
+    });
+
     it('does not filter while enforcement is off', async () => {
       // The production default. Listing behaviour must be untouched, and the
       // manifest table must not even be read.
@@ -488,7 +509,7 @@ describe('CatalogueService', () => {
 
     it('narrows search to recordings covered by a manifest when enforcement is on', async () => {
       const { prisma, settings, service } = setup();
-      settings.isVdclEnforcementEnabled.mockResolvedValue(true);
+      settings.isVdclCatalogueCoverageFilterEnabled.mockResolvedValue(true);
       prisma.vdclManifestItem.findMany.mockResolvedValue([
         { recordingId: 'licensed-1' },
         { recordingId: 'licensed-2' },
@@ -508,7 +529,7 @@ describe('CatalogueService', () => {
       // where.id outright, so a coverage filter written the same way would be
       // silently replaced and widen results back to unlicensed recordings.
       const { prisma, settings, service } = setup();
-      settings.isVdclEnforcementEnabled.mockResolvedValue(true);
+      settings.isVdclCatalogueCoverageFilterEnabled.mockResolvedValue(true);
       prisma.vdclManifestItem.findMany.mockResolvedValue([{ recordingId: 'licensed-1' }]);
       prisma.isvcCurrent.findMany.mockResolvedValue([
         { recordingId: 'licensed-1', aggregation: { isvs: 90, confidence: 'HIGH', organizationCount: 3 } },
@@ -528,7 +549,7 @@ describe('CatalogueService', () => {
       // Rather than reaching the rights check and returning a 403, which
       // would confirm the clip exists.
       const { prisma, settings, service } = setup();
-      settings.isVdclEnforcementEnabled.mockResolvedValue(true);
+      settings.isVdclCatalogueCoverageFilterEnabled.mockResolvedValue(true);
       prisma.vdclManifestItem.findMany.mockResolvedValue([]);
       prisma.wordRecording.findFirst.mockResolvedValue(null);
 
@@ -541,7 +562,7 @@ describe('CatalogueService', () => {
       // Otherwise the search filter would only be a display convention: an
       // org that learned an id elsewhere could still add it.
       const { prisma, settings, service } = setup();
-      settings.isVdclEnforcementEnabled.mockResolvedValue(true);
+      settings.isVdclCatalogueCoverageFilterEnabled.mockResolvedValue(true);
       prisma.vdclManifestItem.findMany.mockResolvedValue([]);
       prisma.wordRecording.count.mockResolvedValue(0);
 

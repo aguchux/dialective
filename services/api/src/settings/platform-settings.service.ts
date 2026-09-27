@@ -539,6 +539,18 @@ export class PlatformSettingsService {
   }
 
   /**
+   * Whether catalogue search is narrowed to manifest-covered recordings.
+   *
+   * getRow, not fetchRow: this shapes a browse listing, not a money or
+   * consent decision, so a few seconds of staleness after an admin flips it
+   * is harmless -- unlike the payout gates above.
+   */
+  async isVdclCatalogueCoverageFilterEnabled(): Promise<boolean> {
+    const row = await this.getRow();
+    return row.vdclCatalogueCoverageFilterEnabled;
+  }
+
+  /**
    * The VDCL commercial lock. Off by default so the enforcement code ships
    * dark -- see the column doc comment in schema.prisma.
    */
@@ -1304,6 +1316,7 @@ export class PlatformSettingsService {
       vdclEnabled: row.vdclEnabled,
       trainingEconomyEnabled: row.trainingEconomyEnabled,
       vdclPayoutSuppressionEnabled: row.vdclPayoutSuppressionEnabled,
+      vdclCatalogueCoverageFilterEnabled: row.vdclCatalogueCoverageFilterEnabled,
       vdclEnforcementEnabled: row.vdclEnforcementEnabled,
       vdclRetentionExemptionEnabled: row.vdclRetentionExemptionEnabled,
       submissionDailyLimitEnabled: row.submissionDailyLimitEnabled,
@@ -1561,6 +1574,7 @@ export class PlatformSettingsService {
     vdclEnabled?: boolean;
     trainingEconomyEnabled?: boolean;
     vdclPayoutSuppressionEnabled?: boolean;
+    vdclCatalogueCoverageFilterEnabled?: boolean;
     vdclEnforcementEnabled?: boolean;
     vdclRetentionExemptionEnabled?: boolean;
     submissionDailyLimitEnabled?: boolean;
@@ -2318,6 +2332,7 @@ export class PlatformSettingsService {
       vdclEnabled: row.vdclEnabled,
       trainingEconomyEnabled: row.trainingEconomyEnabled,
       vdclPayoutSuppressionEnabled: row.vdclPayoutSuppressionEnabled,
+      vdclCatalogueCoverageFilterEnabled: row.vdclCatalogueCoverageFilterEnabled,
       vdclEnforcementEnabled: row.vdclEnforcementEnabled,
       vdclRetentionExemptionEnabled: row.vdclRetentionExemptionEnabled,
       submissionDailyLimitEnabled: row.submissionDailyLimitEnabled,
@@ -2513,6 +2528,7 @@ export class PlatformSettingsService {
       vdclEnabled: row.vdclEnabled,
       trainingEconomyEnabled: row.trainingEconomyEnabled,
       vdclPayoutSuppressionEnabled: row.vdclPayoutSuppressionEnabled,
+      vdclCatalogueCoverageFilterEnabled: row.vdclCatalogueCoverageFilterEnabled,
       dialectValidationPayoutTokens: row.dialectValidationPayoutTokens?.toString() ?? null,
       misplacedDialectFlagThreshold: row.misplacedDialectFlagThreshold,
       noAudioClawbackFlagThreshold: row.noAudioClawbackFlagThreshold,

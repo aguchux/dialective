@@ -3123,6 +3123,22 @@ model PlatformSettings {
   /// is an explicit admin decision, OTP-guarded via
   /// OtpPurpose.VDCL_PAYOUT_SUPPRESSION_TOGGLE.
   vdclPayoutSuppressionEnabled               Boolean   @default(false)
+  /// Whether subscriber catalogue SEARCH is narrowed to recordings covered by
+  /// a VDCL manifest, so the listing agrees with the audio gate instead of
+  /// showing rows that cannot be played.
+  ///
+  /// Its own flag rather than reusing vdclEnforcementEnabled, which is already
+  /// true in production. That flag makes licences bind at the AUDIO boundary:
+  /// a per-recording denial on request, where an uncovered clip 403s and the
+  /// catalogue stays whole. This one removes rows from the listing wholesale,
+  /// which is a far larger blast radius on the same signal -- with 191,800
+  /// settled recordings and 42 covered by a manifest, switching it on before
+  /// contributors have signed empties the catalogue.
+  ///
+  /// Turn it on only once VDCL adoption covers enough of the corpus to be the
+  /// real gate. Until then the audio checks already stop unlicensed data
+  /// leaving; this only stops advertising it.
+  vdclCatalogueCoverageFilterEnabled         Boolean   @default(false)
   reverseWordTrainingEnabled                 Boolean   @default(false)
   adminPayoutOtpEnabled                      Boolean   @default(false) // when true, admin/training-payouts and admin/withdrawals/:id/resolve require the acting admin to verify an emailed OTP first
   sessionIdleTimeoutMinutes                  Int       @default(30) // minutes of inactivity before any authenticated session (trainer or admin) is force-signed-out and must reauthenticate -- enforced both client-side (activity-tracking sign-out) and server-side (frontend/proxy.ts compares against the JWT's lastActiveAt claim, so it can't be bypassed by disabling client JS)

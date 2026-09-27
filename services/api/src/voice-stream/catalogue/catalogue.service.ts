@@ -90,10 +90,13 @@ export class CatalogueService {
    * can never play, including work from contributors who signed nothing. The
    * listing and the audio gate should agree.
    *
-   * Gated on the SAME flag as the audio checks (isVdclEnforcementEnabled),
-   * not a flag of its own, so the two can never disagree: either licences
-   * bind everywhere or nowhere. While enforcement is off this returns {} and
-   * the catalogue behaves exactly as it did before.
+   * On its own flag (vdclCatalogueCoverageFilterEnabled), NOT the
+   * vdclEnforcementEnabled one the audio checks use -- that flag is already
+   * true in production, where it means "a request for uncovered audio is
+   * denied" and the catalogue stays whole. Removing rows from the listing is
+   * a much larger blast radius on the same signal: with 191,800 settled
+   * recordings and 42 covered by a manifest, reusing that flag would have
+   * emptied the catalogue the moment this shipped. Default off.
    *
    * Membership is tested against the manifest, not the licence status. The
    * status question -- withdrawn, suspended, purpose not granted -- stays with
@@ -104,7 +107,7 @@ export class CatalogueService {
    * remove the recordings from Stream.
    */
   private async vdclCoverageWhere(): Promise<Prisma.WordRecordingWhereInput> {
-    if (!(await this.settings.isVdclEnforcementEnabled())) return {};
+    if (!(await this.settings.isVdclCatalogueCoverageFilterEnabled())) return {};
     return {
       // Correlated existence check rather than a fetched id list: the
       // manifest-item table grows with every signed licence, and pulling

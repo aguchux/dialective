@@ -1511,6 +1511,11 @@ export interface PublicClientSettings {
    * revenue sharing instead. Trainers without a licence are unaffected.
    */
   vdclPayoutSuppressionEnabled: boolean;
+  /**
+   * Whether subscriber catalogue search is narrowed to manifest-covered
+   * recordings. Separate from vdclEnforcementEnabled, which gates audio.
+   */
+  vdclCatalogueCoverageFilterEnabled: boolean;
   sessionIdleTimeoutMinutes: number;
   sessionMaxHours: number;
   phoneVerificationRequired: boolean;
@@ -2106,6 +2111,7 @@ export interface PlatformSettings {
   vdclEnabled: boolean;
   trainingEconomyEnabled: boolean;
   vdclPayoutSuppressionEnabled: boolean;
+  vdclCatalogueCoverageFilterEnabled: boolean;
   vdclEnforcementEnabled: boolean;
   vdclRetentionExemptionEnabled: boolean;
   qualityGateEnabled: boolean;
