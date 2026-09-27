@@ -1150,6 +1150,35 @@ export interface P2PTradingEligibility {
   minCompletedTasksForSelling: number;
 }
 
+/** What a bulk revoke would clear, before anything is cleared. */
+export interface P2PRevokeAllPreview {
+  sellOfferCount: number;
+  buyOfferCount: number;
+  /** Escrow held by live listings. */
+  offerTokens: string;
+  /** Paid-marked trades past the dispute window, refunded to their sellers. */
+  staleTradeCount: number;
+  staleTradeTokens: string;
+  /** Offer escrow plus stale-trade escrow -- what the step-up binds. */
+  tokensToRefund: string;
+  /** In-flight trades left alone: inside the dispute window, or disputed. */
+  skippedTradeCount: number;
+  skippedTradeTokens: string;
+  disputedTradeCount: number;
+  disputeWindowMinutes: number;
+}
+
+export interface P2PRevokeAllResult {
+  cancelledSellOffers: number;
+  cancelledBuyOffers: number;
+  refundedTradeCount: number;
+  tokensRefunded: string;
+  skippedTradeCount: number;
+  skippedTradeTokens: string;
+  disputedTradeCount: number;
+  failedCount: number;
+}
+
 export interface P2PMarketSettings {
   enabled: boolean;
   sellOffersEnabled: boolean;
@@ -5551,6 +5580,27 @@ export const dialectivaApi = createApi({
       query: (body) => ({ url: '/p2p/admin/settings', method: 'PATCH', body }),
       invalidatesTags: ['P2P'],
     }),
+    /**
+     * What a bulk revoke would clear. Read first so the admin confirms a
+     * concrete scope, and so the step-up can be bound to it.
+     */
+    previewRevokeAllP2P: builder.query<P2PRevokeAllPreview, void>({
+      query: () => '/p2p/admin/revoke-all/preview',
+      providesTags: ['P2P'],
+    }),
+    requestRevokeAllP2POtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number; preview: P2PRevokeAllPreview },
+      void
+    >({
+      query: () => ({ url: '/p2p/admin/revoke-all/otp', method: 'POST' }),
+    }),
+    revokeAllP2P: builder.mutation<
+      P2PRevokeAllResult,
+      { otpRequestId?: string; code?: string }
+    >({
+      query: (body) => ({ url: '/p2p/admin/revoke-all', method: 'POST', body }),
+      invalidatesTags: ['P2P', 'Wallet'],
+    }),
     listAdminIntegrations: builder.query<AdminIntegration[], void>({
       query: () => '/integrations/admin',
       providesTags: ['Integrations'],
@@ -7075,6 +7125,9 @@ export const {
   useLazyGetMyProofAccountReportPdfUrlQuery,
   useGetAdminP2PSettingsQuery,
   useUpdateAdminP2PSettingsMutation,
+  usePreviewRevokeAllP2PQuery,
+  useRequestRevokeAllP2POtpMutation,
+  useRevokeAllP2PMutation,
   useListIntegrationsQuery,
   useListMyIntegrationsQuery,
   useSubscribeToIntegrationMutation,

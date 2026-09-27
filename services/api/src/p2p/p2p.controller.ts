@@ -27,6 +27,7 @@ import {
   RequestForceResolveOtpDto,
   ResolveDisputeDto,
   ForceResolveTradeDto,
+  RevokeAllOffersDto,
   UpdateOfferDto,
   UpdateP2PMarketSettingsDto,
   UpdateP2pPaymentInstructionsDto,
@@ -234,6 +235,32 @@ export class P2PController {
     @Body() body: ResolveDisputeDto,
   ) {
     return this.p2p.resolveDispute(req.user.sub, id, body);
+  }
+
+  /**
+   * Clearing the whole market before new settings apply. Three routes: what
+   * would be cleared, the step-up bound to that scope, then the action --
+   * same shape and reasoning as force-resolve below.
+   */
+  @Get('admin/revoke-all/preview')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  adminPreviewRevokeAll() {
+    return this.p2p.previewRevokeAll();
+  }
+
+  @Post('admin/revoke-all/otp')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  adminRequestRevokeAllOtp(@Req() req: AuthenticatedRequest) {
+    return this.p2p.requestRevokeAllOtp(req.user.sub);
+  }
+
+  @Post('admin/revoke-all')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  adminRevokeAll(@Req() req: AuthenticatedRequest, @Body() body: RevokeAllOffersDto) {
+    return this.p2p.revokeAllOffers(req.user.sub, body);
   }
 
   /**

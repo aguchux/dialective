@@ -46,3 +46,23 @@ export function p2pAdminForceResolveContextHash(input: {
     tokenAmount: input.tokenAmount,
   });
 }
+
+/**
+ * Binds a bulk-revoke OTP to the exact scope the admin was shown.
+ *
+ * Binds the COUNTS, not just the action. An admin approves "cancel 416
+ * offers and 7 buy requests, unlocking 6,986 DL" -- if the market moves
+ * between reading that figure and confirming it, the code no longer
+ * matches and the revoke fails closed rather than silently clearing a
+ * different, larger market than the one that was weighed.
+ */
+export function p2pAdminRevokeAllContextHash(input: {
+  offerCount: number;
+  tokenAmount: string;
+}): string {
+  return hashContext({
+    action: 'p2p-admin-revoke-all',
+    offerCount: input.offerCount,
+    tokenAmount: input.tokenAmount,
+  });
+}

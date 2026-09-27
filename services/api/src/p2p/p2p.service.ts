@@ -42,6 +42,7 @@ import {
 } from './dto/p2p.dto';
 import {
   p2pAdminForceResolveContextHash,
+  p2pAdminRevokeAllContextHash,
   p2pTradeOtpContextHash,
 } from './p2p-trade-otp-context.util';
 
@@ -1482,6 +1483,268 @@ export class P2PService {
    * outcome against it. Force-resolving around that would leave the dispute
    * row open forever, pointing at escrow that has already moved.
    */
+  /**
+   * Paid-marked trades old enough that refunding the seller no longer takes
+   * anything away from the buyer.
+   *
+   * The cutoff is disputeWindowMinutes, NOT paymentWindowMinutes. The
+   * payment window governs how long a buyer has to pay; once they mark
+   * paid it stops mattering (see the field doc on P2PMarketSettings).
+   * What matters for a refund is whether the buyer can still raise a
+   * dispute -- cancelling a trade closes that route, because raiseDispute
+   * refuses a CANCELLED trade. Past the dispute window that route is
+   * already closed, so the refund takes nothing the buyer still had.
+   *
+   * A trade with an OPEN dispute is never included at any age. That is the
+   * same boundary loadForceResolvableTrade draws, and it is not overridden
+   * in bulk.
+   */
+  private async stalePaidTradeWhere(disputeWindowMinutes: number) {
+    return {
+      status: P2PTradeStatus.PAID_MARKED,
+      paidAt: { lt: new Date(Date.now() - disputeWindowMinutes * 60_000) },
+      OR: [{ dispute: { is: null } }, { dispute: { status: { not: P2PDisputeStatus.OPEN } } }],
+    };
+  }
+
+  /**
+   * What a bulk revoke would clear, without clearing anything.
+   *
+   * Drives both the confirmation screen and the OTP context, so the figures
+   * the admin approves are the figures the code is bound to.
+   */
+  async previewRevokeAll() {
+    await this.expireStaleRecords();
+    const settings = await this.settingsRow();
+    const staleWhere = await this.stalePaidTradeWhere(settings.disputeWindowMinutes);
+
+    const [sellOffers, buyOfferCount, stalePaid, heldBack, disputedCount] = await Promise.all([
+      this.prisma.p2PTokenOffer.aggregate({
+        where: { type: P2POfferType.SELL, status: P2POfferStatus.ACTIVE },
+        _count: true,
+        _sum: { tokenAmount: true },
+      }),
+      this.prisma.p2PTokenOffer.count({
+        where: { type: P2POfferType.BUY, status: P2POfferStatus.ACTIVE },
+      }),
+      this.prisma.p2PTokenTrade.aggregate({
+        where: staleWhere,
+        _count: true,
+        _sum: { tokenAmount: true },
+      }),
+      // Everything still in flight that will NOT be swept: too recent to
+      // have lost the dispute route, or actively disputed.
+      this.prisma.p2PTokenTrade.aggregate({
+        where: {
+          status: { in: [P2PTradeStatus.PAID_MARKED, P2PTradeStatus.DISPUTED] },
+          NOT: staleWhere,
+        },
+        _count: true,
+        _sum: { tokenAmount: true },
+      }),
+      this.prisma.p2PTokenTrade.count({ where: { status: P2PTradeStatus.DISPUTED } }),
+    ]);
+
+    const sellTokens = sellOffers._sum.tokenAmount ?? new Prisma.Decimal(0);
+    const staleTokens = stalePaid._sum.tokenAmount ?? new Prisma.Decimal(0);
+
+    return {
+      sellOfferCount: sellOffers._count,
+      buyOfferCount,
+      /** Escrow held by live listings, returned to the sellers who posted them. */
+      offerTokens: sellTokens.toString(),
+      /** Paid-marked trades past the dispute window, refunded to their sellers. */
+      staleTradeCount: stalePaid._count,
+      staleTradeTokens: staleTokens.toString(),
+      /** Everything above, which is what the OTP binds. */
+      tokensToRefund: sellTokens.add(staleTokens).toString(),
+      /**
+       * In-flight trades left alone: still inside the dispute window, or
+       * actively disputed. Reported so the admin knows the market is not
+       * fully empty afterwards.
+       */
+      skippedTradeCount: heldBack._count,
+      skippedTradeTokens: (heldBack._sum.tokenAmount ?? new Prisma.Decimal(0)).toString(),
+      disputedTradeCount: disputedCount,
+      disputeWindowMinutes: settings.disputeWindowMinutes,
+    };
+  }
+
+  /** Issue the step-up, bound to the scope the admin is looking at. */
+  async requestRevokeAllOtp(adminId: string) {
+    const preview = await this.previewRevokeAll();
+    const admin = await this.prisma.user.findUniqueOrThrow({
+      where: { id: adminId },
+      select: { email: true, phoneNumber: true, phoneVerifiedAt: true },
+    });
+    const { destination, channel } = await resolveOtpDestination(admin, this.platformSettings);
+    const issued = await this.otp.issueForUser(
+      adminId,
+      OtpPurpose.ADMIN_PAYOUT,
+      destination,
+      p2pAdminRevokeAllContextHash({
+        offerCount: preview.sellOfferCount + preview.buyOfferCount + preview.staleTradeCount,
+        tokenAmount: preview.tokensToRefund,
+      }),
+      channel,
+    );
+    return { ...issued, preview };
+  }
+
+  /**
+   * Clear the market: cancel every live listing, refund every abandoned
+   * paid-marked trade, and return all of that escrow.
+   *
+   * For applying new settings cleanly. Trade limits, currencies and payment
+   * methods are validated at post time, so listings placed under the old
+   * rules keep sitting there under the new ones.
+   *
+   * What it will not touch:
+   *
+   * A trade with an OPEN dispute, at any age -- the same boundary
+   * loadForceResolvableTrade draws, not overridden just because this is
+   * bulk. And a paid-marked trade still inside disputeWindowMinutes, where
+   * the buyer can still raise one; cancelling closes that route, since
+   * raiseDispute refuses a CANCELLED trade.
+   *
+   * It works row-by-row through cancelSellOffer/refundTradeToSeller rather
+   * than in one bulk UPDATE. Each unlock has to move that seller wallet and
+   * write their own ledger row in the same transaction, and both helpers go
+   * through the same claim serialization as every other escrow path, so a
+   * seller releasing at the same moment cannot be paid out twice. A bulk
+   * status update would mark rows cancelled while leaving the escrow locked
+   * with no ledger trail -- not recoverable without hand-reconciliation.
+   */
+  async revokeAllOffers(adminId: string, dto: { otpRequestId?: string; code?: string }) {
+    const preview = await this.previewRevokeAll();
+    const settings = await this.settingsRow();
+    if (settings.adminOtpRequiredForDisputes) {
+      if (!dto.otpRequestId || !dto.code) {
+        throw new UnprocessableEntityException(
+          'OTP verification is required to revoke all P2P offers',
+        );
+      }
+      await this.otp.verify({
+        otpRequestId: dto.otpRequestId,
+        userId: adminId,
+        purpose: OtpPurpose.ADMIN_PAYOUT,
+        code: dto.code,
+        // Re-derived from the live market, so a code issued against one
+        // scope cannot clear a larger one that appeared since.
+        contextHash: p2pAdminRevokeAllContextHash({
+          offerCount: preview.sellOfferCount + preview.buyOfferCount + preview.staleTradeCount,
+          tokenAmount: preview.tokensToRefund,
+        }),
+      });
+    }
+
+    let cancelledSell = 0;
+    let cancelledBuy = 0;
+    let refundedTrades = 0;
+    let failed = 0;
+    let refunded = new Prisma.Decimal(0);
+    const notifySellers: string[] = [];
+
+    // Trades first. An offer whose trade is refunded below comes back as
+    // CANCELLED rather than relisted (relistOffer defaults false), so doing
+    // this first means the offer pass does not have to reason about it.
+    const staleTrades = await this.prisma.p2PTokenTrade.findMany({
+      where: await this.stalePaidTradeWhere(settings.disputeWindowMinutes),
+      select: { id: true, sellerId: true, tokenAmount: true },
+    });
+    for (const trade of staleTrades) {
+      try {
+        await this.refundTradeToSeller(trade.id);
+        const after = await this.prisma.p2PTokenTrade.findUnique({
+          where: { id: trade.id },
+          select: { status: true },
+        });
+        if (after?.status !== P2PTradeStatus.CANCELLED) continue;
+        refundedTrades += 1;
+        refunded = refunded.add(trade.tokenAmount);
+        notifySellers.push(trade.sellerId);
+      } catch (err) {
+        failed += 1;
+        this.logger.error(
+          `Revoke-all failed for trade=${trade.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    const offers = await this.prisma.p2PTokenOffer.findMany({
+      where: { status: P2POfferStatus.ACTIVE },
+      select: { id: true, type: true, userId: true, tokenAmount: true },
+    });
+
+    for (const offer of offers) {
+      try {
+        if (offer.type === P2POfferType.SELL) {
+          // cancelSellOffer returns early unless the offer is still ACTIVE,
+          // so one accepted between the read above and here is left to its
+          // trade rather than having its escrow pulled out from under it.
+          await this.cancelSellOffer(offer.id, P2POfferStatus.CANCELLED);
+          const after = await this.prisma.p2PTokenOffer.findUnique({
+            where: { id: offer.id },
+            select: { status: true },
+          });
+          if (after?.status !== P2POfferStatus.CANCELLED) continue;
+          cancelledSell += 1;
+          refunded = refunded.add(offer.tokenAmount);
+          notifySellers.push(offer.userId);
+        } else {
+          // A BUY offer holds no escrow -- the accepting seller locks the
+          // tokens -- so this is a status change with nothing to unlock.
+          const updated = await this.prisma.p2PTokenOffer.updateMany({
+            where: { id: offer.id, status: P2POfferStatus.ACTIVE },
+            data: { status: P2POfferStatus.CANCELLED, cancelledAt: new Date() },
+          });
+          if (updated.count === 0) continue;
+          cancelledBuy += 1;
+        }
+      } catch (err) {
+        // One bad row must not strand the rest of the market with its
+        // tokens locked -- same per-row tolerance as the settlement sweeps.
+        failed += 1;
+        this.logger.error(
+          `Revoke-all failed for offer=${offer.id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    this.logger.warn(
+      `P2P revoke-all by admin=${adminId}: cancelled ${cancelledSell} sell + ${cancelledBuy} buy, ` +
+        `refunded ${refundedTrades} abandoned trades, returned ${refunded.toString()} DL, ` +
+        `left ${preview.skippedTradeCount} in-flight, ${failed} failed`,
+    );
+
+    // Best-effort, and only after the money has moved: a refund must never
+    // be held up by an SMS gateway.
+    void this.notifyRevokedSellers(notifySellers);
+
+    return {
+      cancelledSellOffers: cancelledSell,
+      cancelledBuyOffers: cancelledBuy,
+      refundedTradeCount: refundedTrades,
+      tokensRefunded: refunded.toString(),
+      skippedTradeCount: preview.skippedTradeCount,
+      skippedTradeTokens: preview.skippedTradeTokens,
+      disputedTradeCount: preview.disputedTradeCount,
+      failedCount: failed,
+    };
+  }
+
+  /** One message per distinct seller, not one per cancelled row. */
+  private async notifyRevokedSellers(sellerIds: string[]): Promise<void> {
+    if (!(await this.platformSettings.isP2pSmsCancelledEnabled())) return;
+    for (const sellerId of [...new Set(sellerIds)]) {
+      await this.notify(
+        sellerId,
+        true,
+        'Dialect Library: Your P2P offers were cancelled by support and your tokens returned to your balance.',
+      );
+    }
+  }
+
   private async loadForceResolvableTrade(tradeId: string) {
     const trade = await this.prisma.p2PTokenTrade.findUnique({
       where: { id: tradeId },

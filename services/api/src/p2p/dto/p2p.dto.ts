@@ -267,6 +267,27 @@ export class ResolveDisputeDto {
  * exists only for when the admin has actually seen proof of payment, and
  * the reason is where they record what they saw.
  */
+/**
+ * Clearing the whole market before new settings apply.
+ *
+ * No `reason` field, unlike ForceResolveTradeDto. That one moves a single
+ * named trade's escrow on an admin's judgement about a payment claim, so
+ * the written reason IS the audit record. This is a blanket return of
+ * escrow to the people who already owned it: every seller gets their own
+ * tokens back, nobody receives anyone else's, and each unlock writes its
+ * own P2P_ESCROW_REFUND ledger row. There is no per-row judgement to
+ * record.
+ */
+export class RevokeAllOffersDto {
+  @IsOptional()
+  @IsString()
+  otpRequestId?: string;
+
+  @IsOptional()
+  @IsString()
+  code?: string;
+}
+
 export class ForceResolveTradeDto {
   @IsIn(['refund-seller', 'release-buyer'])
   outcome!: 'refund-seller' | 'release-buyer';

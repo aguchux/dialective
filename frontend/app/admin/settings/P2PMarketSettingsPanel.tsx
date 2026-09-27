@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { CurrencyPicker, CurrencyPickerOption } from '@/components/admin/CurrencyPicker';
+import { RevokeAllP2PButton } from './RevokeAllP2PButton';
 import {
   normalizeErrorMessage,
   useGetAdminP2PSettingsQuery,
@@ -105,12 +106,18 @@ export function P2PMarketSettingsPanel() {
 
   return (
     <form className="grid gap-5 rounded-lg border border-line bg-white p-5" onSubmit={submit}>
-      <div>
-        <h2 className="text-xl font-black">P2P Escrow Market</h2>
-        <p className="mt-1 text-sm text-muted">
-          Gate marketplace access, trade limits, countdowns, cancellation grace, and dispute
-          settings.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-black">P2P Escrow Market</h2>
+          <p className="mt-1 text-sm text-muted">
+            Gate marketplace access, trade limits, countdowns, cancellation grace, and dispute
+            settings.
+          </p>
+        </div>
+        {/* Limits, currencies and payment methods are validated at post
+            time, so listings placed under the old rules survive a settings
+            change. This is how you clear them first. */}
+        <RevokeAllP2PButton />
       </div>
       {message && (
         <p className="rounded-lg bg-green-50 p-3 text-sm font-bold text-green-700">{message}</p>
