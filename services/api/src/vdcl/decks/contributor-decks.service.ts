@@ -1,7 +1,46 @@
-import { Injectable } from '@nestjs/common';
-import { Prisma, SubmissionStatus, VdclVersionStatus } from '@dialectiva/db';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { randomBytes } from 'crypto';
+import {
+  Prisma,
+  StreamDeckType,
+  StreamDeckVisibility,
+  SubmissionStatus,
+  VdclVersionStatus,
+} from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ELIGIBILITY_SELECT, classify } from '../compilation/eligibility';
+
+/**
+ * The seeded singleton SubscriberOrganization every contributor deck is
+ * published under, shared with ValidatorDecksService (which defines the same
+ * constant for its own bridge). Duplicated rather than imported for the same
+ * reason that service duplicates generateDeckKey: importing across module
+ * boundaries here would drag a whole unrelated module graph in for one
+ * string.
+ *
+ * Why the platform org owns the deck rather than the contributor: StreamDeck
+ * requires an organizationId, and there is deliberately no FK between
+ * trainer User and SubscriberUser/SubscriberOrganization -- that boundary is
+ * a tenant separation the schema documents at length. Publishing under the
+ * platform org gets the deck onto Stream without giving a contributor a
+ * subscriber identity, and it has the useful side effect that nothing
+ * subscriber-visible carries the contributor's id at all.
+ */
+export const DIALECT_LIBRARY_PLATFORM_ORG_ID = 'dialect-library-platform';
+
+/** "DLSD-{country}-{dialect}-{subdialect}-{6 chars}" -- same format as StreamDecksService/ValidatorDecksService. */
+function generateDeckKey(countryCode?: string | null, dialectTag?: string | null): string {
+  const country = (countryCode ?? 'GEN').toUpperCase();
+  const dialect = (dialectTag ?? 'GEN').toUpperCase();
+  const suffix = randomBytes(4).toString('hex').slice(0, 6).toUpperCase();
+  return `DLSD-${country}-${dialect}-GEN-${suffix}`;
+}
 
 /**
  * One dialect's worth of a contributor's licensed recordings.
@@ -28,6 +67,17 @@ export interface ContributorDeck {
    * what fixes it.
    */
   uncoveredCount: number;
+  /**
+   * The ContributorDeck row's id once this dialect has been published as a
+   * browsable unit, else null. Null does NOT mean the recordings are absent
+   * from Stream -- signing the licence is what puts them there. It means only
+   * that they are not yet grouped into a named deck a subscriber can browse
+   * as one thing.
+   */
+  deckId: string | null;
+  /** The bridged StreamDeck's public key, for display. Null until published. */
+  streamDeckKey: string | null;
+  publishedAt: Date | null;
 }
 
 export interface ContributorDeckList {
@@ -51,16 +101,30 @@ export interface ContributorDeckList {
  * definition. So decks are a view over VdclManifestItem, grouped by the
  * per-item dialectTag that compilation already writes.
  *
- * Read-only by design in this pass. Publishing a deck to Stream is NOT a
- * matter of flipping a visibility flag on one of these: a contributor deck
- * is covered by exactly one agreement, so a subscriber browsing it would
- * know every recording in it came from one person -- the precise inference
- * DeckCoverageService suppresses its agreement count to prevent. Publishing
- * therefore has to pool contributions into a multi-contributor dialect deck,
- * which is a separate piece of work with its own anonymity review.
+ * Signing the licence is what makes recordings available to Stream -- not
+ * creating a deck. Every recording in an ACTIVE manifest is already
+ * discoverable through the subscriber catalogue, individually, identified by
+ * dialect and never by contributor. A deck adds one thing on top of that: the
+ * dialect-sized GROUPING, so a subscriber shopping for Igbo can take the set
+ * rather than assembling it clip by clip.
+ *
+ * Publishing is therefore additive and ONE-WAY. `publishDeck` bridges into a
+ * PUBLIC StreamDeck under the platform org and there is no unpublish, by
+ * design: revoking the licence withdraws subscribers' PERMISSION to use the
+ * data (RightsService denies with `licence_withdrawn`, live, on every read),
+ * it does not remove recordings from Stream, and re-signing restores access.
+ * Presence and permission are separate, and only permission is revocable.
+ *
+ * Anonymity: a contributor deck is covered by exactly one agreement, so the
+ * bridged deck deliberately reports no contributor count and no owner id --
+ * the StreamDeck's organizationId is the platform org, not anything traceable
+ * to a person. This is the same inference DeckCoverageService suppresses its
+ * agreement count below MIN_ITEMS_FOR_AGREEMENT_COUNT to prevent.
  */
 @Injectable()
 export class ContributorDecksService {
+  private readonly logger = new Logger(ContributorDecksService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async listForContributor(contributorId: string): Promise<ContributorDeckList> {
@@ -126,13 +190,15 @@ export class ContributorDecksService {
     }
 
     const tags = [...grouped.keys()];
-    const [names, uncovered] = await Promise.all([
+    const [names, uncovered, published] = await Promise.all([
       this.resolveDialectNames(tags),
       this.countUncovered(contributorId, tags),
+      this.publishedByTag(contributorId),
     ]);
 
     const decks: ContributorDeck[] = tags.map((tag) => {
       const bucket = grouped.get(tag)!;
+      const row = published.get(tag);
       return {
         dialectTag: tag,
         dialectName: names.get(tag) ?? tag,
@@ -142,6 +208,9 @@ export class ContributorDecksService {
         meanCompositeScore:
           bucket.scored > 0 ? Math.round((bucket.scoreSum / bucket.scored) * 100) / 100 : null,
         uncoveredCount: uncovered.get(tag) ?? 0,
+        deckId: row?.id ?? null,
+        streamDeckKey: row?.streamDeckKey ?? null,
+        publishedAt: row?.createdAt ?? null,
       };
     });
 
@@ -158,6 +227,174 @@ export class ContributorDecksService {
       countersignedAt: active.countersignedAt,
       decks,
     };
+  }
+
+  /**
+   * Publish one dialect as a browsable deck on Stream.
+   *
+   * ONE-WAY, and the copy in the UI says so before the contributor confirms.
+   * There is no unpublish method here and that is deliberate, not an
+   * omission: withdrawing the licence is the lever that matters, and it
+   * revokes subscribers' PERMISSION rather than the deck's existence.
+   *
+   * One dialect per deck is structural, not validated: membership is derived
+   * from the manifest items whose dialectTag equals this deck's tag, so a
+   * mixed-dialect deck cannot be expressed. The only check needed is that the
+   * tag is one this contributor's ACTIVE manifest actually covers.
+   */
+  async publishDeck(contributorId: string, dialectTag: string): Promise<ContributorDeck> {
+    const list = await this.listForContributor(contributorId);
+    if (!list.licenceKey) {
+      throw new BadRequestException(
+        'You need an active Voice Dataset Contributor Licence before you can publish a deck',
+      );
+    }
+
+    const deck = list.decks.find((candidate) => candidate.dialectTag === dialectTag);
+    if (!deck) {
+      throw new NotFoundException(
+        'Your licence does not cover any recordings in that dialect',
+      );
+    }
+    if (deck.deckId) {
+      throw new ConflictException('That dialect is already published as a deck');
+    }
+    if (deck.recordingCount === 0) {
+      // Defensive: a tag only appears in the grouping because items carry it,
+      // so this should be unreachable. An empty deck on Stream would be a
+      // broken shelf, so it is still refused rather than trusted.
+      throw new BadRequestException('There are no licensed recordings in that dialect to publish');
+    }
+
+    // The recordings this deck is built from: exactly the ACTIVE manifest's
+    // items for this one dialect. Read here rather than carried down from
+    // listForContributor because the StreamDeckItem rows need ids, not counts.
+    const items = await this.prisma.vdclManifestItem.findMany({
+      where: {
+        dialectTag,
+        manifest: {
+          vdclVersion: {
+            agreement: { contributorId, withdrawnAt: null },
+            status: VdclVersionStatus.ACTIVE,
+          },
+        },
+      },
+      select: { recordingId: true },
+    });
+    if (items.length === 0) {
+      throw new BadRequestException('There are no licensed recordings in that dialect to publish');
+    }
+
+    const countryCode = await this.resolveCountryCode(dialectTag);
+
+    try {
+      const created = await this.prisma.$transaction(async (tx) => {
+        const streamDeck = await tx.streamDeck.create({
+          data: {
+            deckKey: generateDeckKey(countryCode, dialectTag),
+            organizationId: DIALECT_LIBRARY_PLATFORM_ORG_ID,
+            name: deck.dialectName,
+            type: StreamDeckType.MANUAL,
+            // The contributor is the creator in provenance terms, but this
+            // column is read as a SubscriberUser id everywhere else in
+            // Voice Stream, and a trainer id here would be both wrong and a
+            // quiet identity leak into a subscriber-facing surface. The
+            // platform org id stands in; the real provenance link is
+            // ContributorDeck.ownerUserId, which Stream never reads.
+            createdByUserId: DIALECT_LIBRARY_PLATFORM_ORG_ID,
+            visibility: StreamDeckVisibility.PUBLIC,
+          },
+        });
+
+        await tx.streamDeckItem.createMany({
+          data: items.map((item) => ({
+            deckId: streamDeck.id,
+            recordingId: item.recordingId,
+            addedByUserId: DIALECT_LIBRARY_PLATFORM_ORG_ID,
+          })),
+        });
+
+        const row = await tx.contributorDeck.create({
+          data: {
+            ownerUserId: contributorId,
+            dialectTag,
+            name: deck.dialectName,
+            streamDeckId: streamDeck.id,
+            itemCount: items.length,
+          },
+        });
+
+        return { row, deckKey: streamDeck.deckKey };
+      });
+
+      this.logger.log(
+        `Contributor deck published dialect=${dialectTag} items=${items.length} streamDeck=${created.deckKey}`,
+      );
+
+      return {
+        ...deck,
+        deckId: created.row.id,
+        streamDeckKey: created.deckKey,
+        publishedAt: created.row.createdAt,
+      };
+    } catch (err) {
+      // The @@unique([ownerUserId, dialectTag]) is the real guard against a
+      // double publish -- the deckId check above can lose a race between two
+      // taps. Translating it here means the second tap reports "already
+      // published" rather than a 500.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException('That dialect is already published as a deck');
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Published decks for this contributor, keyed by dialect tag.
+   *
+   * Joined to the StreamDeck only for its public key, which is the identifier
+   * a subscriber would quote back. A row whose bridged deck has since been
+   * deleted still counts as published -- the ContributorDeck row is the
+   * contributor-side record, and reporting it as unpublished would invite a
+   * second publish of the same dialect.
+   */
+  private async publishedByTag(
+    contributorId: string,
+  ): Promise<Map<string, { id: string; streamDeckKey: string | null; createdAt: Date }>> {
+    const rows = await this.prisma.contributorDeck.findMany({
+      where: { ownerUserId: contributorId },
+      select: { id: true, dialectTag: true, streamDeckId: true, createdAt: true },
+    });
+    if (rows.length === 0) return new Map();
+
+    const deckIds = rows.map((row) => row.streamDeckId).filter((id): id is string => id !== null);
+    const keys = deckIds.length
+      ? await this.prisma.streamDeck.findMany({
+          where: { id: { in: deckIds } },
+          select: { id: true, deckKey: true },
+        })
+      : [];
+    const keyById = new Map(keys.map((deck) => [deck.id, deck.deckKey]));
+
+    return new Map(
+      rows.map((row) => [
+        row.dialectTag,
+        {
+          id: row.id,
+          streamDeckKey: row.streamDeckId ? keyById.get(row.streamDeckId) ?? null : null,
+          createdAt: row.createdAt,
+        },
+      ]),
+    );
+  }
+
+  /** For the deck key's country segment. Display-only, same as the name. */
+  private async resolveCountryCode(dialectTag: string): Promise<string | null> {
+    const dialect = await this.prisma.dialect.findFirst({
+      where: { tag: dialectTag },
+      select: { country: { select: { code: true } } },
+    });
+    return dialect?.country?.code ?? null;
   }
 
   /**

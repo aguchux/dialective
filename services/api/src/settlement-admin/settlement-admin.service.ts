@@ -12,6 +12,7 @@ import {
 } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
+import { isEconomyEnabledForUser } from '../settings/training-economy.util';
 import { TokenomicsService } from '../tokenomics/tokenomics.service';
 import { SmsService } from '../sms/sms.service';
 import { ListUnsettledDto } from './dto/list-unsettled.dto';
@@ -303,14 +304,24 @@ export class SettlementAdminService {
     const payoutScore = ctx.qualityGateEnabled ? compositeScore : recording.score;
     const payout = computeTrainingPayout(recording.tokensSpent, payoutScore, ctx.bonusCapMultiple);
     const sourceKey = trainingPayoutSourceKey(recording.wordId, recording.sentenceId);
-    // See SettlementService.settleWordRecordings -- with the training
-    // economy off there is nothing to credit, so credit and mint are both
-    // skipped rather than run for zero.
-    const { ops, result } = ctx.economyEnabled
+    // See SettlementService.settleWordRecordings -- nothing to credit when no
+    // payout is owed, so credit and mint are both skipped rather than run for
+    // zero.
+    //
+    // Resolved per recording rather than taken from ctx, because the answer
+    // depends on THIS recording's owner: ctx carries the platform-wide
+    // switch, and a contributor holding an active VDCL settles at zero even
+    // while it is on. Unlike settlement-job, which resolves one licensed set
+    // per batch, this path settles one row (or iterates rows one at a time),
+    // so a direct per-user check is both simpler and no more expensive.
+    const payoutOwed =
+      ctx.economyEnabled &&
+      (await isEconomyEnabledForUser(this.settings, this.prisma, userId));
+    const { ops, result } = payoutOwed
       ? await creditTrainingPayoutOps(this.prisma, userId, payout, recording.id)
       : { ops: [], result: null };
     const mintOps =
-      ctx.mintingPaused || !ctx.economyEnabled
+      ctx.mintingPaused || !payoutOwed
         ? []
         : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;
     const lockOps = (await this.isStakeStillLocked(recording.id))

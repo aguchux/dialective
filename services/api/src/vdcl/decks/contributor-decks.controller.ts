@@ -1,7 +1,8 @@
-import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, Req, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/strategies/jwt-auth.guard';
 import { VdclEnabledGuard } from '../vdcl-enabled.guard';
 import { ContributorDecksService } from './contributor-decks.service';
+import { PublishContributorDeckDto } from './dto/publish-contributor-deck.dto';
 
 interface AuthedRequest {
   user: { sub: string };
@@ -22,5 +23,23 @@ export class ContributorDecksController {
   @Get()
   list(@Req() req: AuthedRequest) {
     return this.decks.listForContributor(req.user.sub);
+  }
+
+  /**
+   * Publish one dialect as a browsable deck on Stream.
+   *
+   * POST, not PATCH on a deck id, because the deck does not exist yet -- the
+   * contributor is creating one from a dialect their licence covers. 200
+   * rather than 201 since the response is the updated deck view the panel
+   * re-renders from, not a bare location.
+   *
+   * No unpublish route exists, deliberately: see publishDeck's doc comment.
+   * Revoking the licence is the lever, and it withdraws permission rather
+   * than presence.
+   */
+  @Post('publish')
+  @HttpCode(200)
+  publish(@Req() req: AuthedRequest, @Body() body: PublishContributorDeckDto) {
+    return this.decks.publishDeck(req.user.sub, body.dialectTag);
   }
 }

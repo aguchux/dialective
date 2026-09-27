@@ -9,6 +9,7 @@ function setup() {
       findFirst: jest.fn(),
     },
     cataloguePreviewLog: { create: jest.fn() },
+    vdclManifestItem: { findMany: jest.fn().mockResolvedValue([]) },
     isvcCurrent: {
       findMany: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn().mockResolvedValue(null),
@@ -26,8 +27,19 @@ function setup() {
     mayUse: jest.fn().mockResolvedValue({ allowed: true, entitlementDecision: 'allowed' }),
     recordDecision: jest.fn().mockResolvedValue(undefined),
   };
-  const service = new CatalogueService(prisma as any, storage as any, rights as any);
-  return { prisma, storage, rights, service };
+  // Enforcement OFF by default, matching the production default -- the
+  // coverage filter is inert, so every existing assertion here stays about
+  // catalogue behaviour rather than VDCL. The filter has its own tests.
+  const settings = {
+    isVdclEnforcementEnabled: jest.fn().mockResolvedValue(false),
+  };
+  const service = new CatalogueService(
+    prisma as any,
+    storage as any,
+    rights as any,
+    settings as any,
+  );
+  return { prisma, storage, rights, settings, service };
 }
 
 describe('CatalogueService', () => {
@@ -457,6 +469,84 @@ describe('CatalogueService', () => {
       const result = await service.isEligible('rec-missing');
 
       expect(result).toBe(false);
+    });
+  });
+
+  describe('VDCL coverage filter', () => {
+    it('does not filter while enforcement is off', async () => {
+      // The production default. Listing behaviour must be untouched, and the
+      // manifest table must not even be read.
+      const { prisma, service } = setup();
+      prisma.wordRecording.count.mockResolvedValue(0);
+      prisma.wordRecording.findMany.mockResolvedValue([]);
+
+      await service.search({ page: 1, pageSize: 20 });
+
+      expect(prisma.vdclManifestItem.findMany).not.toHaveBeenCalled();
+      expect(prisma.wordRecording.count.mock.calls[0][0].where.AND).toBeUndefined();
+    });
+
+    it('narrows search to recordings covered by a manifest when enforcement is on', async () => {
+      const { prisma, settings, service } = setup();
+      settings.isVdclEnforcementEnabled.mockResolvedValue(true);
+      prisma.vdclManifestItem.findMany.mockResolvedValue([
+        { recordingId: 'licensed-1' },
+        { recordingId: 'licensed-2' },
+      ]);
+      prisma.wordRecording.count.mockResolvedValue(0);
+      prisma.wordRecording.findMany.mockResolvedValue([]);
+
+      await service.search({ page: 1, pageSize: 20 });
+
+      expect(prisma.wordRecording.count.mock.calls[0][0].where.AND).toEqual([
+        { id: { in: ['licensed-1', 'licensed-2'] } },
+      ]);
+    });
+
+    it('keeps the coverage filter when an ISVC filter also sets where.id', async () => {
+      // The regression this composition exists for: the ISVC branch assigns
+      // where.id outright, so a coverage filter written the same way would be
+      // silently replaced and widen results back to unlicensed recordings.
+      const { prisma, settings, service } = setup();
+      settings.isVdclEnforcementEnabled.mockResolvedValue(true);
+      prisma.vdclManifestItem.findMany.mockResolvedValue([{ recordingId: 'licensed-1' }]);
+      prisma.isvcCurrent.findMany.mockResolvedValue([
+        { recordingId: 'licensed-1', aggregation: { isvs: 90, confidence: 'HIGH', organizationCount: 3 } },
+      ]);
+      prisma.wordRecording.count.mockResolvedValue(0);
+      prisma.wordRecording.findMany.mockResolvedValue([]);
+
+      await service.search({ page: 1, pageSize: 20, minIsvs: 50 });
+
+      const where = prisma.wordRecording.count.mock.calls[0][0].where;
+      // Both survive: the ISVC set on `id`, the coverage set under AND.
+      expect(where.id).toBeDefined();
+      expect(where.AND).toEqual([{ id: { in: ['licensed-1'] } }]);
+    });
+
+    it('404s a preview for a recording outside every manifest', async () => {
+      // Rather than reaching the rights check and returning a 403, which
+      // would confirm the clip exists.
+      const { prisma, settings, service } = setup();
+      settings.isVdclEnforcementEnabled.mockResolvedValue(true);
+      prisma.vdclManifestItem.findMany.mockResolvedValue([]);
+      prisma.wordRecording.findFirst.mockResolvedValue(null);
+
+      await expect(service.preview('org-1', 'user-1', 'unlicensed-1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('blocks an unlicensed recording from being hand-added to a deck', async () => {
+      // Otherwise the search filter would only be a display convention: an
+      // org that learned an id elsewhere could still add it.
+      const { prisma, settings, service } = setup();
+      settings.isVdclEnforcementEnabled.mockResolvedValue(true);
+      prisma.vdclManifestItem.findMany.mockResolvedValue([]);
+      prisma.wordRecording.count.mockResolvedValue(0);
+
+      await expect(service.isEligible('unlicensed-1')).resolves.toBe(false);
+      expect(prisma.wordRecording.count.mock.calls[0][0].where.id).toEqual({ in: [] });
     });
   });
 });

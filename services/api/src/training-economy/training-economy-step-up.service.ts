@@ -70,6 +70,77 @@ export class TrainingEconomyStepUpService {
   }
 
   /**
+   * Issue a code for switching per-contributor VDCL payout suppression.
+   *
+   * A separate OtpPurpose from the platform-wide switch above, not a shared
+   * one with a flag in the context: the two changes have different blast
+   * radii and the emails have to say which is which. Direction is bound the
+   * same way, so a code issued to stop payouts cannot resume them.
+   */
+  async requestVdclSuppressionOtp(adminUserId: string, enabling: boolean) {
+    const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: adminUserId } });
+    const { destination, channel } = await resolveOtpDestination(admin, this.settings);
+    return this.otp.issueForUser(
+      adminUserId,
+      OtpPurpose.VDCL_PAYOUT_SUPPRESSION_TOGGLE,
+      destination,
+      adminActionContextHash({
+        action: 'vdcl-payout-suppression-toggle',
+        direction: enabling ? 'enable' : 'disable',
+      }),
+      channel,
+    );
+  }
+
+  /**
+   * Apply the per-contributor suppression switch.
+   *
+   * Same no-op-when-unchanged rule as apply() above, for the same reason.
+   */
+  async applyVdclSuppression(
+    adminUserId: string,
+    dto: { enabled: boolean; otpRequestId?: string; code?: string },
+  ) {
+    const current = await this.settings.isVdclPayoutSuppressionEnabled();
+    if (dto.enabled === current) {
+      return this.settings.getForAdmin();
+    }
+    await this.verifyVdclSuppressionStepUp(
+      adminUserId,
+      dto.enabled,
+      dto.otpRequestId,
+      dto.code,
+    );
+    return this.settings.update({ vdclPayoutSuppressionEnabled: dto.enabled });
+  }
+
+  async verifyVdclSuppressionStepUp(
+    adminUserId: string,
+    enabling: boolean,
+    otpRequestId?: string,
+    code?: string,
+  ): Promise<void> {
+    if (!(await this.settings.isAdminPayoutOtpEnabled())) {
+      return;
+    }
+    if (!otpRequestId || !code) {
+      throw new UnprocessableEntityException(
+        `OTP verification is required to ${enabling ? 'stop' : 'resume'} token payouts for licensed contributors`,
+      );
+    }
+    await this.otp.verify({
+      otpRequestId,
+      userId: adminUserId,
+      purpose: OtpPurpose.VDCL_PAYOUT_SUPPRESSION_TOGGLE,
+      code,
+      contextHash: adminActionContextHash({
+        action: 'vdcl-payout-suppression-toggle',
+        direction: enabling ? 'enable' : 'disable',
+      }),
+    });
+  }
+
+  /**
    * Gated on the same platform setting as every other admin step-up, so an
    * admin who turns admin OTP off is not locked out by a code they can no
    * longer receive.

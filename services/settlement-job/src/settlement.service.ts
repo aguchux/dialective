@@ -4,6 +4,7 @@ import {
   creditTrainingPayoutOps,
   mintTrainingPayoutOps,
   Prisma,
+  VdclVersionStatus,
 } from '@dialectiva/db';
 import { PrismaService } from './prisma/prisma.service';
 import { StorageService } from './storage.service';
@@ -144,6 +145,10 @@ export class SettlementService {
       this.isTrainingEconomyEnabled(),
     ]);
 
+    // Resolved once for the whole run and tested per recording below --
+    // see suppressedContributorIds.
+    const suppressed = await this.suppressedContributorIds();
+
     const wordRecordingResult = await this.settleWordRecordings(
       bonusCapMultiple,
       qualityGateEnabled,
@@ -153,6 +158,7 @@ export class SettlementService {
       settlementDelayMinutes,
       mintingPaused,
       economyEnabled,
+      suppressed,
     );
     const rejectedWordRecordingRefundCount = await this.refundRejectedWordRecordings();
     const stuckRefundCount = await this.refundStuckWordRecordings();
@@ -168,6 +174,7 @@ export class SettlementService {
       settlementDelayMinutes,
       mintingPaused,
       economyEnabled,
+      suppressed,
     );
     const rejectedDomainConversationRefundCount =
       await this.refundRejectedDomainConversationRecordings();
@@ -224,6 +231,8 @@ export class SettlementService {
     settlementDelayMinutes: number,
     mintingPaused: boolean,
     economyEnabled: boolean,
+    /** Contributors whose recordings settle without a payout -- see suppressedContributorIds. */
+    suppressedContributors: Set<string>,
   ) {
     const recordings = await this.prisma.wordRecording.findMany({
       where: {
@@ -282,13 +291,18 @@ export class SettlementService {
         // the ledger that reconciliation has to explain forever after.
         // Skipping also stops the mint, so no supply is recorded against a
         // payout that never happened.
-        const { ops, result } = economyEnabled
+        // Per recording, not per run: the platform-wide switch and this
+        // contributor's own licence both have to be clear before a payout is
+        // owed. A licensed contributor settles at zero while the trainer
+        // beside them in the same batch is paid normally.
+        const payoutOwed = economyEnabled && !suppressedContributors.has(userId);
+        const { ops, result } = payoutOwed
           ? await creditTrainingPayoutOps(this.prisma, userId, payout, recording.id)
           : { ops: [], result: null };
         // Same Tokenomics-mint-alongside-legacy-credit pattern as
         // settleSubmissions -- see mintTrainingPayoutOps's doc comment.
         const mintOps =
-          mintingPaused || !economyEnabled
+          mintingPaused || !payoutOwed
             ? []
             : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;
 
@@ -723,6 +737,52 @@ export class SettlementService {
     return row.trainingEconomyEnabled;
   }
 
+  /**
+   * Whether payouts are suppressed for contributors holding an ACTIVE VDCL.
+   *
+   * Read the same way as isTrainingEconomyEnabled above, and for the same
+   * reason: settlement-job is a separate Nest tree with no PlatformSettings
+   * -Service.
+   */
+  private async isVdclPayoutSuppressionEnabled(): Promise<boolean> {
+    const row = await this.prisma.platformSettings.upsert({
+      where: { id: 'default' },
+      update: {},
+      create: { id: 'default' },
+    });
+    return row.vdclPayoutSuppressionEnabled;
+  }
+
+  /**
+   * Contributor ids whose recordings settle WITHOUT a token payout, because
+   * they hold an active VDCL and are compensated through Stream revenue
+   * sharing instead.
+   *
+   * Resolved once per run and held as a Set, not queried per recording: a
+   * settlement batch can cover thousands of recordings and a licence lookup
+   * each would dominate the run. The set is small by comparison -- one row
+   * per signed contributor.
+   *
+   * Empty set when the gate is off, so the caller's per-recording test is a
+   * cheap `has` either way and needs no second branch.
+   *
+   * "Active" matches RightsService and the API-side helper: not withdrawn,
+   * activeVersion ACTIVE. A contributor who withdrew goes back to being paid
+   * normally, which is correct -- they are no longer licensing for revenue
+   * share.
+   */
+  private async suppressedContributorIds(): Promise<Set<string>> {
+    if (!(await this.isVdclPayoutSuppressionEnabled())) return new Set();
+    const agreements = await this.prisma.vdclAgreement.findMany({
+      where: {
+        withdrawnAt: null,
+        activeVersion: { status: VdclVersionStatus.ACTIVE },
+      },
+      select: { contributorId: true },
+    });
+    return new Set(agreements.map((row) => row.contributorId));
+  }
+
   private async isNoFailOnTrainEnabled(): Promise<boolean> {
     const row = await this.prisma.platformSettings.upsert({
       where: { id: 'default' },
@@ -930,6 +990,8 @@ export class SettlementService {
     settlementDelayMinutes: number,
     mintingPaused: boolean,
     economyEnabled: boolean,
+    /** Contributors whose recordings settle without a payout -- see suppressedContributorIds. */
+    suppressedContributors: Set<string>,
   ) {
     const recordings = await this.prisma.domainConversationRecording.findMany({
       where: {
@@ -991,13 +1053,14 @@ export class SettlementService {
           compositeScore,
           bonusCapMultiple,
         );
-        // See settleWordRecordings -- skipped outright when the training
-        // economy is off, credit and mint alike.
-        const { ops, result } = economyEnabled
+        // See settleWordRecordings -- skipped outright when no payout is owed
+        // for this contributor, credit and mint alike.
+        const payoutOwed = economyEnabled && !suppressedContributors.has(userId);
+        const { ops, result } = payoutOwed
           ? await creditTrainingPayoutOps(this.prisma, userId, payout, recording.id)
           : { ops: [], result: null };
         const mintOps =
-          mintingPaused || !economyEnabled
+          mintingPaused || !payoutOwed
             ? []
             : (await mintTrainingPayoutOps(this.prisma, userId, payout, recording.id)).ops;
         const lockOps = (await this.isStakeStillLocked(recording.id))

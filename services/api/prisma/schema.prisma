@@ -249,6 +249,7 @@ model User {
   payoutAccounts                    PayoutAccount[]
   vdclAgreements                    VdclAgreement[]                  @relation("VdclContributor")
   vdclSignatureEvents               VdclSignatureEvent[]             @relation("VdclSignatureActor")
+  contributorDecks                  ContributorDeck[]                @relation("ContributorDeckOwner")
   kycVerifications                  KycVerification[]
   kycPeerReviews                    KycPeerReview[]                  @relation("KycPeerReviewer")
   kycPeerReviewClaims               KycPeerReviewClaim[]             @relation("KycPeerReviewClaimant")
@@ -669,6 +670,7 @@ enum OtpPurpose {
   VDCL_SIGN // step-up confirming a contributor's signature on a VDCL version; bound to the exact manifest hash and granted purposes being signed (see vdcl-signing-context.util.ts)
   VDCL_COUNTERSIGN // step-up confirming Dialect Library's countersignature, executed on behalf of Golojan Technologies LLC. Previously borrowed ADMIN_PAYOUT, whose email said nothing about what was being authorised
   TRAINING_ECONOMY_TOGGLE // step-up confirming the stake-and-payout training economy is being switched on or off platform-wide; bound to the DIRECTION so a code issued to switch it off cannot be replayed to switch it back on
+  VDCL_PAYOUT_SUPPRESSION_TOGGLE // step-up confirming per-contributor token payouts are being switched off (or back on) for trainers holding an ACTIVE VDCL; bound to the DIRECTION, same as TRAINING_ECONOMY_TOGGLE
 }
 
 enum ManualPhoneVerificationStatus {
@@ -3101,6 +3103,26 @@ model PlatformSettings {
   /// normally; recordings created while this is off have none, so settlement
   /// takes its legacy pre-locking branch and credits tokensSpent, which is 0.
   trainingEconomyEnabled                     Boolean   @default(true)
+  /// Stops charging and paying tokens for recordings made by contributors who
+  /// hold an ACTIVE VDCL -- their voice is compensated through Stream revenue
+  /// sharing instead of per-recording tokens.
+  ///
+  /// Per-contributor, unlike trainingEconomyEnabled above which is
+  /// platform-wide. A trainer who has not signed is completely unaffected:
+  /// they keep staking and earning exactly as before. This is what makes the
+  /// switch safe to leave on while VDCL adoption is partial.
+  ///
+  /// Charge and payout move TOGETHER and cannot be separated, because
+  /// computeTrainingPayout returns the stake as part of the payout
+  /// (spent + spent*score*cap). Suppressing only the payout would leave a
+  /// contributor paying to record and receiving nothing.
+  ///
+  /// Ships OFF (default false) deliberately. Stream revenue sharing does not
+  /// exist in code yet, so enabling this before it does means a signed
+  /// contributor records for no compensation from any source. Turning it on
+  /// is an explicit admin decision, OTP-guarded via
+  /// OtpPurpose.VDCL_PAYOUT_SUPPRESSION_TOGGLE.
+  vdclPayoutSuppressionEnabled               Boolean   @default(false)
   reverseWordTrainingEnabled                 Boolean   @default(false)
   adminPayoutOtpEnabled                      Boolean   @default(false) // when true, admin/training-payouts and admin/withdrawals/:id/resolve require the acting admin to verify an emailed OTP first
   sessionIdleTimeoutMinutes                  Int       @default(30) // minutes of inactivity before any authenticated session (trainer or admin) is force-signed-out and must reauthenticate -- enforced both client-side (activity-tracking sign-out) and server-side (frontend/proxy.ts compares against the JWT's lastActiveAt claim, so it can't be bypassed by disabling client JS)
@@ -5401,4 +5423,74 @@ model VdclAuditEvent {
   @@index([versionId, createdAt])
   @@index([eventType, createdAt])
   @@map("vdcl_audit_events")
+}
+
+/// A contributor's licensed recordings in ONE dialect, grouped as a named
+/// unit a subscriber can browse.
+///
+/// Why this exists at all, given VdclManifest already lists what is
+/// licensed: the manifest is one flat list spanning every dialect the
+/// contributor ever recorded, and a subscriber shopping for Igbo data has no
+/// use for the Pidgin half of it. A deck is the dialect-sized slice, which
+/// is the unit that actually gets licensed.
+///
+/// One dialect, never mixed. `dialectTag` here is the grouping key, and
+/// membership is derived from VdclManifestItem.dialectTag matching it, so a
+/// mixed-dialect deck is not merely forbidden -- it is unrepresentable.
+///
+/// Creation is ONE-WAY. Signing the VDCL is what makes recordings live to
+/// Stream; creating a deck publishes the grouping, bridging into a PUBLIC
+/// StreamDeck owned by the seeded `dialect-library-platform` org (the same
+/// bridge ValidatorDeck.publishedStreamDeckId uses, and the same reason: a
+/// trainer-owned row must never appear as a SubscriberOrganization's own
+/// property, and there is no FK between User and SubscriberUser). There is
+/// deliberately no status column and no unpublish: revoking the licence
+/// withdraws subscribers' PERMISSION via RightsService, it does not remove
+/// recordings from Stream, and re-signing restores access. Presence and
+/// permission are separate concerns and only permission is revocable.
+///
+/// No contributor count or identity is ever exposed through the bridged
+/// deck: the StreamDeck's owner is the platform org, and the API never
+/// reports how many agreements back it -- the inference
+/// DeckCoverageService.MIN_ITEMS_FOR_AGREEMENT_COUNT exists to prevent.
+model ContributorDeck {
+  id String @id @default(uuid())
+
+  /// The contributor whose licence covers every recording in this deck.
+  /// Trainer-side User, never a SubscriberUser -- see the note above about
+  /// why the bridged StreamDeck is owned by the platform org instead.
+  ownerUserId String
+  owner       User   @relation("ContributorDeckOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+
+  /// The one dialect this deck covers. Matched against
+  /// VdclManifestItem.dialectTag to resolve membership.
+  dialectTag String
+
+  /// Display name, defaulted from the dialect's full name at creation and
+  /// renameable. Never contains the contributor's name -- the deck is
+  /// browsable by subscribers.
+  name String
+
+  /// The PUBLIC StreamDeck this deck was bridged into at creation. Unique so
+  /// one ContributorDeck can only ever back one StreamDeck. Not nullable in
+  /// practice -- the bridge happens in the same transaction as the row -- but
+  /// nullable in the column so a future admin-side repair path can exist
+  /// without a migration.
+  streamDeckId String? @unique
+
+  /// Item count frozen at creation, for display without re-counting the
+  /// manifest. The live count comes from the manifest; this is the figure the
+  /// subscriber-facing deck was built with.
+  itemCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// One deck per contributor per dialect. A second Igbo deck would be a
+  /// duplicate of the first, since membership is derived from the tag rather
+  /// than hand-picked.
+  @@unique([ownerUserId, dialectTag])
+  @@index([ownerUserId])
+  @@index([dialectTag])
+  @@map("contributor_decks")
 }

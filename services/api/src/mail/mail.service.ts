@@ -854,6 +854,18 @@ function otpCopyForPurpose(purpose: OtpPurpose): { subject: string; intro: strin
         intro:
           'Enter this code to switch the stake-and-payout training economy on or off for every trainer. While it is off, recording costs nothing and earns no DL. This does not affect any balance already earned.',
       };
+    case 'VDCL_PAYOUT_SUPPRESSION_TOGGLE':
+      // Narrower than TRAINING_ECONOMY_TOGGLE above and worth distinguishing
+      // in the copy: this affects only contributors who have signed a VDCL,
+      // and the compensation it removes is meant to be replaced by Stream
+      // revenue sharing. Naming that dependency is the point -- switching
+      // this on before revenue sharing pays out means signed contributors
+      // record for nothing.
+      return {
+        subject: 'Change token payouts for licensed contributors',
+        intro:
+          'Enter this code to switch per-recording DL payouts on or off for trainers who hold an active Voice Dataset Contributor Licence. While it is off, their recordings cost nothing and earn no DL, and they are compensated through Stream revenue sharing instead. Trainers without a licence are unaffected, and no balance already earned changes.',
+      };
     case 'VDCL_COUNTERSIGN':
       // Names the counterparty, not just the act. Countersigning is
       // executed on behalf of the parent company, and an admin receiving

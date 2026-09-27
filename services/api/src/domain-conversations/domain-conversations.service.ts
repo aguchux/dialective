@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import { DomainPromptGenderVariant, Gender } from '@dialectiva/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
+import { isEconomyEnabledForUser } from '../settings/training-economy.util';
 import { StorageService } from '../storage/storage.service';
 import { RedisStreamsService } from '../redis-streams/redis-streams.service';
 import { CoursesService } from '../courses/courses.service';
@@ -104,7 +105,7 @@ export class DomainConversationsService {
     // See WordsService.nextAssignment: the balance gate only applies while
     // recording costs something.
     const [economyEnabled, wallet] = await Promise.all([
-      this.settings.isTrainingEconomyEnabled(),
+      isEconomyEnabledForUser(this.settings, this.prisma, userId),
       this.prisma.wallet.upsert({
         where: { userId },
         update: {},
@@ -209,9 +210,10 @@ export class DomainConversationsService {
       );
     }
 
-    // See WordsService.createRecording -- zero stake when the training
-    // economy is switched off, and no TASK_LOCK row written for it.
-    const economyEnabled = await this.settings.isTrainingEconomyEnabled();
+    // See WordsService.createRecording -- zero stake when the economy is off
+    // for this trainer (platform-wide, or because they hold an active VDCL),
+    // and no TASK_LOCK row written for it.
+    const economyEnabled = await isEconomyEnabledForUser(this.settings, this.prisma, userId);
     const taskTokenCost = economyEnabled
       ? await this.settings.getDomainConversationTaskTokenCost()
       : 0;

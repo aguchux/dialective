@@ -10,6 +10,7 @@ import {
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
+import { isEconomyEnabledForUser } from '../settings/training-economy.util';
 import { StorageService } from '../storage/storage.service';
 import { RedisStreamsService } from '../redis-streams/redis-streams.service';
 import { LlmNormalizerService } from '../llm/llm-normalizer.service';
@@ -175,11 +176,12 @@ export class WordsService {
 
     const trainer = await this.getTrainer(userId);
 
-    // The balance gate only applies while recording costs something. With
-    // the training economy off, turning away a trainer with an empty wallet
-    // would block them from a task that is now free.
+    // The balance gate only applies while recording costs THIS trainer
+    // something -- the economy can be off platform-wide, or off just for them
+    // because they hold an active VDCL. Either way, turning away a trainer
+    // with an empty wallet would block them from a task that is now free.
     const [economyEnabled, wallet] = await Promise.all([
-      this.settings.isTrainingEconomyEnabled(),
+      isEconomyEnabledForUser(this.settings, this.prisma, userId),
       this.prisma.wallet.upsert({
         where: { userId },
         update: {},
@@ -494,10 +496,12 @@ export class WordsService {
         : null;
     const score = validationScore !== null ? validationScore * 100 : null;
 
-    // Zero when the training economy is switched off: no stake is taken,
-    // and the recording is stamped tokensSpent: 0 so settlement computes a
-    // zero payout from the same formula rather than needing its own rule.
-    const economyEnabled = await this.settings.isTrainingEconomyEnabled();
+    // Zero when the economy is off for this trainer -- platform-wide, or
+    // because they hold an active VDCL and are compensated through Stream
+    // revenue sharing instead. No stake is taken, and the recording is
+    // stamped tokensSpent: 0 so settlement computes a zero payout from the
+    // same formula rather than needing its own rule.
+    const economyEnabled = await isEconomyEnabledForUser(this.settings, this.prisma, userId);
     const taskTokenCost = economyEnabled ? await this.settings.getTaskTokenCost() : 0;
     const wallet = await this.prisma.wallet.upsert({
       where: { userId },

@@ -3,6 +3,7 @@ import { IsvcConfidence, Prisma, SubmissionStatus, VdclPurpose } from '@dialecti
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
 import { RightsService } from '../../vdcl/rights/rights.service';
+import { PlatformSettingsService } from '../../settings/platform-settings.service';
 
 const CONFIDENCE_RANK: Record<IsvcConfidence, number> = {
   EMERGING: 0,
@@ -78,7 +79,58 @@ export class CatalogueService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly rights: RightsService,
+    private readonly settings: PlatformSettingsService,
   ) {}
+
+  /**
+   * Narrows the catalogue to recordings a contributor has actually licensed.
+   *
+   * Without this, search lists every SETTLED recording and the licence is
+   * only checked when audio is requested -- so a subscriber sees rows they
+   * can never play, including work from contributors who signed nothing. The
+   * listing and the audio gate should agree.
+   *
+   * Gated on the SAME flag as the audio checks (isVdclEnforcementEnabled),
+   * not a flag of its own, so the two can never disagree: either licences
+   * bind everywhere or nowhere. While enforcement is off this returns {} and
+   * the catalogue behaves exactly as it did before.
+   *
+   * Membership is tested against the manifest, not the licence status. The
+   * status question -- withdrawn, suspended, purpose not granted -- stays with
+   * RightsService at the audio boundary, where it is evaluated live so a
+   * withdrawal takes effect immediately. A withdrawn contributor's rows may
+   * therefore still appear in search; the audio behind them is refused. That
+   * is the intended split: revoking a licence removes PERMISSION, it does not
+   * remove the recordings from Stream.
+   */
+  private async vdclCoverageWhere(): Promise<Prisma.WordRecordingWhereInput> {
+    if (!(await this.settings.isVdclEnforcementEnabled())) return {};
+    return {
+      // Correlated existence check rather than a fetched id list: the
+      // manifest-item table grows with every signed licence, and pulling
+      // every covered recordingId into memory to build an `in` clause would
+      // not survive scale.
+      id: {
+        in: await this.coveredRecordingIds(),
+      },
+    };
+  }
+
+  /**
+   * Recording ids covered by any VDCL manifest.
+   *
+   * VdclManifestItem.recordingId is a loose string, not a Prisma relation on
+   * WordRecording (same rationale as StreamDeckItem.recordingId), so this
+   * cannot be expressed as a nested `where` and has to resolve the id set
+   * first -- the same two-step the ISVC filters in `search` already use.
+   */
+  private async coveredRecordingIds(): Promise<string[]> {
+    const rows = await this.prisma.vdclManifestItem.findMany({
+      select: { recordingId: true },
+      distinct: ['recordingId'],
+    });
+    return rows.map((row) => row.recordingId);
+  }
 
   private eligibleWhere(params: {
     countryCode?: string;
@@ -121,6 +173,16 @@ export class CatalogueService {
     pageSize: number;
   }) {
     const where = this.eligibleWhere(params);
+
+    // Composed under AND rather than merged into `where.id`, because the ISVC
+    // branch below assigns `where.id` outright -- a second id filter written
+    // the same way would silently replace this one and widen the result set
+    // back to unlicensed recordings.
+    const coverage = await this.vdclCoverageWhere();
+    if (coverage.id !== undefined) {
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []), coverage];
+    }
+
     const effectiveMinConfidence = stricterConfidence(
       params.minConfidence,
       params.planMinConfidence,
@@ -315,6 +377,16 @@ export class CatalogueService {
       minAudioQuality: rule.minAudioQuality ?? undefined,
     });
 
+    // Coverage applies to rule matching too, or a Smart Deck would quietly
+    // auto-populate itself with unlicensed recordings -- the same leak as
+    // search(), arriving by a different door and without anyone browsing.
+    // Composed under AND for the same reason as in search(): the ISVC branch
+    // below assigns where.id outright.
+    const coverage = await this.vdclCoverageWhere();
+    if (coverage.id !== undefined) {
+      where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []), coverage];
+    }
+
     const hasIsvcFilter =
       (rule.minIsvs !== undefined && rule.minIsvs !== null) ||
       Boolean(rule.minConfidence) ||
@@ -362,8 +434,12 @@ export class CatalogueService {
     recordingId: string,
     planMinConfidence?: IsvcConfidence,
   ): Promise<{ url: string; expiresInSeconds: number }> {
+    // The coverage filter applies here too, so a recording outside every
+    // manifest 404s rather than reaching the rights check below and
+    // returning a 403 that implies the clip exists and is merely unlicensed.
+    const coverage = await this.vdclCoverageWhere();
     const recording = await this.prisma.wordRecording.findFirst({
-      where: { id: recordingId, ...this.eligibleWhere({}) },
+      where: { id: recordingId, ...this.eligibleWhere({}), ...coverage },
       select: { audioBucket: true, audioKey: true },
     });
     if (!recording?.audioBucket || !recording.audioKey) {
@@ -407,10 +483,18 @@ export class CatalogueService {
     return this.storage.createPresignedDownloadUrl(recording.audioBucket, recording.audioKey);
   }
 
-  /** Used by StreamDecksService to validate a recordingId before adding it to a deck. */
+  /**
+   * Used by StreamDecksService to validate a recordingId before adding it to
+   * a deck.
+   *
+   * Coverage-filtered, so an unlicensed recording cannot be hand-added to a
+   * deck even by an org that learned its id some other way. Without this the
+   * search filter would only be a display convention.
+   */
   async isEligible(recordingId: string): Promise<boolean> {
+    const coverage = await this.vdclCoverageWhere();
     const count = await this.prisma.wordRecording.count({
-      where: { id: recordingId, ...this.eligibleWhere({}) },
+      where: { id: recordingId, ...this.eligibleWhere({}), ...coverage },
     });
     return count > 0;
   }
@@ -420,6 +504,13 @@ export class CatalogueService {
    * endpoints need, already scoped to eligibleWhere() -- returns null for a
    * purged/unpaid/unknown recording, same "silently absent, never a
    * dangling reference" posture as isEligible.
+   *
+   * Deliberately NOT coverage-filtered, unlike search/isEligible above. Every
+   * caller of this already runs the recording through RightsService, which is
+   * the stronger check: it is status-aware, so a withdrawn or suspended
+   * licence is refused live. Filtering here as well would turn an accurate
+   * "not licensed for this purpose" denial into a bare 404 and duplicate
+   * enforcement in a weaker, presence-only form.
    */
   async getEligibleRecording(recordingId: string, planMinConfidence?: IsvcConfidence) {
     const recording = await this.prisma.wordRecording.findFirst({

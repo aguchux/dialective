@@ -1,7 +1,10 @@
 import { Test } from '@nestjs/testing';
 import { Prisma, SubmissionStatus, VdclVersionStatus } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ContributorDecksService } from './contributor-decks.service';
+import {
+  ContributorDecksService,
+  DIALECT_LIBRARY_PLATFORM_ORG_ID,
+} from './contributor-decks.service';
 
 const CONTRIBUTOR = 'contributor-1';
 
@@ -40,7 +43,11 @@ describe('ContributorDecksService', () => {
     vdclAgreement: { findUnique: jest.Mock };
     vdclManifestItem: { findMany: jest.Mock };
     wordRecording: { findMany: jest.Mock };
-    dialect: { findMany: jest.Mock };
+    dialect: { findMany: jest.Mock; findFirst: jest.Mock };
+    contributorDeck: { findMany: jest.Mock; create: jest.Mock };
+    streamDeck: { findMany: jest.Mock; create: jest.Mock };
+    streamDeckItem: { createMany: jest.Mock };
+    $transaction: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -48,7 +55,21 @@ describe('ContributorDecksService', () => {
       vdclAgreement: { findUnique: jest.fn() },
       vdclManifestItem: { findMany: jest.fn().mockResolvedValue([]) },
       wordRecording: { findMany: jest.fn().mockResolvedValue([]) },
-      dialect: { findMany: jest.fn().mockResolvedValue([]) },
+      dialect: {
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn().mockResolvedValue({ country: { code: 'NG' } }),
+      },
+      // No published decks by default, so the existing listing assertions
+      // stay about grouping rather than publication state.
+      contributorDeck: {
+        findMany: jest.fn().mockResolvedValue([]),
+        create: jest.fn(),
+      },
+      streamDeck: { findMany: jest.fn().mockResolvedValue([]), create: jest.fn() },
+      streamDeckItem: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      // Runs the callback against the same mock, so a publish's writes are
+      // observable on the mocks above.
+      $transaction: jest.fn(async (cb: (tx: unknown) => unknown) => cb(prisma)),
     };
 
     const moduleRef = await Test.createTestingModule({
@@ -211,5 +232,143 @@ describe('ContributorDecksService', () => {
 
     expect(byTag.get('ig')!.uncoveredCount).toBe(1);
     expect(byTag.get('pcm')!.uncoveredCount).toBe(2);
+  });
+
+  describe('publishDeck', () => {
+    /** The manifest rows publishDeck reads to build StreamDeckItems. */
+    function withManifestRecordings(ids: string[]) {
+      prisma.vdclManifestItem.findMany.mockImplementation((args: any) => {
+        // countUncovered asks for recordingIds across every version;
+        // publishDeck asks for one dialect's items on the ACTIVE version.
+        if (args?.where?.dialectTag) {
+          return Promise.resolve(ids.map((id) => ({ recordingId: id })));
+        }
+        return Promise.resolve([]);
+      });
+    }
+
+    beforeEach(() => {
+      prisma.contributorDeck.create.mockImplementation(({ data }: any) =>
+        Promise.resolve({ ...data, id: 'deck-row-1', createdAt: new Date('2026-09-27T00:00:00Z') }),
+      );
+      prisma.streamDeck.create.mockImplementation(({ data }: any) =>
+        Promise.resolve({ ...data, id: 'stream-deck-1' }),
+      );
+    });
+
+    it('bridges into a PUBLIC StreamDeck owned by the platform org', async () => {
+      // The whole point of the platform org: a contributor deck must reach
+      // Stream without a trainer id appearing on a subscriber-facing row,
+      // since there is no FK between User and SubscriberUser at all.
+      withActiveVersion([manifestItem({ dialectTag: 'ig' })]);
+      prisma.dialect.findMany.mockResolvedValue([{ tag: 'ig', name: 'Igbo' }]);
+      withManifestRecordings(['rec-1', 'rec-2']);
+
+      await service.publishDeck(CONTRIBUTOR, 'ig');
+
+      const deckArgs = prisma.streamDeck.create.mock.calls[0][0].data;
+      expect(deckArgs.organizationId).toBe(DIALECT_LIBRARY_PLATFORM_ORG_ID);
+      expect(deckArgs.visibility).toBe('PUBLIC');
+      expect(deckArgs.createdByUserId).not.toBe(CONTRIBUTOR);
+    });
+
+    it('adds exactly the manifest items for that one dialect', async () => {
+      withActiveVersion([manifestItem({ dialectTag: 'ig' })]);
+      withManifestRecordings(['rec-1', 'rec-2']);
+
+      await service.publishDeck(CONTRIBUTOR, 'ig');
+
+      const items = prisma.streamDeckItem.createMany.mock.calls[0][0].data;
+      expect(items.map((i: any) => i.recordingId)).toEqual(['rec-1', 'rec-2']);
+      // One dialect per deck is the invariant the whole feature rests on.
+      expect(prisma.vdclManifestItem.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ dialectTag: 'ig' }) }),
+      );
+    });
+
+    it('refuses a dialect the licence does not cover', async () => {
+      withActiveVersion([manifestItem({ dialectTag: 'ig' })]);
+
+      await expect(service.publishDeck(CONTRIBUTOR, 'yo')).rejects.toThrow(
+        /does not cover any recordings/i,
+      );
+      expect(prisma.streamDeck.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses to publish without an active licence', async () => {
+      // Signing is what makes recordings available; there is nothing to group
+      // into a deck before that.
+      prisma.vdclAgreement.findUnique.mockResolvedValue(null);
+
+      await expect(service.publishDeck(CONTRIBUTOR, 'ig')).rejects.toThrow(/active Voice Dataset/i);
+      expect(prisma.streamDeck.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses a second publish of the same dialect', async () => {
+      withActiveVersion([manifestItem({ dialectTag: 'ig' })]);
+      withManifestRecordings(['rec-1']);
+      prisma.contributorDeck.findMany.mockResolvedValue([
+        {
+          id: 'deck-row-1',
+          dialectTag: 'ig',
+          streamDeckId: 'stream-deck-1',
+          createdAt: new Date(),
+        },
+      ]);
+      prisma.streamDeck.findMany.mockResolvedValue([
+        { id: 'stream-deck-1', deckKey: 'DLSD-NG-IG-GEN-ABC123' },
+      ]);
+
+      await expect(service.publishDeck(CONTRIBUTOR, 'ig')).rejects.toThrow(/already published/i);
+      expect(prisma.streamDeck.create).not.toHaveBeenCalled();
+    });
+
+    it('translates a unique-constraint race into "already published"', async () => {
+      // The deckId check above can lose a race between two taps; the unique
+      // index is the real guard, and the second tap must not 500.
+      withActiveVersion([manifestItem({ dialectTag: 'ig' })]);
+      withManifestRecordings(['rec-1']);
+      prisma.contributorDeck.create.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('dup', {
+          code: 'P2002',
+          clientVersion: '7',
+        }),
+      );
+
+      await expect(service.publishDeck(CONTRIBUTOR, 'ig')).rejects.toThrow(/already published/i);
+    });
+
+    it('reports published state back on the deck listing', async () => {
+      withActiveVersion([manifestItem({ dialectTag: 'ig' })]);
+      prisma.contributorDeck.findMany.mockResolvedValue([
+        {
+          id: 'deck-row-1',
+          dialectTag: 'ig',
+          streamDeckId: 'stream-deck-1',
+          createdAt: new Date('2026-09-27T00:00:00Z'),
+        },
+      ]);
+      prisma.streamDeck.findMany.mockResolvedValue([
+        { id: 'stream-deck-1', deckKey: 'DLSD-NG-IG-GEN-ABC123' },
+      ]);
+
+      const [deck] = (await service.listForContributor(CONTRIBUTOR)).decks;
+
+      expect(deck.deckId).toBe('deck-row-1');
+      expect(deck.streamDeckKey).toBe('DLSD-NG-IG-GEN-ABC123');
+      expect(deck.publishedAt).toEqual(new Date('2026-09-27T00:00:00Z'));
+    });
+
+    it('leaves unpublished dialects null rather than absent', async () => {
+      // Null deckId means "not grouped into a browsable deck", NOT "not on
+      // Stream" -- signing already put the recordings there.
+      withActiveVersion([manifestItem({ dialectTag: 'ig' })]);
+
+      const [deck] = (await service.listForContributor(CONTRIBUTOR)).decks;
+
+      expect(deck.deckId).toBeNull();
+      expect(deck.streamDeckKey).toBeNull();
+      expect(deck.publishedAt).toBeNull();
+    });
   });
 });

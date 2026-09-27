@@ -156,6 +156,7 @@ export function adminActionContextHash(
     // economy OFF must not be replayable to switch it back ON, which would
     // silently resume creating withdrawal liabilities.
     | { action: 'training-economy-toggle'; direction: 'enable' | 'disable' }
+    | { action: 'vdcl-payout-suppression-toggle'; direction: 'enable' | 'disable' }
     | { action: 'phone-verification-revoke'; userId: string }
     // Countersigning a VDCL grants commercial rights over a real person's
     // voice, which is why it joins the step-up set. It binds the MANIFEST

@@ -525,6 +525,20 @@ export class PlatformSettingsService {
   }
 
   /**
+   * Whether contributors holding an ACTIVE VDCL record without a stake or a
+   * token payout, compensated through Stream revenue sharing instead.
+   *
+   * fetchRow, not getRow, for the same reason as isTrainingEconomyEnabled
+   * above: this decides whether a trainer is charged, so a cached read would
+   * keep charging signed contributors for the life of the TTL after an admin
+   * switched it off.
+   */
+  async isVdclPayoutSuppressionEnabled(): Promise<boolean> {
+    const row = await this.fetchRow();
+    return row.vdclPayoutSuppressionEnabled;
+  }
+
+  /**
    * The VDCL commercial lock. Off by default so the enforcement code ships
    * dark -- see the column doc comment in schema.prisma.
    */
@@ -1289,6 +1303,7 @@ export class PlatformSettingsService {
       submissionRateLimitPerHour: row.submissionRateLimitPerHour,
       vdclEnabled: row.vdclEnabled,
       trainingEconomyEnabled: row.trainingEconomyEnabled,
+      vdclPayoutSuppressionEnabled: row.vdclPayoutSuppressionEnabled,
       vdclEnforcementEnabled: row.vdclEnforcementEnabled,
       vdclRetentionExemptionEnabled: row.vdclRetentionExemptionEnabled,
       submissionDailyLimitEnabled: row.submissionDailyLimitEnabled,
@@ -1545,6 +1560,7 @@ export class PlatformSettingsService {
     submissionRateLimitPerHour?: number;
     vdclEnabled?: boolean;
     trainingEconomyEnabled?: boolean;
+    vdclPayoutSuppressionEnabled?: boolean;
     vdclEnforcementEnabled?: boolean;
     vdclRetentionExemptionEnabled?: boolean;
     submissionDailyLimitEnabled?: boolean;
@@ -2301,6 +2317,7 @@ export class PlatformSettingsService {
       submissionRateLimitPerHour: row.submissionRateLimitPerHour,
       vdclEnabled: row.vdclEnabled,
       trainingEconomyEnabled: row.trainingEconomyEnabled,
+      vdclPayoutSuppressionEnabled: row.vdclPayoutSuppressionEnabled,
       vdclEnforcementEnabled: row.vdclEnforcementEnabled,
       vdclRetentionExemptionEnabled: row.vdclRetentionExemptionEnabled,
       submissionDailyLimitEnabled: row.submissionDailyLimitEnabled,
@@ -2495,6 +2512,7 @@ export class PlatformSettingsService {
       // this only stops us advertising a door that would refuse.
       vdclEnabled: row.vdclEnabled,
       trainingEconomyEnabled: row.trainingEconomyEnabled,
+      vdclPayoutSuppressionEnabled: row.vdclPayoutSuppressionEnabled,
       dialectValidationPayoutTokens: row.dialectValidationPayoutTokens?.toString() ?? null,
       misplacedDialectFlagThreshold: row.misplacedDialectFlagThreshold,
       noAudioClawbackFlagThreshold: row.noAudioClawbackFlagThreshold,

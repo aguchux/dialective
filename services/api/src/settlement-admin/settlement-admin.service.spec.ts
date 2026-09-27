@@ -35,6 +35,7 @@ describe('SettlementAdminService', () => {
     settings = {
       getSettlementDelayMinutes: jest.fn().mockResolvedValue(0),
       isTrainingEconomyEnabled: jest.fn().mockResolvedValue(true),
+      isVdclPayoutSuppressionEnabled: jest.fn().mockResolvedValue(false),
       getTrainingPayoutBonusCapMultiple: jest.fn().mockResolvedValue(1),
       isQualityGateEnabled: jest.fn().mockResolvedValue(false),
       getQualityWeights: jest

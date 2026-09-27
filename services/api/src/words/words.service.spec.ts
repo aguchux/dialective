@@ -19,6 +19,7 @@ describe('WordsService', () => {
     // Defaults to the long-standing behaviour so every existing expectation
     // about stakes and locks still describes the economy being ON.
     isTrainingEconomyEnabled: jest.fn().mockResolvedValue(true),
+    isVdclPayoutSuppressionEnabled: jest.fn().mockResolvedValue(false),
     isReverseWordTrainingEnabled: jest.fn(),
     isPhraseEscalationEnabled: jest.fn(),
     isWordTrainingEnabled: jest.fn(),

@@ -1505,6 +1505,12 @@ export interface PublicClientSettings {
    * training flow is hidden rather than shown as zero.
    */
   trainingEconomyEnabled: boolean;
+  /**
+   * Per-contributor, unlike trainingEconomyEnabled above: trainers holding an
+   * ACTIVE VDCL record without a stake or payout, compensated through Stream
+   * revenue sharing instead. Trainers without a licence are unaffected.
+   */
+  vdclPayoutSuppressionEnabled: boolean;
   sessionIdleTimeoutMinutes: number;
   sessionMaxHours: number;
   phoneVerificationRequired: boolean;
@@ -2099,6 +2105,7 @@ export interface PlatformSettings {
   testimonyVideoRewardTokens: string;
   vdclEnabled: boolean;
   trainingEconomyEnabled: boolean;
+  vdclPayoutSuppressionEnabled: boolean;
   vdclEnforcementEnabled: boolean;
   vdclRetentionExemptionEnabled: boolean;
   qualityGateEnabled: boolean;
@@ -2922,6 +2929,14 @@ export interface ContributorDeck {
   meanCompositeScore: number | null;
   /** Eligible recordings made after signing, so not yet in the frozen manifest. */
   uncoveredCount: number;
+  /**
+   * Set once this dialect is published as a browsable deck. Null does NOT
+   * mean the recordings are off Stream -- signing the licence is what puts
+   * them there. It means only that they are not grouped into a named deck.
+   */
+  deckId: string | null;
+  streamDeckKey: string | null;
+  publishedAt: string | null;
 }
 
 export interface ContributorDeckList {
@@ -6290,6 +6305,34 @@ export const dialectivaApi = createApi({
       }),
       invalidatesTags: ['PlatformSettings'],
     }),
+    /**
+     * The narrower, per-contributor switch: stop charging and paying trainers
+     * who hold an active VDCL, because their voice is compensated through
+     * Stream revenue sharing instead. Separate endpoints from the
+     * platform-wide switch above so a code issued for one cannot apply to
+     * the other.
+     */
+    requestVdclSuppressionOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      { enabling: boolean }
+    >({
+      query: (body) => ({
+        url: '/admin/platform-settings/training-economy/vdcl-suppression/otp',
+        method: 'POST',
+        body,
+      }),
+    }),
+    applyVdclSuppression: builder.mutation<
+      PlatformSettings,
+      { enabled: boolean; otpRequestId?: string; code?: string }
+    >({
+      query: (body) => ({
+        url: '/admin/platform-settings/training-economy/vdcl-suppression',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['PlatformSettings'],
+    }),
     // Admin-only presigned upload for the top banner image -- browser PUTs
     // the raw file bytes directly to `uploadUrl`, then the caller saves
     // {bucket, key} via updatePlatformSettings, same two-step flow as
@@ -6748,6 +6791,10 @@ export const dialectivaApi = createApi({
     getMyVdclDecks: builder.query<ContributorDeckList, void>({
       query: () => '/vdcl/decks',
       providesTags: ['VdclMaker'],
+    }),
+    publishVdclDeck: builder.mutation<ContributorDeck, { dialectTag: string }>({
+      query: (body) => ({ url: '/vdcl/decks/publish', method: 'POST', body }),
+      invalidatesTags: ['VdclMaker'],
     }),
     startVdclDraft: builder.mutation<StartVdclDraftResult, StartVdclDraftInput>({
       query: (body) => ({ url: '/vdcl/drafts', method: 'POST', body }),
@@ -7246,6 +7293,8 @@ export const {
   useUpdatePlatformSettingsMutation,
   useRequestTrainingEconomyOtpMutation,
   useApplyTrainingEconomyMutation,
+  useRequestVdclSuppressionOtpMutation,
+  useApplyVdclSuppressionMutation,
   useUploadTopBannerImageMutation,
   useUploadConnectHeroImageMutation,
   useGetApiAccessTokensQuery,
@@ -7313,6 +7362,7 @@ export const {
   useGetVdclReadinessQuery,
   useGetMyVdclVersionsQuery,
   useGetMyVdclDecksQuery,
+  usePublishVdclDeckMutation,
   useStartVdclDraftMutation,
   useGetVdclReviewQuery,
   useGetVdclVersionStatusQuery,

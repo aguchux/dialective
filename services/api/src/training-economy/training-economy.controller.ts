@@ -35,4 +35,30 @@ export class TrainingEconomyController {
   apply(@Body() dto: ApplyTrainingEconomyDto, @Req() req: { user: { sub: string } }) {
     return this.stepUp.apply(req.user.sub, dto);
   }
+
+  /**
+   * The narrower, per-contributor switch: stop charging and paying trainers
+   * who hold an active VDCL, because their voice is compensated through
+   * Stream revenue sharing instead.
+   *
+   * Separate routes from the platform-wide switch above rather than a flag on
+   * the same one, so a code issued for one can never apply to the other --
+   * they have different blast radii, and the DTO shape being identical is
+   * exactly why sharing an endpoint would be a hazard.
+   */
+  @Post('vdcl-suppression/otp')
+  requestVdclSuppressionOtp(
+    @Body() dto: TrainingEconomyOtpDto,
+    @Req() req: { user: { sub: string } },
+  ) {
+    return this.stepUp.requestVdclSuppressionOtp(req.user.sub, dto.enabling);
+  }
+
+  @Post('vdcl-suppression')
+  applyVdclSuppression(
+    @Body() dto: ApplyTrainingEconomyDto,
+    @Req() req: { user: { sub: string } },
+  ) {
+    return this.stepUp.applyVdclSuppression(req.user.sub, dto);
+  }
 }

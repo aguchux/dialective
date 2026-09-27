@@ -336,7 +336,7 @@ describe('SettlementService settlement state', () => {
     // path, not Tokenomics minting (see the "mints into Tokenomics" tests
     // below for that).
     // @ts-expect-error -- private method under test
-    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true, true);
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true, true, new Set());
 
     expect(prisma.wordRecording.update).toHaveBeenCalledWith({
       where: { id: 'recording-1' },
@@ -367,7 +367,7 @@ describe('SettlementService settlement state', () => {
     );
 
     // @ts-expect-error -- private method under test
-    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true, true);
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true, true, new Set());
 
     expect(prisma.wallet.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -394,10 +394,72 @@ describe('SettlementService settlement state', () => {
     (mintTrainingPayoutOps as jest.Mock).mockClear();
 
     // @ts-expect-error -- private method under test
-    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, false, false);
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, false, false, new Set());
 
     expect(creditTrainingPayoutOps).not.toHaveBeenCalled();
     expect(mintTrainingPayoutOps).not.toHaveBeenCalled();
+  });
+
+  it('skips the payout for a contributor in the suppressed set', async () => {
+    // The per-contributor gate: the platform economy is ON, but this
+    // recording's owner holds an active VDCL and is compensated through
+    // Stream revenue sharing instead.
+    const prisma = buildPrismaMock();
+    const service = new SettlementService(
+      prisma as never,
+      { deleteObject: jest.fn().mockResolvedValue(undefined) } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
+    (creditTrainingPayoutOps as jest.Mock).mockClear();
+    (mintTrainingPayoutOps as jest.Mock).mockClear();
+
+    // @ts-expect-error -- private method under test
+    await service.settleWordRecordings(
+      1,
+      false,
+      qualityWeights,
+      0,
+      scoreRange,
+      0,
+      false,
+      true,
+      new Set(['user-1']),
+    );
+
+    expect(creditTrainingPayoutOps).not.toHaveBeenCalled();
+    expect(mintTrainingPayoutOps).not.toHaveBeenCalled();
+    // Still settled -- a recording with no money attached must not be
+    // stranded in SCORED.
+    expect(prisma.wordRecording.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: 'SETTLED' }) }),
+    );
+  });
+
+  it('still pays a trainer who is not in the suppressed set', async () => {
+    // The property that makes the gate safe during partial adoption: two
+    // trainers in the same batch get different treatment.
+    const prisma = buildPrismaMock();
+    const service = new SettlementService(
+      prisma as never,
+      { deleteObject: jest.fn().mockResolvedValue(undefined) } as never,
+      { notifyReferralPayoutBonus: jest.fn().mockResolvedValue(undefined) } as never,
+    );
+    (creditTrainingPayoutOps as jest.Mock).mockClear();
+
+    // @ts-expect-error -- private method under test
+    await service.settleWordRecordings(
+      1,
+      false,
+      qualityWeights,
+      0,
+      scoreRange,
+      0,
+      false,
+      true,
+      new Set(['someone-else']),
+    );
+
+    expect(creditTrainingPayoutOps).toHaveBeenCalled();
   });
 
   it('still marks recordings settled while the training economy is off', async () => {
@@ -419,6 +481,7 @@ describe('SettlementService settlement state', () => {
       0,
       false,
       false,
+      new Set(),
     );
 
     expect(result.settledCount).toBe(1);
@@ -434,7 +497,7 @@ describe('SettlementService settlement state', () => {
     (mintTrainingPayoutOps as jest.Mock).mockClear();
 
     // @ts-expect-error -- private method under test
-    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, false, true);
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, false, true, new Set());
 
     expect(mintTrainingPayoutOps).toHaveBeenCalledWith(
       prisma,
@@ -468,7 +531,7 @@ describe('SettlementService settlement state', () => {
     );
 
     // @ts-expect-error -- private method under test
-    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true, true);
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true, true, new Set());
 
     expect(prisma.trainingPayoutClaim.create).toHaveBeenCalledWith({
       data: { userId: 'user-1', sourceKey: 'word:word-1', recordingId: 'recording-source-1' },
@@ -485,7 +548,7 @@ describe('SettlementService settlement state', () => {
     (mintTrainingPayoutOps as jest.Mock).mockClear();
 
     // @ts-expect-error -- private method under test
-    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true, true);
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true, true, new Set());
 
     expect(mintTrainingPayoutOps).not.toHaveBeenCalled();
     expect(prisma.wordRecording.update).toHaveBeenCalledWith(
@@ -515,7 +578,7 @@ describe('SettlementService settlement state', () => {
     );
 
     // @ts-expect-error -- private method under test
-    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true, true);
+    await service.settleWordRecordings(1, false, qualityWeights, 0, scoreRange, 0, true, true, new Set());
 
     expect(prisma.wordRecording.update).toHaveBeenCalledWith({
       where: { id: 'recording-sentence-1' },
