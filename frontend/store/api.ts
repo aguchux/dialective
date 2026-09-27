@@ -3086,6 +3086,50 @@ export interface VdclAdminVersionSummary {
   _count: { grants: number };
 }
 
+/**
+ * A contributor's own royalty position.
+ *
+ * Deliberately carries NO money estimate. Converting usage to expected DL needs
+ * a revenue pool, and a pool only exists against collected revenue -- a figure
+ * here would be the stale promise section 7 of the design warns about.
+ *
+ * `subscriberCount` is a COUNT, never identities: a contributor learning WHICH
+ * organisations streamed their work would learn the platform's customer list.
+ */
+export interface MyRoyalties {
+  /** Master switch. False means the whole programme is off, not that this contributor is excluded. */
+  enabled: boolean;
+  royaltyBalance: string;
+  minimumPayout: string;
+  /** Server's own answer, so the UI never re-derives the rule and drifts from it. */
+  canWithdraw: boolean;
+  currentPeriod: {
+    periodStart: string;
+    streamCount: number;
+    recordingsStreamed: number;
+    subscriberCount: number;
+    totalDurationMs: string;
+  };
+}
+
+export type RoyaltyWithdrawalStatus =
+  | 'PENDING'
+  | 'APPROVED'
+  | 'PROCESSING'
+  | 'PAID'
+  | 'FAILED'
+  | 'REJECTED';
+
+export interface RoyaltyWithdrawal {
+  id: string;
+  tokenAmount: string;
+  usdAmount: string;
+  status: RoyaltyWithdrawalStatus;
+  adminNote: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
 export interface VdclAgreementSummary {
   id: string;
   licenceKey: string;
@@ -3703,6 +3747,7 @@ export const dialectivaApi = createApi({
     'VdclAgreements',
     'VdclManifest',
     'VdclMaker',
+    'Royalties',
   ],
   endpoints: (builder) => ({
     register: builder.mutation<
@@ -6840,6 +6885,34 @@ export const dialectivaApi = createApi({
     getVdclReceipt: builder.query<VdclSigningReceipt, string>({
       query: (id) => `/vdcl/versions/${id}/receipt`,
     }),
+    /**
+     * The signed-in contributor's royalty balance and this period's usage.
+     *
+     * Also the feature gate: `enabled` comes from the same authenticated read as
+     * the figures, so there is no second public flag that could disagree with
+     * what the payout routes actually allow.
+     */
+    getMyRoyalties: builder.query<MyRoyalties, void>({
+      query: () => '/royalties/me',
+      providesTags: ['Royalties'],
+    }),
+    getMyRoyaltyWithdrawals: builder.query<RoyaltyWithdrawal[], void>({
+      query: () => '/royalties/withdrawals',
+      providesTags: ['Royalties'],
+    }),
+    requestRoyaltyWithdrawalOtp: builder.mutation<
+      { otpRequestId: string; expiresInSeconds: number },
+      { tokenAmount: number; payoutAccountId: string }
+    >({
+      query: (body) => ({ url: '/royalties/withdrawals/otp', method: 'POST', body }),
+    }),
+    createRoyaltyWithdrawal: builder.mutation<
+      { withdrawalId: string; status: RoyaltyWithdrawalStatus; tokenAmount: string; usdAmount: string },
+      { tokenAmount: number; payoutAccountId: string; otpRequestId: string; code: string }
+    >({
+      query: (body) => ({ url: '/royalties/withdrawals', method: 'POST', body }),
+      invalidatesTags: ['Royalties'],
+    }),
     getVdclAgreements: builder.query<VdclAgreementSummary[], { take?: number } | void>({
       query: (params) => ({ url: '/admin/vdcl/agreements', params: params ?? undefined }),
       providesTags: ['VdclAgreements'],
@@ -7389,6 +7462,10 @@ export const {
   useWithdrawVdclAgreementMutation,
   useReissueVdclDocumentsMutation,
   useLazyGetVdclDocumentLinkQuery,
+  useGetMyRoyaltiesQuery,
+  useGetMyRoyaltyWithdrawalsQuery,
+  useRequestRoyaltyWithdrawalOtpMutation,
+  useCreateRoyaltyWithdrawalMutation,
 } = dialectivaApi;
 
 export { normalizeErrorMessage };

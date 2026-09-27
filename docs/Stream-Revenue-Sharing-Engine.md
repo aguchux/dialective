@@ -645,6 +645,34 @@ never identities. Converting usage to expected DL needs a pool, and a pool only
 exists against collected revenue, so a figure here would be the stale promise
 §7 warns about.
 
+### 7a What the dashboard shows, and what it refuses to
+
+Phase 8 is `RoyaltiesPanel`, a tab beside Stream Deck in the trainer dashboard
+plus a standalone `/dashboard/royalties` route. Three decisions worth recording:
+
+**It shows no money estimate at all.** Not even a range. The original phrasing
+("accrued vs estimated") implied two figures; the panel shows **accrued DL** and
+**this period's usage**, because converting usage to an amount needs a pool, and
+a pool only exists against collected revenue. Any figure would be the stale
+promise this section warns about.
+
+**The share-can-fall warning is prose, not a tooltip.** §7 requires the UI to say
+plainly that a contributor's share can drop without them doing anything. It is
+stated as a sentence in the panel body -- "your share of a month can go down as
+the month goes on" -- with the reason (other contributors' usage grew) and the
+reassurance (nothing is deducted; the split moves). A contributor should not
+discover that by watching a number fall.
+
+**`REJECTED` reads as "Returned to balance".** Not "Rejected". A rejected royalty
+payout returns the DL to `royaltyBalance` (§6.1a), and a contributor seeing the
+bare word would reasonably think the money was gone.
+
+The panel gates on `enabled` from its own authenticated `GET royalties/me` read,
+deliberately rather than a new public flag: the same response carries the gate
+and the figures, so there is nothing that can disagree with what the payout
+routes allow. The route additionally sits behind `VdclPageShell`, since royalties
+only accrue on licensed recordings.
+
 ### Settings
 
 | Setting | Default | Purpose |
@@ -707,9 +735,9 @@ stopping payouts.
 | **5** ✅ | `royaltyBalance` column + the five integration fixes in §6.1 | Column exists, unused |
 | **6** ✅ | Accrual settlement: reserve inflow + ledger + credit (**no mint** — see §5.3a), plus refund reversal (§5.5) | **Money.** Gated off |
 | **7** ✅ | Royalty withdrawal (own model, existing rails, KYC + OTP) | **Money.** Gated on `royaltiesEnabled` |
-| **8** | Contributor dashboard: accrued vs estimated | None |
+| **8** ✅ | Contributor dashboard: accrued vs this period's usage | None |
 
-**Shipped:** 0 through 7 are built, deployed and migrated (see git history from
+**Shipped:** 0 through 8 are built and migrated (see git history from
 `64fa907d`). Phase 1 made 9,861 domain-conversation recordings across 939
 contributors licensable for the first time; Phase 2 records money received but
 moves none. Nothing is contributor-visible yet: VDCL remains gated off.

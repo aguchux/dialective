@@ -58,6 +58,7 @@ import {
 import { resolveDialectName, useDialectName } from '@/lib/dialect-name';
 import { WordTrainingDialog } from '@/components/trainer/WordTrainingDialog';
 import { ContributorDecksPanel } from '@/components/vdcl/ContributorDecksPanel';
+import { RoyaltiesPanel } from '@/components/vdcl/RoyaltiesPanel';
 import { TaskPickerDialog } from '@/components/trainer/TaskPickerDialog';
 import { DomainConversationDialog } from '@/components/trainer/DomainConversationDialog';
 import { DialectValidationDialog } from '@/components/trainer/DialectValidationDialog';
@@ -1626,7 +1627,7 @@ export function formatDurationLabel(ms: number): string {
   return `${hours}h ${minutes}m`;
 }
 
-type TrainingTab = 'training' | 'tasks' | 'decks';
+type TrainingTab = 'training' | 'tasks' | 'decks' | 'royalties';
 
 function TrainingView({
   dialectTag,
@@ -1689,9 +1690,24 @@ function TrainingView({
         >
           Stream Deck
         </button>
+        <button
+          aria-selected={tab === 'royalties'}
+          className={`min-h-9 rounded-md px-4 text-sm font-extrabold transition-colors ${tab === 'royalties' ? 'bg-accent text-white' : 'text-muted hover:text-ink'}`}
+          onClick={() => setTab('royalties')}
+          role="tab"
+          type="button"
+        >
+          Royalties
+        </button>
       </div>
 
       {tab === 'decks' ? <ContributorDecksPanel vdclEnabled={vdclEnabled} /> : null}
+
+      {/* Sits beside Stream Deck deliberately: both answer "what is my voice
+          doing on Stream", and a contributor looking for one will look here for
+          the other. The panel gates itself on royaltiesEnabled, which is a
+          different switch from vdclEnabled. */}
+      {tab === 'royalties' ? <RoyaltiesPanel /> : null}
 
       {tab === 'training' ? (
         <div className="grid gap-5 md:grid-cols-2">
