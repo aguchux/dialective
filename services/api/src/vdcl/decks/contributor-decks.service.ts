@@ -286,6 +286,12 @@ export class ContributorDecksService {
         },
       },
       select: { recordingId: true },
+      // activeFor above already narrows to one manifest, whose
+      // @@unique([manifestId, recordingId]) makes ids distinct -- but
+      // StreamDeckItem's own @@unique([deckId, recordingId]) would make a
+      // duplicate a failed publish rather than a deduplicated one, so this
+      // does not lean on an invariant two constraints away.
+      distinct: ['recordingId'],
     });
     if (items.length === 0) {
       throw new BadRequestException('There are no licensed recordings in that dialect to publish');
