@@ -6,8 +6,8 @@ membership, symmetric blindness, DL on a separate track — is **carried forward
 unchanged and is not re-argued here.**
 
 **This document adds what that one did not have:** a dataset-agnostic accounting
-core, a collected-revenue source of truth, and the wallet-integration work an
-audit turned up.
+core, a collected-revenue source of truth, the wallet-integration work an audit
+turned up, and resolved answers on rate changes (§5.4) and chargebacks (§5.5).
 
 **Status:** Design. Not built.
 **Written:** 2026-09-27, against live production data.
@@ -376,6 +376,94 @@ across transactions is how backing drifts.
 
 ---
 
+### 5.4 Rate changes are never retroactive
+
+**A change to `royaltySharePercent` applies only to usage streamed after it.**
+Usage already streamed settles at the rate in force when it was streamed, and
+earnings already accrued are never recomputed.
+
+Two things make that true rather than merely intended:
+
+- **`RoyaltyPool.sharePercentUsed` is the enforcement, not just an audit
+  field.** A settled pool carries the rate it used, so no later change can
+  reprice it. The same holds for `fxRateUsed` and `tokenUsdRateUsed` -- a
+  historical settlement is recomputable from its own row.
+- **A change takes effect at the start of the next settlement period**, so one
+  period always settles at exactly one rate.
+
+The alternative -- splitting a period at the change point -- would honour "only
+new streams" to the minute, at the cost of two pools per subscriber per month
+and a rate-change timestamp joined against every usage row. Period granularity
+is the right trade: it keeps a pool one auditable row, and it is what a
+contributor can actually be told ("the rate changed from March").
+
+```prisma
+/// Append-only history of the contributor share rate.
+///
+/// Settlement reads the rate in force for the period being settled, NOT the
+/// current setting -- otherwise a change made before a late settlement run
+/// would silently reprice usage that was streamed under the old rate.
+model RoyaltyRatePeriod {
+  id             String   @id @default(uuid())
+  sharePercent   Decimal  @db.Decimal(5, 2)
+  /// First period this rate applies to. Always a future period at write time.
+  effectiveFrom  DateTime
+  changedByUserId String?
+  createdAt      DateTime @default(now())
+
+  @@unique([effectiveFrom])
+  @@map("royalty_rate_periods")
+}
+```
+
+Storing the schedule rather than reading `PlatformSettings` at settlement time
+is what makes a late or re-run settlement produce the same answer as a timely
+one. A settlement job that reads "the current rate" is not idempotent across a
+rate change.
+
+### 5.5 Refunds and chargebacks: the platform absorbs the shortfall
+
+A payment can be reversed after its royalties are already paid out and possibly
+already withdrawn. The money is gone from the platform; the DL is not.
+
+**Recovery stops at zero.** It takes whatever royalty balance the contributor
+still holds and goes no further:
+
+```
+owed_back = their share of the reversed pool
+recovered = min(owed_back, their current royaltyBalance)
+shortfall = owed_back - recovered     -- absorbed by the platform
+```
+
+Written as a negative `ROYALTY_ADJUSTMENT` for `recovered`, against the next
+period, with the pool's reserve transaction reversed for the **full** reversed
+amount so backing does not drift.
+
+What must **not** happen, in order of how tempting each is:
+
+- **No negative balance.** A contributor is never driven below zero, so their
+  dashboard never shows a debt they had no part in.
+- **No debt carried forward.** The shortfall is written off, not deducted from
+  future royalties. Otherwise a contributor's next months silently disappear
+  paying off a stranger's chargeback, with no way to see why.
+- **No reaching into `balance`.** Royalty recovery never touches DL earned by
+  contributing. The two income streams stay separate in both directions -- that
+  separation is not only about spendability.
+
+**Why the platform eats it.** The contributor did nothing wrong: they recorded,
+someone licensed it, someone streamed it, and a party they cannot see and never
+transacted with reversed a payment. Chargeback risk belongs to whoever chose to
+accept the card. Exposure is bounded -- `royaltySharePercent` of a single
+payment, $11.70 on the current $39 plan -- and a subscriber who charges back is
+normally cut off quickly, so it does not compound.
+
+**The reserve must still be made whole for the full amount.** Reversing only
+`recovered` would leave DL outstanding against revenue that went away, which is
+the dilution the reserve exists to prevent. The shortfall is a platform loss
+recorded honestly, not an accounting gap.
+
+---
+
 ## 6. `royaltyBalance`: withdraw-only, and actually so
 
 ```prisma
@@ -505,7 +593,7 @@ forward.
 |---|---|---|
 | `royaltiesEnabled` | `false` | Master switch. Off means no aggregation, no pools, no accrual |
 | `royaltyShadowMode` | `true` | Aggregate and compute pools, mint nothing |
-| `royaltySharePercent` | `30.00` | Contributor share of collected revenue |
+| `royaltySharePercent` | `30.00` | Contributor share of collected revenue. Writing it schedules a `RoyaltyRatePeriod` from the next period; settlement reads the schedule, never this value (§5.4) |
 | `royaltyMinimumPayout` | — | DL floor below which balance rolls forward |
 
 Both switches OTP-guarded, as `trainingEconomyEnabled` already is. Leaving
@@ -525,17 +613,23 @@ stopping payouts.
   contributor's own view aggregates a period into one figure — per-organisation
   rows would disclose how many customers exist and begin to characterise them.
   The `organizationId` on a pool is admin-only.
-- **`royaltySharePercent` is platform-set and current**, not snapshotted per
-  agreement. The VDCL states a rate exists; it does not guarantee a number.
-  Whether a rate change may apply to already-streamed usage needs an answer.
+- **`royaltySharePercent` is platform-set, and a change is never
+  retroactive.** The VDCL states a rate exists; it does not guarantee a number.
+  **Resolved:** a rate change applies only to usage streamed after it, never to
+  usage already streamed or already earned. It takes effect at the start of the
+  next settlement period, so one period always settles at one rate. See §5.4.
 - **Withdrawal is prospective.** A contributor who withdraws stops earning on
   new streams. Royalties already earned are already owed and are paid in the
   next settlement.
-- **A refund after accrual** produces a negative `ROYALTY_ADJUSTMENT` against
-  the next period, floored at zero so nobody is driven negative by someone
-  else's chargeback, with the reserve transaction reversed so backing does not
-  drift. **Open question for legal:** whether a floored-at-zero clawback leaves
-  the platform absorbing the shortfall, and whether that is acceptable.
+- **A refund or chargeback after accrual: the platform absorbs the
+  shortfall.** Recovery takes whatever royalty balance the contributor still
+  holds and **stops at zero** -- it never drives them negative, never carries a
+  debt forward against future royalties, and never reaches into their ordinary
+  wallet balance. **Resolved deliberately:** a contributor did nothing wrong. A
+  third party they cannot see and never transacted with reversed a payment, and
+  chargeback risk belongs to the party that chose to accept the card. Exposure
+  is bounded at `royaltySharePercent` of one payment -- $11.70 on the current
+  $39 plan. See §5.5.
 - **Nothing may be issued to a real contributor before the Phase 1 VDCL legal
   review lands.** This engine pays only VDCL-covered recordings, so it inherits
   that gate entirely.
@@ -550,9 +644,9 @@ stopping payouts.
 | **1** | Domain conversations licensable + streamable (§2), incl. `RightsService` kind-awareness | None |
 | **2** | `SubscriptionPayment` + `invoice.payment_succeeded` / refund handlers | Records money; moves none |
 | **3** | Usage aggregation → `RecordingUsagePeriod`; live estimates | None |
-| **4** | Pool computation in **shadow mode** (`settledAt: null`, no mint) | None |
+| **4** | Pool computation in **shadow mode** (`settledAt: null`, no mint) + `RoyaltyRatePeriod` schedule | None |
 | **5** | `royaltyBalance` column + the five integration fixes in §6.1 | Column exists, unused |
-| **6** | Accrual settlement: reserve inflow + mint + ledger + credit | **Money.** Gated off |
+| **6** | Accrual settlement: reserve inflow + mint + ledger + credit, plus refund reversal (§5.5) | **Money.** Gated off |
 | **7** | Royalty withdrawal (own model, existing rails, KYC + OTP) | **Money.** Gated off |
 | **8** | Contributor dashboard: accrued vs estimated | None |
 
@@ -570,5 +664,7 @@ particular the reversal path (§6.1a) and the supply invariant (§6.1b) — ship
 6 without them means royalty DL can become spendable, and total supply
 under-reports. Neither is acceptable with money attached.
 
-**Phase 6 needs the §6.3 review and the §9 answers before it is enabled**, not
-merely before it is written.
+**Phase 6's open questions are now answered** (§5.4 rate changes, §5.5
+chargebacks). What remains before it is *enabled* -- not merely written -- is the
+reserve-and-mint review in §5.3, which couples token issuance to collected
+revenue and is the one place a mistake dilutes backing silently.
