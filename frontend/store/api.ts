@@ -2314,6 +2314,8 @@ export interface PlatformSettingsInput {
   vdclEnabled?: boolean;
   vdclEnforcementEnabled?: boolean;
   vdclRetentionExemptionEnabled?: boolean;
+  /** Listing-only gate. Off shows unlicensed rows for testing; audio stays gated by vdclEnforcementEnabled. */
+  vdclCatalogueCoverageFilterEnabled?: boolean;
   qualityGateEnabled?: boolean;
   qualityWeightConsensus?: number;
   qualityWeightNoise?: number;

@@ -464,6 +464,28 @@ export class UpdatePlatformSettingsDto {
   @IsBoolean()
   vdclRetentionExemptionEnabled?: boolean;
 
+  /**
+   * Whether the subscriber catalogue lists ONLY recordings covered by a signed
+   * VDCL manifest.
+   *
+   * Off (default) is the wider, testing-oriented setting: search returns every
+   * eligible SETTLED recording so real data can be exercised end to end while
+   * licence coverage is still tiny. It is safe because it widens a LISTING
+   * only -- audio delivery is gated separately by vdclEnforcementEnabled,
+   * which is already ON in production, so an unlicensed row can be seen but
+   * never streamed.
+   *
+   * Turning it ON is the production posture: the listing then agrees with the
+   * audio gate and a subscriber never sees a row they cannot play.
+   *
+   * Deliberately NOT read by the showcase endpoint
+   * (voice-stream/catalogue/collections), which always counts licensed-only --
+   * a headline coverage figure must not change meaning when this is toggled.
+   */
+  @IsOptional()
+  @IsBoolean()
+  vdclCatalogueCoverageFilterEnabled?: boolean;
+
   @IsOptional()
   @IsBoolean()
   submissionDailyLimitEnabled?: boolean;

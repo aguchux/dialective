@@ -1,10 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   normalizeErrorMessage,
-  useGetPlatformSettingsQuery,
-  useUpdatePlatformSettingsMutation,
   useCreateAudioRetentionRuleMutation,
   useDeleteAudioRetentionRuleMutation,
   useGetAdminCountriesQuery,
@@ -38,37 +36,6 @@ export function DatasetStorageSettingsPanel() {
   const [createRule, { isLoading: isCreating }] = useCreateAudioRetentionRuleMutation();
   const [updateRule] = useUpdateAudioRetentionRuleMutation();
   const [deleteRule] = useDeleteAudioRetentionRuleMutation();
-  const { data: settings } = useGetPlatformSettingsQuery();
-  const [updateSettings, { isLoading: isSavingVdcl }] = useUpdatePlatformSettingsMutation();
-
-  const [vdclEnabled, setVdclEnabled] = useState(false);
-  const [vdclEnforcement, setVdclEnforcement] = useState(false);
-  const [vdclRetentionExemption, setVdclRetentionExemption] = useState(true);
-  const [vdclMessage, setVdclMessage] = useState<string | null>(null);
-  const [vdclError, setVdclError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!settings) return;
-    setVdclEnabled(settings.vdclEnabled);
-    setVdclEnforcement(settings.vdclEnforcementEnabled);
-    setVdclRetentionExemption(settings.vdclRetentionExemptionEnabled);
-  }, [settings]);
-
-  async function saveVdcl() {
-    setVdclMessage(null);
-    setVdclError(null);
-    try {
-      await updateSettings({
-        vdclEnabled,
-        vdclEnforcementEnabled: vdclEnforcement,
-        vdclRetentionExemptionEnabled: vdclRetentionExemption,
-      }).unwrap();
-      setVdclMessage('Licensing settings saved.');
-    } catch (err) {
-      setVdclError(normalizeErrorMessage(err, 'Could not save licensing settings.'));
-    }
-  }
-
   const [newCountryId, setNewCountryId] = useState('');
   const [newDialectTag, setNewDialectTag] = useState('');
   const [newRetentionDays, setNewRetentionDays] = useState('90');
@@ -145,83 +112,18 @@ export function DatasetStorageSettingsPanel() {
         </p>
       </div>
 
-      <div className="grid gap-3 rounded-lg border border-line bg-bg p-4">
-        <div className="grid gap-1">
-          <h3 className="text-lg font-bold leading-snug">Contributor licensing (VDCL)</h3>
-          <p className="text-sm leading-relaxed text-muted">
-            Controls whether contributors can create a licence at all, whether a licence is required
-            before a subscriber may stream a recording, and whether licensed audio is protected from
-            the retention rules below.
-          </p>
-        </div>
-
-        <label className="flex items-start gap-3" htmlFor="vdcl-enabled">
-          <input
-            checked={vdclEnabled}
-            className="mt-0.5 size-5 accent-accent"
-            id="vdcl-enabled"
-            onChange={(event) => setVdclEnabled(event.target.checked)}
-            type="checkbox"
-          />
-          <span>
-            <span className="block font-bold">Open contributor licensing (VDCL)</span>
-            <span className="mt-1 block text-sm leading-relaxed text-muted">
-              Off until licence publication is complete. While off, contributors see no licence page
-              or menu item and every contributor licensing request is refused, so no licence can be
-              signed. Admin licence screens and public certificate verification keep working either
-              way, so you can still exercise the flow and any issued certificate still verifies.
-            </span>
-          </span>
-        </label>
-
-        <label className="flex items-start gap-3" htmlFor="vdcl-enforcement">
-          <input
-            checked={vdclEnforcement}
-            className="mt-0.5 size-5 accent-accent"
-            id="vdcl-enforcement"
-            onChange={(event) => setVdclEnforcement(event.target.checked)}
-            type="checkbox"
-          />
-          <span>
-            <span className="block font-bold">Require a licence to stream</span>
-            <span className="mt-1 block text-sm leading-relaxed text-muted">
-              When on, a subscriber cannot stream or preview any recording not covered by an active
-              contributor licence granting their declared purpose.{' '}
-              <strong>
-                This denies everything until licence manifests exist -- do not turn it on before
-                compilation is producing them.
-              </strong>
-            </span>
-          </span>
-        </label>
-
-        <label className="flex items-start gap-3" htmlFor="vdcl-retention-exemption">
-          <input
-            checked={vdclRetentionExemption}
-            className="mt-0.5 size-5 accent-accent"
-            id="vdcl-retention-exemption"
-            onChange={(event) => setVdclRetentionExemption(event.target.checked)}
-            type="checkbox"
-          />
-          <span>
-            <span className="block font-bold">Protect licensed audio from retention</span>
-            <span className="mt-1 block text-sm leading-relaxed text-muted">
-              On by default. A signed licence says &ldquo;this manifest covers these clips, verify
-              by hash&rdquo;, so the audio behind them must not be purged by the rules below.
-              Turning this off lets retention delete licensed audio, which breaks the provenance
-              claim of any licence already issued.
-            </span>
-          </span>
-        </label>
-
-        <div className="flex items-center gap-3">
-          <ActionButton className={primaryButtonClass} disabled={isSavingVdcl} onClick={saveVdcl}>
-            {isSavingVdcl ? 'Saving...' : 'Save licensing settings'}
-          </ActionButton>
-          {vdclMessage ? <span className="text-sm text-accent">{vdclMessage}</span> : null}
-          {vdclError ? <span className="text-sm text-red-600">{vdclError}</span> : null}
-        </div>
-      </div>
+      {/* The three contributor-licensing toggles that used to live here moved to
+          the "Stream Dialect" tab, which now holds every Stream Dialect gate
+          together -- what the subscriber catalogue lists, and what it will
+          serve. The retention exemption is decided there but takes effect on
+          the rules below, so the pointer stays. */}
+      <p className="rounded-lg border border-line bg-surface-muted p-4 text-sm leading-relaxed text-muted">
+        <strong className="text-ink">Contributor licensing (VDCL)</strong> now lives on the{' '}
+        <strong className="text-ink">Stream Dialect</strong> tab, alongside the rest of the Stream
+        Dialect gates. That is also where{' '}
+        <em>Protect licensed audio from retention</em> is set &mdash; it decides whether the
+        retention rules below may delete audio covered by a signed licence.
+      </p>
 
       {isLoading && <p className="text-muted">Loading...</p>}
 

@@ -38,7 +38,7 @@ import { DlConnectSettingsPanel } from './DlConnectSettingsPanel';
 const groups = [
   { key: 'general', label: 'General Settings' },
   { key: 'analytics', label: 'Analytics & Metrics' },
-  { key: 'stream', label: 'Stream Settings' },
+  { key: 'stream', label: 'Stream Dialect' },
   { key: 'adsMonetisation', label: 'Ads & Monetisation' },
   { key: 'landingPage', label: 'Landing Page' },
   { key: 'maintenance', label: 'Site Maintenance' },
