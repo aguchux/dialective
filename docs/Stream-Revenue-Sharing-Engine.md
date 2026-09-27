@@ -273,10 +273,23 @@ by the existing `StripeWebhookEvent` event-id gate:
 - `charge.refunded` / `charge.dispute.created` → stamp `refundedAt`
 
 **Non-USD is a real case.** `amountPaidCents` + `currency` are stored as Stripe
-reports them. The pool converts to USD at pool time using the FX rate already
-maintained by `fx-rate-job`, and the rate used is **recorded on the pool row**
-so a historical settlement can be recomputed. Assuming USD would silently
-misprice any non-USD subscriber.
+reports them. The pool converts to USD at pool time and the rate used is
+**recorded on the pool row**, so a historical settlement can be recomputed.
+Assuming USD would silently misprice any non-USD subscriber.
+
+The conversion source is `Country.usdExchangeRate`, joined by
+`Country.currencyCode` — verified against production (2026-09-27): 106 countries
+carry a rate, `fx-rate-job` refreshes the `LIVE` ones daily, and **no currency
+has two conflicting rates**, so the currency→rate mapping is single-valued.
+Countries reading exactly `1.000000` are the genuinely USD ones, not missing
+data.
+
+Two caveats for whoever builds the pool. A currency Stripe bills in but no
+country row carries is possible, and a pool must **fail loudly** rather than
+default the rate to 1 — silently treating NGN as USD would overpay by three
+orders of magnitude. And `exchangeRateSource: MANUAL` rows are admin-pinned and
+deliberately not refreshed, which is correct for payouts but means a stale
+manual rate would price a pool; read the source alongside the rate.
 
 ---
 
@@ -640,9 +653,9 @@ stopping payouts.
 
 | Phase | Content | Financial surface |
 |---|---|---|
-| **0** | `StreamRecordKind`, resolver seam, `StreamAccessLog` index | None |
-| **1** | Domain conversations licensable + streamable (§2), incl. `RightsService` kind-awareness | None |
-| **2** | `SubscriptionPayment` + `invoice.payment_succeeded` / refund handlers | Records money; moves none |
+| **0** ✅ | `StreamRecordKind`, kind util, `StreamAccessLog` index | None |
+| **1** ✅ | Domain conversations licensable (§2), incl. `RightsService` kind-awareness | None |
+| **2** ✅ | `SubscriptionPayment` + `invoice.payment_succeeded` / refund handlers | Records money; moves none |
 | **3** | Usage aggregation → `RecordingUsagePeriod`; live estimates | None |
 | **4** | Pool computation in **shadow mode** (`settledAt: null`, no mint) + `RoyaltyRatePeriod` schedule | None |
 | **5** | `royaltyBalance` column + the five integration fixes in §6.1 | Column exists, unused |
@@ -650,7 +663,18 @@ stopping payouts.
 | **7** | Royalty withdrawal (own model, existing rails, KYC + OTP) | **Money.** Gated off |
 | **8** | Contributor dashboard: accrued vs estimated | None |
 
-**0–4 are safe to build now** and carry no financial surface.
+**Shipped:** 0, 1 and 2 are built, deployed and migrated (see git history from
+`64fa907d`). Phase 1 made 9,861 domain-conversation recordings across 939
+contributors licensable for the first time; Phase 2 records money received but
+moves none. Nothing is contributor-visible yet: VDCL remains gated off.
+
+**Streaming what Phase 1 licensed is still outstanding.** Phase 1 delivered the
+licensing, catalogue and rights half. The `StreamDeckItem`/manifest path carries
+`recordKind` end to end, but no deck UI or subscriber-facing surface offers
+domain conversations yet, so in practice they are licensable and discoverable
+rather than actually streamed.
+
+**3–4 are safe to build now** and carry no financial surface.
 
 **Phase 1 is the largest and least glamorous**, and it is what "every streamed
 dataset" actually requires: 9,861 recordings currently cannot be licensed,

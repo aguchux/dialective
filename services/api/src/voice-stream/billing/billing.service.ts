@@ -17,6 +17,23 @@ function streamFrontendUrl(): string {
  * 43, Phase 1 doesn't reimplement that cron); `canceled`/`incomplete_expired`
  * map to CANCELED.
  */
+/**
+ * The payment intent behind an invoice.
+ *
+ * Read through `payments` rather than a top-level field, because Stripe's
+ * newer invoice shape moved it there. Worth reading explicitly: this is the id
+ * every refund and dispute joins back on, since Charge carries payment_intent
+ * but not invoice.
+ */
+function paymentIntentIdOf(invoice: Stripe.Invoice): string | undefined {
+  for (const payment of invoice.payments?.data ?? []) {
+    const intent = payment.payment?.payment_intent;
+    if (typeof intent === 'string') return intent;
+    if (intent?.id) return intent.id;
+  }
+  return undefined;
+}
+
 function mapStripeStatus(status: Stripe.Subscription.Status): SubscriptionStatus {
   switch (status) {
     case 'trialing':
@@ -267,6 +284,23 @@ export class BillingService {
         return;
       }
 
+      // The only event that records money ARRIVING. Everything else in this
+      // switch records a state change; this one records a receipt, and it is
+      // the sole basis for a contributor revenue-sharing pool.
+      case 'invoice.payment_succeeded': {
+        await this.recordPayment(event.data.object as Stripe.Invoice);
+        return;
+      }
+
+      // Reversals. Both arrive as Charge events, and Charge carries
+      // payment_intent but not invoice, which is why SubscriptionPayment stores
+      // the intent id -- it is the only join back to the payment being undone.
+      case 'charge.refunded':
+      case 'charge.dispute.created': {
+        await this.recordReversal(event);
+        return;
+      }
+
       case 'invoice.payment_failed': {
         const invoice = event.data.object as Stripe.Invoice;
         const stripeSubscriptionId =
@@ -294,6 +328,164 @@ export class BillingService {
 
       default:
         return; // event types we don't act on yet
+    }
+  }
+
+  /**
+   * Record a settled subscription payment.
+   *
+   * Deliberately narrow: it records what Stripe reported and derives nothing.
+   * No amount is computed from a plan price, no period is inferred from a
+   * calendar month, and `paidAt` comes from Stripe's own
+   * status_transitions.paid_at rather than the time this row was written -- a
+   * webhook can be delivered late, and a pool that drew on the wrong period
+   * would pay the wrong contributors.
+   *
+   * Skips anything that is not a subscription payment. A one-off invoice is
+   * real revenue, but it is not what a contributor's recording earned against,
+   * so admitting it would put money in a pool with no usage period behind it.
+   */
+  private async recordPayment(invoice: Stripe.Invoice): Promise<void> {
+    if (!invoice.id) {
+      this.logger.warn('invoice.payment_succeeded with no invoice id, ignoring');
+      return;
+    }
+
+    const stripeSubscriptionId =
+      typeof invoice.parent?.subscription_details?.subscription === 'string'
+        ? invoice.parent.subscription_details.subscription
+        : invoice.parent?.subscription_details?.subscription?.id;
+
+    if (!stripeSubscriptionId) {
+      this.logger.log(
+        `invoice.payment_succeeded invoice=${invoice.id} has no subscription parent -- not pool revenue, skipped`,
+      );
+      return;
+    }
+
+    // The organisation comes from OUR subscription row, never from invoice
+    // metadata: metadata is caller-supplied, and a payment attributed to the
+    // wrong org would pay the wrong contributors.
+    const subscription = await this.prisma.subscription.findFirst({
+      where: { stripeSubscriptionId },
+      select: { organizationId: true },
+    });
+    if (!subscription) {
+      this.logger.warn(
+        `invoice.payment_succeeded references unknown subscription=${stripeSubscriptionId}, invoice=${invoice.id}`,
+      );
+      return;
+    }
+
+    // Zero-amount invoices are normal on a free plan or a fully-discounted
+    // period. They are not revenue, and a zero pool has nothing to divide.
+    if (invoice.amount_paid <= 0) {
+      this.logger.log(
+        `invoice.payment_succeeded invoice=${invoice.id} paid 0 -- no revenue to record`,
+      );
+      return;
+    }
+
+    const paidAtUnix = invoice.status_transitions?.paid_at;
+
+    await this.prisma.subscriptionPayment.upsert({
+      where: { stripeInvoiceId: invoice.id },
+      // Upsert rather than create: two DIFFERENT Stripe events can reference
+      // one invoice, so the event-id gate in handleWebhook does not by itself
+      // make this idempotent. The unique on stripeInvoiceId does.
+      update: {},
+      create: {
+        organizationId: subscription.organizationId,
+        stripeInvoiceId: invoice.id,
+        stripePaymentIntentId: paymentIntentIdOf(invoice),
+        stripeSubscriptionId,
+        amountPaidCents: invoice.amount_paid,
+        currency: invoice.currency,
+        periodStart: new Date(invoice.period_start * 1000),
+        periodEnd: new Date(invoice.period_end * 1000),
+        // Falls back to now only when Stripe omitted it, which should not
+        // happen on a succeeded payment. Logged below so a systematic absence
+        // is visible rather than quietly becoming "whenever we processed it".
+        paidAt: paidAtUnix ? new Date(paidAtUnix * 1000) : new Date(),
+      },
+    });
+
+    if (!paidAtUnix) {
+      this.logger.warn(
+        `invoice.payment_succeeded invoice=${invoice.id} had no status_transitions.paid_at; used receipt time`,
+      );
+    }
+
+    this.logger.log(
+      `Recorded subscription payment org=${subscription.organizationId} invoice=${invoice.id} amount=${invoice.amount_paid}${invoice.currency.toUpperCase()}`,
+    );
+  }
+
+  /**
+   * Mark a payment reversed.
+   *
+   * A refund or dispute means the platform does not have that money. The
+   * payment row is not deleted -- it did happen, and a pool may already have
+   * drawn on it -- so the reversal is recorded alongside it and settlement
+   * compensates from there.
+   *
+   * `charge.dispute.created` is treated as a full reversal when the dispute
+   * OPENS, rather than waiting for it to resolve. Deliberately pessimistic:
+   * continuing to pay royalties out of money being clawed back is the more
+   * expensive mistake, and a dispute resolved in our favour can be un-marked.
+   */
+  private async recordReversal(event: Stripe.Event): Promise<void> {
+    const charge =
+      event.type === 'charge.refunded'
+        ? (event.data.object as Stripe.Charge)
+        : await this.chargeForDispute(event.data.object as Stripe.Dispute);
+    if (!charge) return;
+
+    const paymentIntentId =
+      typeof charge.payment_intent === 'string'
+        ? charge.payment_intent
+        : charge.payment_intent?.id;
+    if (!paymentIntentId) return;
+
+    const payment = await this.prisma.subscriptionPayment.findFirst({
+      where: { stripePaymentIntentId: paymentIntentId },
+      select: { id: true, organizationId: true, amountPaidCents: true },
+    });
+    if (!payment) {
+      // Not every charge is a subscription payment. This is the expected
+      // outcome for any other Stripe activity on the account.
+      return;
+    }
+
+    const reversedCents =
+      event.type === 'charge.refunded'
+        ? charge.amount_refunded
+        : // A dispute reports no refunded amount, so the whole payment is
+          // treated as at risk -- see the doc comment above.
+          payment.amountPaidCents;
+
+    await this.prisma.subscriptionPayment.update({
+      where: { id: payment.id },
+      data: { refundedAt: new Date(), refundedAmountCents: reversedCents },
+    });
+
+    this.logger.warn(
+      `Subscription payment reversed org=${payment.organizationId} payment=${payment.id} reversed=${reversedCents} of ${payment.amountPaidCents} via ${event.type}`,
+    );
+  }
+
+  /** A dispute references its charge by id; the charge carries the payment intent. */
+  private async chargeForDispute(dispute: Stripe.Dispute): Promise<Stripe.Charge | null> {
+    const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge?.id;
+    if (!chargeId) return null;
+    const stripe = await this.getStripe();
+    try {
+      return await stripe.charges.retrieve(chargeId);
+    } catch (err) {
+      this.logger.error(
+        `Could not retrieve charge=${chargeId} for dispute=${dispute.id}: ${err instanceof Error ? err.message : err}`,
+      );
+      return null;
     }
   }
 

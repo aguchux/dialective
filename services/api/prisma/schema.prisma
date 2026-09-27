@@ -3706,6 +3706,7 @@ model SubscriberOrganization {
   activityEvents         OrgActivityEvent[]
   anomalyEvents          AnomalyEvent[]
   usageCounters          UsageCounter[]
+  subscriptionPayments   SubscriptionPayment[]
   sourceDataAccessLead   DataAccessLead?
   deckLicenseAcceptances DeckLicenseAcceptance[]
   validationQueueItems   ValidationQueueItem[]
@@ -3871,6 +3872,68 @@ model Subscription {
   updatedAt            DateTime               @updatedAt
 
   @@map("subscriptions")
+}
+
+/// Money actually received from a subscriber organisation.
+///
+/// The ONLY basis for a revenue-sharing pool. `SubscriptionPlan.monthlyUsdAmount`
+/// is what we asked for and `Subscription.status = ACTIVE` is a state, not a
+/// receipt -- neither says a payment settled. Computing a contributor pool from
+/// either would mint DL against money that may have failed, been refunded or
+/// been charged back, which is exactly the dilution the tokenomics reserve
+/// exists to prevent.
+///
+/// Written only by the invoice.payment_succeeded webhook. Nothing else may
+/// create a row here: a payment record the platform wrote for itself, rather
+/// than one Stripe confirmed, would be an assertion instead of evidence.
+model SubscriptionPayment {
+  id             String                 @id @default(uuid())
+  organizationId String
+  organization   SubscriberOrganization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// Stripe's invoice id. Unique, so a redelivered webhook cannot double-count
+  /// a payment -- the StripeWebhookEvent gate below catches an identical event
+  /// replay, but two DIFFERENT events can reference one invoice.
+  stripeInvoiceId String @unique
+  /// The payment intent behind it. Refunds and disputes arrive as Charge
+  /// events, and Charge carries payment_intent but not invoice, so this is the
+  /// only join back from a refund to the payment it reverses.
+  stripePaymentIntentId String?
+  /// Set when a subscription is the invoice's parent, which is the only case
+  /// that funds a pool. Nullable because a one-off invoice has no subscription.
+  stripeSubscriptionId String?
+
+  /// Minor units, exactly as Stripe reports them, and the currency alongside.
+  /// Stored unconverted: converting on the way in would bake one day's FX rate
+  /// into the permanent record, and the rate actually used has to be visible on
+  /// the pool that used it.
+  amountPaidCents Int
+  currency        String
+
+  /// Stripe's billing period for this invoice, not the platform's calendar
+  /// month. The pool that draws on this payment is the one covering this
+  /// window.
+  periodStart DateTime
+  periodEnd   DateTime
+  /// From status_transitions.paid_at -- when Stripe says the money arrived,
+  /// never when this row was written.
+  paidAt      DateTime
+
+  /// Reversal state. A refunded payment is excluded from future pools, and if
+  /// a pool already drew on it, settlement writes a compensating adjustment
+  /// (see docs/Stream-Revenue-Sharing-Engine.md 5.5). Partial refunds are real,
+  /// so the amount is tracked rather than a boolean.
+  refundedAt          DateTime?
+  refundedAmountCents Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizationId, paidAt])
+  @@index([periodStart])
+  /// For the refund join described above.
+  @@index([stripePaymentIntentId])
+  @@map("subscription_payments")
 }
 
 /// Idempotency ledger for Stripe webhook delivery -- id is Stripe's own

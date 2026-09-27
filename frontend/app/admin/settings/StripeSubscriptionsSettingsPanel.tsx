@@ -686,6 +686,41 @@ export function StripeSubscriptionsSettingsPanel() {
             ))}
           </div>
         )}
+
+        {/*
+          Which events Stripe delivers is configured in the Stripe dashboard, not
+          here -- so a handler existing in the API does not mean the event will
+          ever arrive. Listed explicitly because the consequences differ: miss a
+          status event and a subscription's state goes stale, which is visible.
+          Miss invoice.payment_succeeded and no payment is ever recorded, which
+          is invisible until contributor revenue sharing silently pays nothing.
+        */}
+        <div className="grid gap-2 rounded-lg border border-line bg-surface-muted p-4">
+          <h3 className="font-extrabold">Events this endpoint needs</h3>
+          <p className="text-sm leading-relaxed text-muted">
+            Enable these on the webhook endpoint in Stripe (Developers → Webhooks). Anything not
+            listed is ignored safely.
+          </p>
+          <ul className="grid gap-1 text-sm">
+            {[
+              ['checkout.session.completed', 'activates a subscription after checkout'],
+              ['customer.subscription.updated', 'status, period and cancel-at-period-end'],
+              ['customer.subscription.deleted', 'marks a subscription cancelled'],
+              ['invoice.payment_failed', 'marks a subscription past due'],
+              [
+                'invoice.payment_succeeded',
+                'records money received — the only basis for contributor revenue sharing',
+              ],
+              ['charge.refunded', 'reverses a recorded payment, partially or fully'],
+              ['charge.dispute.created', 'treats a disputed payment as reversed while contested'],
+            ].map(([event, why]) => (
+              <li className="flex flex-wrap gap-x-2" key={event}>
+                <code className="rounded bg-white px-1 py-0.5 font-bold">{event}</code>
+                <span className="text-muted">{why}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       </section>
 
       <section className="grid gap-4 rounded-lg border border-line bg-white p-5 shadow-[0_2px_8px_rgba(27,31,27,0.05)]">
