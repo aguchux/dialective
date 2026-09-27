@@ -347,6 +347,53 @@ describe('RoyaltyPoolService: splitting', () => {
   });
 });
 
+describe('RoyaltyPoolService: rounding never over-mints', () => {
+  it('rounds the pool DOWN, so it never claims more DL than revenue supports', async () => {
+    // Direction matters, not just precision. Rounding up would mint a
+    // fraction of a DL more than the reserve inflow backing it -- small per
+    // pool, and exactly the drift the reserve exists to catch. The remainder
+    // rounded off here stays with the platform, which is the safe side.
+    const { tx, service } = setup({
+      // $10.00 at 33.33% = $3.333, / $0.07 per DL = 47.61428571428...
+      payments: [payment({ amountPaidCents: 1000 })],
+      usage: [usageRow()],
+      rate: 33.33,
+      tokenUsdRate: 0.07,
+    });
+
+    await service.computePeriod(MARCH);
+
+    const poolDl: Prisma.Decimal = tx.royaltyPool.create.mock.calls[0][0].data.poolDl;
+    const exact = new Prisma.Decimal('10')
+      .times('33.33')
+      .dividedBy(100)
+      .dividedBy('0.07');
+    expect(poolDl.lessThanOrEqualTo(exact)).toBe(true);
+    expect(poolDl.toString()).toBe('47.61428571');
+  });
+
+  it('allocates that floored pool exactly, leaving nothing unaccounted', async () => {
+    // The two roundings compose: poolDl is a floor, and the shares sum to that
+    // floor rather than to the unrounded figure.
+    const { tx, service } = setup({
+      payments: [payment({ amountPaidCents: 1000 })],
+      usage: [
+        usageRow({ contributorId: 'a', _sum: { streamCount: 1 } }),
+        usageRow({ contributorId: 'b', _sum: { streamCount: 1 } }),
+        usageRow({ contributorId: 'c', _sum: { streamCount: 1 } }),
+      ],
+      rate: 33.33,
+      tokenUsdRate: 0.07,
+    });
+
+    await service.computePeriod(MARCH);
+
+    const poolDl: Prisma.Decimal = tx.royaltyPool.create.mock.calls[0][0].data.poolDl;
+    const accruals = tx.royaltyAccrual.createMany.mock.calls[0][0].data;
+    expect(sum(accruals).equals(poolDl)).toBe(true);
+  });
+});
+
 describe('allocate: the split must balance exactly', () => {
   it('allocates the whole pool when it divides evenly', () => {
     const allocations = allocate(new Prisma.Decimal('100'), [
