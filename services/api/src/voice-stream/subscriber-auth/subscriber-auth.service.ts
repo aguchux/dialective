@@ -27,6 +27,17 @@ const BCRYPT_ROUNDS = 12;
 const OTP_TTL_MS = 10 * 60 * 1000;
 const OTP_TTL_SECONDS = OTP_TTL_MS / 1000;
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+/**
+ * How long after a token rotates a second presentation of it is treated as a
+ * concurrent retry rather than a replay. See the reuse branch in `refresh`.
+ *
+ * 30s covers a racing pair of serverless requests (the observed race was 163ms
+ * apart) with room for a slow cold start, while staying far too short to help
+ * an attacker, who would have to steal the token and use it inside the same
+ * half-minute the legitimate client rotated it -- and would still get a token
+ * the real client's next rotation invalidates.
+ */
+const REFRESH_ROTATION_GRACE_MS = 30 * 1000;
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000; // 1 hour
 
@@ -263,6 +274,45 @@ export class SubscriberAuthService {
     }
 
     if (record.revokedAt) {
+      // A token presented moments after it rotated is almost always a RACE,
+      // not a replay.
+      //
+      // Both client apps deduplicate in-flight refreshes, but with an
+      // in-process Map -- and they run as serverless functions, so two
+      // concurrent requests can land on different instances, both miss that
+      // cache, and both present the same token. Production evidence: family
+      // 217d33fb rotated cleanly for six days, then a token was revoked 163ms
+      // after its predecessor and the family was destroyed, logging the user
+      // out mid-session.
+      //
+      // So a presented token that (a) was superseded very recently and (b)
+      // names its successor is answered with that successor's replacement
+      // rather than treated as an attack. `replacedBy` has always been written
+      // on rotation and never read; this is what it was for.
+      //
+      // Replay protection is unchanged for the case it exists to catch: an old
+      // stolen token is outside the window, and a revoked token with NO
+      // successor (a logout, or a family already killed) still revokes the
+      // family. The window is deliberately short -- long enough for a
+      // concurrent pair of requests, far too short to be useful to an attacker
+      // who has to steal the token first.
+      const withinGrace =
+        Date.now() - record.revokedAt.getTime() <= REFRESH_ROTATION_GRACE_MS;
+      if (withinGrace && record.replacedBy) {
+        const successor = await this.prisma.subscriberRefreshToken.findUnique({
+          where: { tokenHash: record.replacedBy },
+        });
+        // Only when the successor is still the live token. If it has itself
+        // been rotated or revoked, this is not a simple race and the strict
+        // path below applies.
+        if (successor && !successor.revokedAt && successor.expiresAt > new Date()) {
+          this.logger.log(
+            `Subscriber refresh race for family=${record.familyId}; replaying rotation within grace`,
+          );
+          return this.rotate(successor);
+        }
+      }
+
       this.logger.warn(
         `Subscriber refresh token reuse detected for family=${record.familyId}; revoking family`,
       );
@@ -277,6 +327,27 @@ export class SubscriberAuthService {
       throw new UnauthorizedException('Refresh token expired');
     }
 
+    return this.rotate(record);
+  }
+
+  /**
+   * Revoke one live refresh token and issue its successor, in one transaction.
+   *
+   * Shared by the normal path and the grace path above so both rotate
+   * identically -- a second copy of this would be a place for the two to drift
+   * apart, and a token rotated by only one of them would break the family
+   * chain.
+   *
+   * The atomic guard is `where: { id, revokedAt: null }`: two callers racing
+   * on the SAME live token cannot both revoke it, so at most one issues a
+   * successor and the loser gets no rotation rather than a second live token
+   * in the family.
+   */
+  private async rotate(record: {
+    id: string;
+    userId: string;
+    familyId: string;
+  }): Promise<SubscriberAuthTokens> {
     const user = await this.prisma.subscriberUser.findUnique({ where: { id: record.userId } });
     if (!user) {
       throw new UnauthorizedException('User no longer exists');
@@ -286,20 +357,29 @@ export class SubscriberAuthService {
 
     const { token: nextToken, hash: nextHash } = generateOpaqueToken();
 
-    await this.prisma.$transaction([
-      this.prisma.subscriberRefreshToken.update({
-        where: { id: record.id },
+    const claimed = await this.prisma.$transaction(async (tx) => {
+      const claim = await tx.subscriberRefreshToken.updateMany({
+        where: { id: record.id, revokedAt: null },
         data: { revokedAt: new Date(), replacedBy: nextHash },
-      }),
-      this.prisma.subscriberRefreshToken.create({
+      });
+      if (claim.count === 0) return false;
+      await tx.subscriberRefreshToken.create({
         data: {
           userId: user.id,
           tokenHash: nextHash,
           familyId: record.familyId,
           expiresAt: new Date(Date.now() + refreshTtlMs),
         },
-      }),
-    ]);
+      });
+      return true;
+    });
+
+    if (!claimed) {
+      // Another request rotated this exact token between the read above and
+      // this write. Nothing was issued here, and the family is intact -- the
+      // caller retries and lands on the grace path.
+      throw new UnauthorizedException('Refresh token has been revoked');
+    }
 
     return {
       accessToken: signSubscriberAccessToken({

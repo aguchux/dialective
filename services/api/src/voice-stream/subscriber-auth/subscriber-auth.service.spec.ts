@@ -37,7 +37,10 @@ function setup() {
       create: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
-      updateMany: jest.fn(),
+      // rotate() claims the row with `updateMany ... where revokedAt: null` and
+      // treats count 0 as "someone else rotated it first", so the default here
+      // has to report a claimed row or every rotation looks like a lost race.
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     subscriberInvite: {
       deleteMany: jest.fn(),
@@ -393,6 +396,119 @@ describe('SubscriberAuthService', () => {
       });
     });
 
+    describe('rotation grace window', () => {
+      // Both client apps dedupe in-flight refreshes with an IN-PROCESS Map, and
+      // both run as serverless functions -- so two concurrent requests can land
+      // on different instances, both miss that cache, and both present the same
+      // token. Production: family 217d33fb rotated cleanly for six days, then a
+      // token was revoked 163ms after its predecessor and the family was
+      // destroyed, logging the user out mid-session.
+      const liveSuccessor = {
+        id: 'rt-2',
+        userId: 'user-1',
+        familyId: 'family-1',
+        tokenHash: 'successor-hash',
+        revokedAt: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      };
+
+      function racingSetup(overrides: Record<string, unknown> = {}) {
+        const ctx = setup();
+        ctx.prisma.subscriberUser.findUnique.mockResolvedValue({
+          id: 'user-1',
+          email: 'a@b.com',
+        });
+        ctx.prisma.subscriberMembership.findFirst.mockResolvedValue({
+          organizationId: 'org-1',
+          role: SubscriberOrgRole.ADMIN,
+        });
+        ctx.prisma.subscriberRefreshToken.findUnique
+          // the presented token: just rotated
+          .mockResolvedValueOnce({
+            id: 'rt-1',
+            userId: 'user-1',
+            familyId: 'family-1',
+            revokedAt: new Date(),
+            replacedBy: 'successor-hash',
+            expiresAt: new Date(Date.now() + 60_000),
+            ...overrides,
+          })
+          // the successor lookup
+          .mockResolvedValueOnce(liveSuccessor);
+        return ctx;
+      }
+
+      it('serves a racing duplicate instead of destroying the session', async () => {
+        const { prisma, service } = racingSetup();
+
+        const result = await service.refresh('just-rotated-token');
+
+        expect(result.accessToken).toEqual(expect.any(String));
+        expect(result.refreshToken).toEqual(expect.any(String));
+        // THE point: the family survives.
+        expect(prisma.subscriberRefreshToken.updateMany).not.toHaveBeenCalledWith(
+          expect.objectContaining({ where: { familyId: 'family-1', revokedAt: null } }),
+        );
+      });
+
+      it('still revokes the family for a token revoked LONG ago', async () => {
+        // A genuinely stolen token is outside the window. Replay protection is
+        // the reason this code exists and must not be softened by the grace path.
+        const { prisma, service } = racingSetup({
+          revokedAt: new Date(Date.now() - 10 * 60 * 1000),
+        });
+
+        await expect(service.refresh('stale-stolen-token')).rejects.toThrow(
+          UnauthorizedException,
+        );
+        expect(prisma.subscriberRefreshToken.updateMany).toHaveBeenCalledWith({
+          where: { familyId: 'family-1', revokedAt: null },
+          data: { revokedAt: expect.any(Date) },
+        });
+      });
+
+      it('still revokes the family when the token names no successor', async () => {
+        // No replacedBy means it was revoked by a logout or an earlier family
+        // kill, not by rotation -- there is nothing to replay.
+        const { prisma, service } = setup();
+        prisma.subscriberRefreshToken.findUnique.mockResolvedValue({
+          id: 'rt-1',
+          userId: 'user-1',
+          familyId: 'family-1',
+          revokedAt: new Date(),
+          replacedBy: null,
+          expiresAt: new Date(Date.now() + 60_000),
+        });
+
+        await expect(service.refresh('logged-out-token')).rejects.toThrow(UnauthorizedException);
+        expect(prisma.subscriberRefreshToken.updateMany).toHaveBeenCalledWith({
+          where: { familyId: 'family-1', revokedAt: null },
+          data: { revokedAt: expect.any(Date) },
+        });
+      });
+
+      it('still revokes the family when the successor has itself been revoked', async () => {
+        // Two rotations deep is not a simple race: someone is replaying a chain.
+        const { prisma, service } = setup();
+        prisma.subscriberRefreshToken.findUnique
+          .mockResolvedValueOnce({
+            id: 'rt-1',
+            userId: 'user-1',
+            familyId: 'family-1',
+            revokedAt: new Date(),
+            replacedBy: 'successor-hash',
+            expiresAt: new Date(Date.now() + 60_000),
+          })
+          .mockResolvedValueOnce({ ...liveSuccessor, revokedAt: new Date() });
+
+        await expect(service.refresh('chain-replay')).rejects.toThrow(UnauthorizedException);
+        expect(prisma.subscriberRefreshToken.updateMany).toHaveBeenCalledWith({
+          where: { familyId: 'family-1', revokedAt: null },
+          data: { revokedAt: expect.any(Date) },
+        });
+      });
+    });
+
     it('rotates the token and issues a fresh access token on valid presentation', async () => {
       const { prisma, service } = setup();
       prisma.subscriberRefreshToken.findUnique.mockResolvedValue({
@@ -412,10 +528,15 @@ describe('SubscriberAuthService', () => {
 
       expect(result.accessToken).toEqual(expect.any(String));
       expect(result.refreshToken).toEqual(expect.any(String));
-      expect(prisma.subscriberRefreshToken.update).toHaveBeenCalledWith(
+      // Claimed with an atomic guard, not a bare update: two requests racing on
+      // the same live token must not both issue a successor.
+      expect(prisma.subscriberRefreshToken.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'rt-1' },
-          data: expect.objectContaining({ revokedAt: expect.any(Date) }),
+          where: { id: 'rt-1', revokedAt: null },
+          data: expect.objectContaining({
+            revokedAt: expect.any(Date),
+            replacedBy: expect.any(String),
+          }),
         }),
       );
     });
