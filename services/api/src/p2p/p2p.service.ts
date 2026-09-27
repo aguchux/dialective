@@ -18,6 +18,7 @@ import {
 } from '@dialectiva/db';
 import { randomUUID } from 'crypto';
 import { OtpService } from '../otp/otp.service';
+import { MailService } from '../mail/mail.service';
 import { resolveOtpDestination } from '../otp/otp.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { PlatformSettingsService } from '../settings/platform-settings.service';
@@ -100,6 +101,7 @@ export class P2PService {
     private readonly otp: OtpService,
     private readonly platformSettings: PlatformSettingsService,
     private readonly sms: SmsService,
+    private readonly mail: MailService,
   ) {}
 
   async getSettings() {
@@ -1643,7 +1645,19 @@ export class P2PService {
     let refundedTrades = 0;
     let failed = 0;
     let refunded = new Prisma.Decimal(0);
-    const notifySellers: string[] = [];
+    // Per seller, so each gets one email with their own totals rather than
+    // one per cancelled row.
+    const perSeller = new Map<string, { offers: number; trades: number; tokens: Prisma.Decimal }>();
+    const track = (sellerId: string, kind: 'offers' | 'trades', tokens: Prisma.Decimal) => {
+      const entry = perSeller.get(sellerId) ?? {
+        offers: 0,
+        trades: 0,
+        tokens: new Prisma.Decimal(0),
+      };
+      entry[kind] += 1;
+      entry.tokens = entry.tokens.add(tokens);
+      perSeller.set(sellerId, entry);
+    };
 
     // Trades first. An offer whose trade is refunded below comes back as
     // CANCELLED rather than relisted (relistOffer defaults false), so doing
@@ -1662,7 +1676,7 @@ export class P2PService {
         if (after?.status !== P2PTradeStatus.CANCELLED) continue;
         refundedTrades += 1;
         refunded = refunded.add(trade.tokenAmount);
-        notifySellers.push(trade.sellerId);
+        track(trade.sellerId, 'trades', trade.tokenAmount);
       } catch (err) {
         failed += 1;
         this.logger.error(
@@ -1690,7 +1704,7 @@ export class P2PService {
           if (after?.status !== P2POfferStatus.CANCELLED) continue;
           cancelledSell += 1;
           refunded = refunded.add(offer.tokenAmount);
-          notifySellers.push(offer.userId);
+          track(offer.userId, 'offers', offer.tokenAmount);
         } else {
           // A BUY offer holds no escrow -- the accepting seller locks the
           // tokens -- so this is a status change with nothing to unlock.
@@ -1718,8 +1732,8 @@ export class P2PService {
     );
 
     // Best-effort, and only after the money has moved: a refund must never
-    // be held up by an SMS gateway.
-    void this.notifyRevokedSellers(notifySellers);
+    // be held up by a mail provider.
+    void this.notifyRevokedSellers(perSeller);
 
     return {
       cancelledSellOffers: cancelledSell,
@@ -1733,15 +1747,39 @@ export class P2PService {
     };
   }
 
-  /** One message per distinct seller, not one per cancelled row. */
-  private async notifyRevokedSellers(sellerIds: string[]): Promise<void> {
-    if (!(await this.platformSettings.isP2pSmsCancelledEnabled())) return;
-    for (const sellerId of [...new Set(sellerIds)]) {
-      await this.notify(
-        sellerId,
-        true,
-        'Dialect Library: Your P2P offers were cancelled by support and your tokens returned to your balance.',
-      );
+  /**
+   * One email per seller, summarising everything of theirs that came down.
+   *
+   * Email, not SMS. A revoke can touch several hundred sellers in one go,
+   * which is a real per-message cost on the SMS rails, and the message
+   * carries figures worth reading twice -- how much came back, and what it
+   * was holding. It also aggregates: a seller with 40 cancelled offers gets
+   * one email with a total, not 40 notifications.
+   *
+   * Runs after the escrow has already moved and swallows its own failures,
+   * so a mail outage can never hold up or roll back a refund.
+   */
+  private async notifyRevokedSellers(
+    refunds: Map<string, { offers: number; trades: number; tokens: Prisma.Decimal }>,
+  ): Promise<void> {
+    for (const [sellerId, summary] of refunds) {
+      try {
+        const seller = await this.prisma.user.findUnique({
+          where: { id: sellerId },
+          select: { email: true },
+        });
+        if (!seller?.email) continue;
+        await this.mail.sendP2PRevokedEmail({
+          sellerEmail: seller.email,
+          offerCount: summary.offers,
+          tradeCount: summary.trades,
+          tokenAmount: summary.tokens.toString(),
+        });
+      } catch (err) {
+        this.logger.warn(
+          `Revoke-all notification failed for seller=${sellerId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
     }
   }
 

@@ -79,7 +79,7 @@ function setup(options: { currency?: string; exchangeRate?: number } = {}) {
     getMinCompletedTasksForWithdrawal: jest.fn().mockResolvedValue(100),
     getTokenUsdRate: jest.fn().mockResolvedValue(0.1),
   };
-  const service = new P2PService(prisma, {} as never, platformSettings as never, {} as never);
+  const service = new P2PService(prisma, {} as never, platformSettings as never, {} as never, { sendP2PRevokedEmail: jest.fn().mockResolvedValue(undefined) } as never);
   jest.spyOn(service as any, 'getOfferForUser').mockResolvedValue({ id: 'offer-1' });
   return { service, prisma };
 }

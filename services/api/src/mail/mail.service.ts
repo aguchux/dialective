@@ -57,6 +57,16 @@ interface KycDeclinedNotification {
   reason: string;
 }
 
+interface P2PRevokedNotification {
+  sellerEmail: string;
+  /** Live listings taken down for this seller. */
+  offerCount: number;
+  /** Abandoned trades refunded to them, if any. */
+  tradeCount: number;
+  /** Total DL moved back from locked to spendable. */
+  tokenAmount: string;
+}
+
 interface AnomalyAlertNotification {
   recipientEmail: string;
   organizationName: string;
@@ -311,6 +321,25 @@ export class MailService {
       auditHoldReleasedHtml(dashboardUrl),
       auditHoldReleasedText(dashboardUrl),
       { kind: 'sendAuditHoldReleasedEmail' },
+    );
+  }
+
+  /**
+   * Fired by P2PService.revokeAllOffers after a bulk market clear.
+   *
+   * Email rather than SMS: a revoke can touch several hundred sellers at
+   * once, and it carries figures worth reading twice -- how much came back
+   * and what it was holding. Sent per seller after the money has already
+   * moved, so a mail failure can never hold up a refund.
+   */
+  async sendP2PRevokedEmail(payload: P2PRevokedNotification): Promise<void> {
+    const walletUrl = `${frontendUrl()}/wallet`;
+    await this.send(
+      payload.sellerEmail,
+      'Your P2P offers were cancelled and your tokens returned',
+      p2pRevokedHtml(payload, walletUrl),
+      p2pRevokedText(payload, walletUrl),
+      { kind: 'sendP2PRevokedEmail', optional: true },
     );
   }
 
@@ -1007,6 +1036,42 @@ function auditHoldReleasedText(dashboardUrl: string): string {
   return `Good news -- your account review is complete and your account is back in good standing.
 You can resume training right away.
 Go to your dashboard: ${dashboardUrl}`;
+}
+
+function p2pRevokedSummary(payload: {
+  offerCount: number;
+  tradeCount: number;
+}): string {
+  const parts: string[] = [];
+  if (payload.offerCount > 0) {
+    parts.push(`${payload.offerCount} ${payload.offerCount === 1 ? 'offer' : 'offers'}`);
+  }
+  if (payload.tradeCount > 0) {
+    parts.push(`${payload.tradeCount} ${payload.tradeCount === 1 ? 'trade' : 'trades'}`);
+  }
+  return parts.join(' and ');
+}
+
+function p2pRevokedHtml(
+  payload: { offerCount: number; tradeCount: number; tokenAmount: string },
+  walletUrl: string,
+): string {
+  return `<p>We have cleared the P2P market while we update its settings, so ${p2pRevokedSummary(payload)} of yours ${payload.offerCount + payload.tradeCount === 1 ? 'was' : 'were'} cancelled.</p>
+<p><strong>${escapeHtml(payload.tokenAmount)} DL</strong> that was being held is back in your spendable balance. Nothing was lost &mdash; the tokens were always yours, and they were only locked while ${payload.offerCount > 0 && payload.tradeCount > 0 ? 'those were open' : payload.offerCount > 0 ? (payload.offerCount === 1 ? 'that offer was live' : 'those offers were live') : payload.tradeCount === 1 ? 'that trade was open' : 'those trades were open'}.</p>
+<p>You can post again once the market reopens.</p>
+<p><a href="${walletUrl}">View your wallet</a></p>`;
+}
+
+function p2pRevokedText(
+  payload: { offerCount: number; tradeCount: number; tokenAmount: string },
+  walletUrl: string,
+): string {
+  return `We have cleared the P2P market while we update its settings, so ${p2pRevokedSummary(payload)} of yours ${payload.offerCount + payload.tradeCount === 1 ? 'was' : 'were'} cancelled.
+
+${payload.tokenAmount} DL that was being held is back in your spendable balance. Nothing was lost -- the tokens were always yours, and they were only locked while ${payload.offerCount > 0 && payload.tradeCount > 0 ? 'those were open' : payload.offerCount > 0 ? (payload.offerCount === 1 ? 'that offer was live' : 'those offers were live') : payload.tradeCount === 1 ? 'that trade was open' : 'those trades were open'}.
+
+You can post again once the market reopens.
+View your wallet: ${walletUrl}`;
 }
 
 function connectRegistrationHtml(

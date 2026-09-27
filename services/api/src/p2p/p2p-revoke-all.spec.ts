@@ -104,6 +104,11 @@ describe('P2PService.revokeAllOffers', () => {
           phoneNumber: null,
           phoneVerifiedAt: null,
         }),
+        findUnique: jest
+          .fn()
+          .mockImplementation(({ where }: { where: { id: string } }) =>
+            Promise.resolve({ email: `${where.id}@example.com` }),
+          ),
       },
       $transaction: jest.fn().mockResolvedValue([]),
     };
@@ -118,19 +123,21 @@ describe('P2PService.revokeAllOffers', () => {
       getOtpChannel: jest.fn().mockResolvedValue('email'),
       isWhatsappOtpEnabled: jest.fn().mockResolvedValue(false),
     };
+    const mail = { sendP2PRevokedEmail: jest.fn().mockResolvedValue(undefined) };
 
     const service = new P2PService(
       prisma as never,
       otp as never,
       platformSettings as never,
       { send: jest.fn() } as never,
+      mail as never,
     );
     // The sweep that runs at the top of every read; irrelevant here and it
     // would otherwise need the whole expiry fixture set.
     (service as unknown as { expireStaleRecords: () => Promise<void> }).expireStaleRecords = jest
       .fn()
       .mockResolvedValue(undefined);
-    return { service, prisma, otp, platformSettings };
+    return { service, prisma, otp, platformSettings, mail };
   }
 
   const sellOffer = (id: string, tokens: number, userId = 'seller-1') => ({
@@ -303,23 +310,61 @@ describe('P2PService.revokeAllOffers', () => {
     expect(result.tokensRefunded).toBe('50');
   });
 
-  it('notifies each seller once, not once per cancelled offer', async () => {
-    const { service, platformSettings } = build({
+  it('emails each seller once with their own totals, not once per row', async () => {
+    // Email rather than SMS: a revoke can touch several hundred sellers,
+    // and one aggregated message beats 40 notifications to the same person.
+    const { service, mail } = build({
       offers: [
         sellOffer('offer-1', 10, 'seller-1'),
-        sellOffer('offer-2', 10, 'seller-1'),
-        sellOffer('offer-3', 10, 'seller-2'),
+        sellOffer('offer-2', 15, 'seller-1'),
+        sellOffer('offer-3', 30, 'seller-2'),
       ],
       settings: { adminOtpRequiredForDisputes: false },
     });
-    platformSettings.isP2pSmsCancelledEnabled.mockResolvedValue(true);
-    const notify = jest.fn().mockResolvedValue(undefined);
-    (service as unknown as { notify: unknown }).notify = notify;
 
     await service.revokeAllOffers('admin-1', {});
-    // notifyRevokedSellers is fire-and-forget, so let the microtask queue drain.
+    // notifyRevokedSellers is fire-and-forget, so let the queue drain.
     await new Promise((resolve) => setImmediate(resolve));
 
-    expect(notify).toHaveBeenCalledTimes(2);
+    expect(mail.sendP2PRevokedEmail).toHaveBeenCalledTimes(2);
+    expect(mail.sendP2PRevokedEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ sellerEmail: 'seller-1@example.com', offerCount: 2, tokenAmount: '25' }),
+    );
+    expect(mail.sendP2PRevokedEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ sellerEmail: 'seller-2@example.com', offerCount: 1, tokenAmount: '30' }),
+    );
+  });
+
+  it('counts an offer and a refunded trade for the same seller in one email', async () => {
+    const { service, mail } = build({
+      offers: [sellOffer('offer-1', 10, 'seller-1')],
+      staleTrades: [{ id: 'trade-1', sellerId: 'seller-1', tokenAmount: decimal(25) }],
+      settings: { adminOtpRequiredForDisputes: false },
+    });
+
+    await service.revokeAllOffers('admin-1', {});
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(mail.sendP2PRevokedEmail).toHaveBeenCalledTimes(1);
+    expect(mail.sendP2PRevokedEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ offerCount: 1, tradeCount: 1, tokenAmount: '35' }),
+    );
+  });
+
+  it('a failing email never rolls back a refund', async () => {
+    const { service, mail } = build({
+      offers: [sellOffer('offer-1', 10, 'seller-1')],
+      settings: { adminOtpRequiredForDisputes: false },
+    });
+    mail.sendP2PRevokedEmail.mockRejectedValue(new Error('resend down'));
+
+    const result = await service.revokeAllOffers('admin-1', {});
+    await new Promise((resolve) => setImmediate(resolve));
+
+    // The money moved regardless -- notification is best-effort and runs
+    // after the escrow has already been returned.
+    expect(result.cancelledSellOffers).toBe(1);
+    expect(result.tokensRefunded).toBe('10');
+    expect(result.failedCount).toBe(0);
   });
 });

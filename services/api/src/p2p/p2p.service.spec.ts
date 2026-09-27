@@ -68,7 +68,7 @@ describe('P2PService.listMyTrades -- seller payment method reveal', () => {
     const prisma = {
       p2PTokenTrade: { findMany: jest.fn().mockResolvedValue([trade]) },
     };
-    const service = new P2PService(prisma as never, {} as never, {} as never, {} as never);
+    const service = new P2PService(prisma as never, {} as never, {} as never, {} as never, {} as never);
     jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
     return { service, prisma };
   }
@@ -190,7 +190,7 @@ describe('P2PService.listMyTrades -- counterparty phone number reveal (WhatsApp 
 
   function setup(trade: unknown) {
     const prisma = { p2PTokenTrade: { findMany: jest.fn().mockResolvedValue([trade]) } };
-    const service = new P2PService(prisma as never, {} as never, {} as never, {} as never);
+    const service = new P2PService(prisma as never, {} as never, {} as never, {} as never, {} as never);
     jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
     return { service, prisma };
   }
@@ -266,7 +266,7 @@ describe('P2PService.adminListTrades -- counterparty phone number reveal', () =>
 
   it('shows both parties phone numbers to an admin (no viewerId is the admin-facing convention)', async () => {
     const prisma = { p2PTokenTrade: { findMany: jest.fn().mockResolvedValue([makeTrade()]) } };
-    const service = new P2PService(prisma as never, {} as never, {} as never, {} as never);
+    const service = new P2PService(prisma as never, {} as never, {} as never, {} as never, {} as never);
     jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
 
     const [result] = await service.adminListTrades({} as any);
@@ -303,7 +303,7 @@ describe('P2PService.adminListTrades -- counterparty phone number reveal', () =>
       const prisma = {
         p2PDispute: { findMany: jest.fn().mockResolvedValue([makeDispute()]) },
       };
-      const service = new P2PService(prisma as never, {} as never, {} as never, {} as never);
+      const service = new P2PService(prisma as never, {} as never, {} as never, {} as never, {} as never);
 
       const [result] = await service.adminListDisputes({} as any);
 
@@ -330,7 +330,7 @@ describe('P2PService.adminListTrades -- counterparty phone number reveal', () =>
           ]),
         },
       };
-      const service = new P2PService(prisma as never, {} as never, {} as never, {} as never);
+      const service = new P2PService(prisma as never, {} as never, {} as never, {} as never, {} as never);
 
       const [result] = await service.adminListDisputes({} as any);
 
@@ -343,7 +343,7 @@ describe('P2PService.adminListTrades -- counterparty phone number reveal', () =>
       const prisma = {
         p2PDispute: { findMany: jest.fn().mockResolvedValue([makeDispute()]) },
       };
-      const service = new P2PService(prisma as never, {} as never, {} as never, {} as never);
+      const service = new P2PService(prisma as never, {} as never, {} as never, {} as never, {} as never);
 
       const [result] = await service.adminListDisputes({} as any);
 
@@ -394,7 +394,7 @@ describe('P2PService trade-notification SMS', () => {
       isP2pSmsPaymentMarkedEnabled: jest.fn(),
     };
     sms = { sendTransactional: jest.fn().mockResolvedValue(undefined) };
-    service = new P2PService(prisma, otp, platformSettings, sms);
+    service = new P2PService(prisma, otp, platformSettings, sms, { sendP2PRevokedEmail: jest.fn().mockResolvedValue(undefined) } as never);
     jest.spyOn(service as any, 'getTradeForUser').mockResolvedValue(trade);
   });
 
@@ -541,7 +541,7 @@ describe('P2PService.listOffers', () => {
       },
       $queryRaw: jest.fn(),
     };
-    service = new P2PService(prisma, {} as any, {} as any, {} as any);
+    service = new P2PService(prisma, {} as any, {} as any, {} as any, { sendP2PRevokedEmail: jest.fn().mockResolvedValue(undefined) } as never);
     jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
   });
 
@@ -764,7 +764,7 @@ describe('P2PService.requestTradeOtp', () => {
       getOtpChannel: jest.fn().mockResolvedValue('sms'),
       isWhatsappOtpEnabled: jest.fn().mockResolvedValue(false),
     };
-    service = new P2PService(prisma, otp, platformSettings as any, {} as any);
+    service = new P2PService(prisma, otp, platformSettings as any, {} as any, { sendP2PRevokedEmail: jest.fn().mockResolvedValue(undefined) } as never);
   });
 
   it('emails the OTP when the caller has no verified phone', async () => {
@@ -822,7 +822,7 @@ describe('P2PService.expireStaleRecords trade handling', () => {
         upsert: jest.fn().mockResolvedValue({ abandonedTradeHours: 48, ...settings }),
       },
     };
-    const service = new P2PService(prisma as never, {} as never, {} as never, {} as never);
+    const service = new P2PService(prisma as never, {} as never, {} as never, {} as never, {} as never);
     const cancelTrade = jest
       .spyOn(service as any, 'cancelTrade')
       .mockResolvedValue(undefined);
@@ -973,7 +973,7 @@ describe('P2PService.getOfferDetail -- view tracking', () => {
       p2PTokenTrade: { groupBy: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn(async (fn: (t: any) => unknown) => fn(tx)),
     };
-    service = new P2PService(prisma, {} as any, {} as any, {} as any);
+    service = new P2PService(prisma, {} as any, {} as any, {} as any, { sendP2PRevokedEmail: jest.fn().mockResolvedValue(undefined) } as never);
     jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
   });
 
@@ -1056,7 +1056,7 @@ describe('P2PService -- phone verification gate on trading', () => {
       p2PMarketSettings: { upsert: jest.fn().mockResolvedValue({}) },
     };
     platformSettings = { isPhoneVerificationRequired: jest.fn().mockResolvedValue(true) };
-    service = new P2PService(prisma, {} as any, platformSettings as any, {} as any);
+    service = new P2PService(prisma, {} as any, platformSettings as any, {} as any, { sendP2PRevokedEmail: jest.fn().mockResolvedValue(undefined) } as never);
     jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
   });
 
@@ -1125,7 +1125,7 @@ describe('P2PService -- KYC and task-history gates on trading', () => {
       isPhoneVerificationRequired: jest.fn().mockResolvedValue(true),
       getMinCompletedTasksForWithdrawal: jest.fn().mockResolvedValue(MIN_TASKS),
     };
-    const service = new P2PService(prisma, {} as any, platformSettings as any, {} as any);
+    const service = new P2PService(prisma, {} as any, platformSettings as any, {} as any, { sendP2PRevokedEmail: jest.fn().mockResolvedValue(undefined) } as never);
     jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
     jest.spyOn(service as any, 'requireMarketEnabled').mockResolvedValue({
       maxOpenOffersPerUser: 5,
@@ -1296,7 +1296,7 @@ describe('P2PService.updateOffer / deleteOffer -- owner edits', () => {
       p2POfferPaymentMethod: { deleteMany: jest.fn().mockResolvedValue({}) },
       p2POfferView: { deleteMany: jest.fn().mockResolvedValue({}) },
     };
-    const service = new P2PService(prisma as never, {} as never, {} as never, {} as never);
+    const service = new P2PService(prisma as never, {} as never, {} as never, {} as never, {} as never);
     jest.spyOn(service as any, 'expireStaleRecords').mockResolvedValue(undefined);
     return { service, prisma };
   }

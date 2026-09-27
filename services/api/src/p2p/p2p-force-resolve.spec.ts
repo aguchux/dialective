@@ -90,6 +90,7 @@ describe('P2PService.forceResolveTrade', () => {
       otp as never,
       platformSettings as never,
       { send: jest.fn() } as never,
+      { sendP2PRevokedEmail: jest.fn().mockResolvedValue(undefined) } as never,
     );
     return { service, prisma, otp };
   }
