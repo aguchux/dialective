@@ -405,6 +405,54 @@ Redis Streams doesn't provide dead-lettering out of the box, so every consumer g
 - **KEDA itself is a cluster prerequisite**, like cert-manager/nginx-ingress — the `*-keda.yaml` manifests are inert `ScaledObject`s until the KEDA operator is installed; `kubectl apply` succeeds regardless (kustomize doesn't validate CRDs exist). Check `kubectl get scaledobject -n dai` if a queue-driven worker never scales up.
 - `minReplicaCount: 0` is intentional for the KEDA-scaled workers and for `livekit-server` — don't "fix" this to a nonzero minimum without discussing cost implications.
 - `k8s/base/kustomization.yaml` is the authoritative resource list — check it, not directory listings, when auditing what's actually deployed.
+- **Images in committed manifests stay on `:latest`; the SHA is pinned at apply time by `k8s/deploy.sh`** — see "Image tags and deploying" below. Don't commit a `newTag:`, and don't add a new workload image to a manifest without also adding it to that script's `PINNED_IMAGES` and to `docker-publish.yml`'s matrix.
+
+### Image tags and deploying (`k8s/deploy.sh`)
+
+**Committed manifests carry `:latest`, and that is deliberate — but `kubectl
+apply -k` alone is not how a code change reaches production.** Use
+`k8s/deploy.sh`, which resolves one commit SHA at apply time and pins every
+workload image to it.
+
+Why the committed manifests can't just carry the SHA: **a commit cannot contain
+its own SHA.** A `newTag:` checked into git could only ever name an *earlier*
+commit's image, so every apply would deploy the previous build while looking
+precise — worse than `:latest`, because it reads as intentional. This is the
+same reason `prisma-deploy.yml` substitutes its image tag at run time instead of
+committing one; `k8s/deploy.sh` follows that precedent.
+
+Why `:latest` alone isn't good enough: on **2026-09-27** the `api` pod had run
+for four hours on digest `b7e27829…` while `:latest` in the registry pointed at
+`3ffa8555…` — two commits behind. The manifest said `:latest`, the registry said
+`:latest`, and `kubectl get deploy -o …image` said `:latest`. Only comparing the
+running pod's `imageID` against the registry digest revealed it. **A tag that can
+mean two different images at two different times cannot answer "what is
+deployed."** When verifying a deploy, compare digests, not tags.
+
+The script refuses to deploy a tag that was never built: it checks every image
+against the registry HTTP API **before** touching the cluster, so a half-finished
+build fails fast instead of leaving a mix of updated and `ImagePullBackOff`
+workloads. Rollback is the same command with an older SHA.
+
+Two things to keep in step:
+
+- **`PINNED_IMAGES` must match `docker-publish.yml`'s build matrix.** An image
+  pinned there but absent from the matrix has no SHA tag, so it 404s at pull
+  time and takes the workload down.
+- **`consensus-scorer` is deliberately left on `:latest`** (`UNPINNABLE_IMAGES`).
+  It runs in production and is listed in `base/kustomization.yaml`, but has **no
+  `services/` directory and no matrix entry** — `:latest` exists in the registry,
+  no SHA tag does or will. Don't "fix" this by adding it to `PINNED_IMAGES`; give
+  it a build first.
+
+`k8s/deploy.sh` never edits a committed file — no `kustomize edit set image`,
+which would rewrite `kustomization.yaml` on disk and is how a stale SHA gets
+committed by accident. It writes a throwaway overlay under
+`k8s/overlays/.deploy-tmp-$$/` (gitignored, removed on exit) that references the
+real overlay by a **relative** path, so the `secretGenerator`/`configMapGenerator`
+hashing — including the `redis-auth` no-hash exception — still applies. The path
+is relative because an absolute one breaks on Windows, where `kubectl` is a
+native binary that cannot resolve an MSYS `/h/...` path.
 
 ### Secrets and configs
 
@@ -512,7 +560,16 @@ docker build -f services/prompt-audio-service/Dockerfile -t your-registry/prompt
 # First time: copy each k8s/overlays/prod/secrets/*.env.example and
 # configs/*.env.example to the same name without .example, fill in real values
 
-# Apply the production manifests (requires the secrets/configs above)
+# Deploy to production -- pins every workload image to one commit SHA.
+# Prefer this over a bare `kubectl apply -k`: the committed manifests carry
+# `:latest`, which cannot tell you what is actually running (see
+# "Image tags and deploying" below).
+k8s/deploy.sh                    # pin to HEAD
+k8s/deploy.sh <full-40-char-sha> # pin to a specific commit (this is also how you roll back)
+DRY_RUN=1 k8s/deploy.sh          # render and verify tags, apply nothing
+
+# Apply the manifests as committed, leaving every image on :latest. Fine for a
+# config/secret-only change; for a code change prefer k8s/deploy.sh.
 kubectl apply -k k8s/overlays/prod/
 
 # Check KEDA scaler status
@@ -554,9 +611,10 @@ npm run format:check
 8. **New sensitive/admin routes are guarded** — `@UseGuards(JwtAuthGuard)` at minimum, `@UseGuards(JwtAuthGuard, RolesGuard)` + `@Roles(Role.ADMIN)` (in that order) for admin-only routes.
 9. **Refresh-token rotation preserved** — any change to `AuthService.refresh`/`logout` keeps rotate-on-use + family-revocation-on-replay intact.
 10. **Financial ledger invariants preserved** — any wallet, withdrawal, payout, tokenomics/reserve, distributor allocation, or P2P escrow change uses atomic balance guards (`updateMany` with a `gte` condition, not read-then-write) and writes the mutation + ledger/operation entry in the same Prisma transaction. P2P accepted-trade cancellation must keep the grace-window behavior.
-11. **Prisma migrations travel with the code that needs them** — a schema change ships in the same PR/push as the code depending on it; remember `prisma-deploy.yml` applies to production automatically on push to `main` (see "CI/CD"), so a bad migration is a production incident, not a staging one.
-12. **Voice Stream identity boundaries respected** — subscriber-org auth (`SubscriberUser`/`subscriber-auth/`) is a separate system from trainer/admin auth; don't reuse `JwtAuthGuard`/`Role` assumptions there without checking what the Voice Stream module actually guards with.
-13. **Docs updated** — if you change the architecture (new service, new stream, new scoring approach, financial flow, or admin-gated setting), update the relevant `docs/*.md` or this file alongside the code, not as a follow-up.
+11. **A new service image is deployable** — a new `golojan/dialect-*` image referenced from a manifest is added to `docker-publish.yml`'s build matrix *and* to `k8s/deploy.sh`'s `PINNED_IMAGES`. In the matrix but not the script means it silently stays on `:latest`; in the script but not the matrix means it 404s at pull time and the workload goes down.
+12. **Prisma migrations travel with the code that needs them** — a schema change ships in the same PR/push as the code depending on it; remember `prisma-deploy.yml` applies to production automatically on push to `main` (see "CI/CD"), so a bad migration is a production incident, not a staging one.
+13. **Voice Stream identity boundaries respected** — subscriber-org auth (`SubscriberUser`/`subscriber-auth/`) is a separate system from trainer/admin auth; don't reuse `JwtAuthGuard`/`Role` assumptions there without checking what the Voice Stream module actually guards with.
+14. **Docs updated** — if you change the architecture (new service, new stream, new scoring approach, financial flow, or admin-gated setting), update the relevant `docs/*.md` or this file alongside the code, not as a follow-up.
 
 ---
 
