@@ -269,13 +269,19 @@ export class ContributorDecksService {
     // The recordings this deck is built from: exactly the ACTIVE manifest's
     // items for this one dialect. Read here rather than carried down from
     // listForContributor because the StreamDeckItem rows need ids, not counts.
+    // Scoped to the version the AGREEMENT points at, not merely to one whose
+    // status reads ACTIVE. RightsService applies the same extra condition for
+    // the same reason: the agreement's own pointer is authoritative, and a
+    // stale manifest row left pointing at a version the agreement has since
+    // moved off must not contribute items to a deck.
     const items = await this.prisma.vdclManifestItem.findMany({
       where: {
         dialectTag,
         manifest: {
           vdclVersion: {
-            agreement: { contributorId, withdrawnAt: null },
             status: VdclVersionStatus.ACTIVE,
+            agreement: { contributorId, withdrawnAt: null },
+            activeFor: { contributorId },
           },
         },
       },

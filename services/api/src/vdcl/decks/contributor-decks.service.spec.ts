@@ -286,6 +286,22 @@ describe('ContributorDecksService', () => {
       );
     });
 
+    it('scopes items to the version the agreement points at', async () => {
+      // Not merely to one whose status reads ACTIVE. The agreement's own
+      // pointer is authoritative, so a stale manifest row left on a version
+      // the agreement has moved off must not contribute items.
+      withActiveVersion([manifestItem({ dialectTag: 'ig' })]);
+      withManifestRecordings(['rec-1']);
+
+      await service.publishDeck(CONTRIBUTOR, 'ig');
+
+      const where = prisma.vdclManifestItem.findMany.mock.calls.find(
+        (call: any) => call[0]?.where?.dialectTag === 'ig',
+      )![0].where;
+      expect(where.manifest.vdclVersion.activeFor).toEqual({ contributorId: CONTRIBUTOR });
+      expect(where.manifest.vdclVersion.agreement.withdrawnAt).toBeNull();
+    });
+
     it('refuses a dialect the licence does not cover', async () => {
       withActiveVersion([manifestItem({ dialectTag: 'ig' })]);
 
