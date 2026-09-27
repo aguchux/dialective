@@ -148,6 +148,33 @@ describe('RoyaltySettlementService: gates refuse the whole run', () => {
     expect(tx.ledgerEntry.create).not.toHaveBeenCalled();
     expect(tx.reserveTransaction.upsert).not.toHaveBeenCalled();
   });
+
+  it('checks every gate independently, so no single one is load-bearing', async () => {
+    // In production royaltiesEnabled is false, which short-circuits before the
+    // others are ever reached -- so the in-cluster run only exercised the first
+    // gate. Each must hold on its own, because enabling royalties is exactly the
+    // moment the remaining three become the only protection left.
+    const cases: [Record<string, unknown>, string][] = [
+      [{ royaltiesEnabled: false }, 'royalties_disabled'],
+      [{ shadowMode: true }, 'shadow_mode'],
+      [{ mintingPaused: true }, 'minting_paused'],
+      [{ runCap: 1 }, 'run_cap_exceeded'],
+    ];
+
+    for (const [options, expected] of cases) {
+      const { prisma, tx, service } = setup({ ...options, pools: [pool()] });
+      const result = await service.settlePeriod(MARCH_START);
+      expect(result.abortedBecause).toBe(expected);
+      expect(result.poolsSettled).toBe(0);
+      // Nothing moved, whichever gate caught it.
+      expect(tx.wallet.update).not.toHaveBeenCalled();
+      expect(tx.ledgerEntry.create).not.toHaveBeenCalled();
+      expect(tx.reserveAccount.upsert).not.toHaveBeenCalled();
+      if (expected !== 'run_cap_exceeded') {
+        expect(prisma.royaltyPool.findMany).not.toHaveBeenCalled();
+      }
+    }
+  });
 });
 
 describe('RoyaltySettlementService: the money path', () => {
