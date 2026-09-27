@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Req,
+  UnprocessableEntityException,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { IsNumber, IsString, IsOptional, IsIn, Min } from 'class-validator';
 import { OtpPurpose, Role } from '@dialectiva/db';
@@ -10,7 +19,10 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PlatformSettingsService } from '../../settings/platform-settings.service';
 import { OtpService } from '../../otp/otp.service';
 import { resolveOtpDestination } from '../../otp/otp.util';
-import { royaltyWithdrawalContextHash } from '../../wallet/otp-context.util';
+import {
+  adminActionContextHash,
+  royaltyWithdrawalContextHash,
+} from '../../wallet/otp-context.util';
 import { RoyaltyWithdrawalService } from './royalty-withdrawal.service';
 import { UsageEstimateService } from './usage-estimate.service';
 
@@ -49,6 +61,15 @@ class ResolveRoyaltyWithdrawalDto {
   @IsOptional()
   @IsString()
   adminNote?: string;
+
+  /** Required when PlatformSettings.adminPayoutOtpEnabled is on. */
+  @IsOptional()
+  @IsString()
+  otpRequestId?: string;
+
+  @IsOptional()
+  @IsString()
+  code?: string;
 }
 
 /**
@@ -193,6 +214,42 @@ export class RoyaltyWithdrawalController {
     });
   }
 
+  /**
+   * Issue the admin step-up for resolving a payout.
+   *
+   * Bound to the outcome as well as the request: on this rail `rejected` is the
+   * branch that moves money (it credits DL back to royaltyBalance, since the
+   * debit already happened at request time), so a code issued for one outcome
+   * must not complete the other.
+   */
+  @Post('admin/royalties/withdrawals/:id/resolve-otp')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN)
+  async resolveOtp(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() body: ResolveRoyaltyWithdrawalDto,
+  ) {
+    const request = await this.prisma.royaltyWithdrawalRequest.findUniqueOrThrow({
+      where: { id },
+      select: { tokenAmount: true },
+    });
+    const admin = await this.prisma.user.findUniqueOrThrow({ where: { id: req.user.sub } });
+    const { destination, channel } = await resolveOtpDestination(admin, this.settings);
+    return this.otp.issueForUser(
+      req.user.sub,
+      OtpPurpose.ADMIN_PAYOUT,
+      destination,
+      adminActionContextHash({
+        action: 'royalty-withdrawal-resolve',
+        id,
+        tokenAmount: request.tokenAmount.toNumber(),
+        outcome: body.outcome,
+      }),
+      channel,
+    );
+  }
+
   @Post('admin/royalties/withdrawals/:id/resolve')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
@@ -201,6 +258,37 @@ export class RoyaltyWithdrawalController {
     @Param('id') id: string,
     @Body() body: ResolveRoyaltyWithdrawalDto,
   ) {
+    // Step-up when the platform requires it for admin payout actions.
+    //
+    // BOTH outcomes are gated here, unlike the wallet rail which gates only
+    // `paid`. The asymmetry is inverted on this rail: the DL was debited when
+    // the contributor made the request, so `paid` merely flips a status while
+    // `rejected` credits DL back into royaltyBalance. Gating only `paid` would
+    // leave the one branch that actually moves money unconfirmed.
+    if (await this.settings.isAdminPayoutOtpEnabled()) {
+      if (!body.otpRequestId || !body.code) {
+        throw new UnprocessableEntityException(
+          'Confirm this action with the code sent to you',
+        );
+      }
+      const request = await this.prisma.royaltyWithdrawalRequest.findUniqueOrThrow({
+        where: { id },
+        select: { tokenAmount: true },
+      });
+      await this.otp.verify({
+        otpRequestId: body.otpRequestId,
+        userId: req.user.sub,
+        purpose: OtpPurpose.ADMIN_PAYOUT,
+        code: body.code,
+        contextHash: adminActionContextHash({
+          action: 'royalty-withdrawal-resolve',
+          id,
+          tokenAmount: request.tokenAmount.toNumber(),
+          outcome: body.outcome,
+        }),
+      });
+    }
+
     return this.withdrawals.resolve({
       withdrawalId: id,
       outcome: body.outcome,

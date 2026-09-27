@@ -9,6 +9,7 @@ import { TokenomicsModule } from '../../tokenomics/tokenomics.module';
 import { OtpModule } from '../../otp/otp.module';
 import { RoyaltyWithdrawalService } from './royalty-withdrawal.service';
 import { RoyaltyWithdrawalController } from './royalty-withdrawal.controller';
+import { RoyaltyAdminController } from './royalty-admin.controller';
 
 /**
  * Revenue sharing: usage accounting, pool computation, settlement and recovery.
@@ -31,7 +32,7 @@ import { RoyaltyWithdrawalController } from './royalty-withdrawal.controller';
   // A plain leaf-to-leaf import: TokenomicsModule exports its service and
   // imports nothing from here, so no cycle.
   imports: [TokenomicsModule, OtpModule],
-  controllers: [RoyaltyWithdrawalController],
+  controllers: [RoyaltyWithdrawalController, RoyaltyAdminController],
   providers: [
     UsageAggregationService,
     UsageEstimateService,

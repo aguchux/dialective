@@ -157,6 +157,66 @@ describe('RoyaltyWithdrawalService.create: the debit', () => {
   });
 });
 
+describe('RoyaltyWithdrawalService.create: concurrency', () => {
+  it('lets exactly one of two racing withdrawals through', async () => {
+    // The attack this rail must survive: a contributor firing two payout
+    // requests at one balance. Postgres evaluates the gte guard as part of the
+    // update, so the second finds the balance no longer covers it and matches
+    // zero rows. Simulated here because a unit test has no real database, but
+    // the semantics mirror exactly what the guard does.
+    let balance = new Prisma.Decimal('600');
+    const tx = {
+      wallet: {
+        updateMany: jest.fn(
+          async ({
+            where,
+            data,
+          }: {
+            where: { royaltyBalance: { gte: Prisma.Decimal } };
+            data: { royaltyBalance: { decrement: Prisma.Decimal } };
+          }) => {
+            if (balance.lessThan(where.royaltyBalance.gte)) return { count: 0 };
+            balance = balance.minus(data.royaltyBalance.decrement);
+            return { count: 1 };
+          },
+        ),
+        update: jest.fn(),
+      },
+      royaltyWithdrawalRequest: {
+        create: jest.fn().mockResolvedValue({ id: 'rwd', status: 'PENDING' }),
+        updateMany: jest.fn(),
+      },
+      ledgerEntry: { create: jest.fn() },
+    };
+    const prisma = {
+      wallet: { findUnique: jest.fn(async () => ({ id: 'wallet-1', royaltyBalance: balance })) },
+      user: { findUnique: jest.fn().mockResolvedValue({ kycStatus: 'APPROVED' }) },
+      payoutAccount: {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'pa-1', type: 'BANK', verificationStatus: 'VERIFIED' }),
+      },
+      royaltyWithdrawalRequest: { findUnique: jest.fn(), findMany: jest.fn() },
+      $transaction: jest.fn(async (cb: (t: unknown) => unknown) => cb(tx)),
+    };
+    const settings = {
+      areRoyaltiesEnabled: jest.fn().mockResolvedValue(true),
+      getRoyaltyMinimumPayout: jest.fn().mockResolvedValue(500),
+      getTokenUsdRate: jest.fn().mockResolvedValue(0.16),
+      isKycRequiredForWithdrawals: jest.fn().mockResolvedValue(false),
+      getKycMinWithdrawalTokens: jest.fn().mockResolvedValue(1000),
+    };
+    const service = new RoyaltyWithdrawalService(prisma as never, settings as never);
+
+    const results = await Promise.allSettled([service.create(REQUEST), service.create(REQUEST)]);
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+    // Landed at zero exactly once, never negative.
+    expect(balance.toString()).toBe('0');
+  });
+});
+
 describe('RoyaltyWithdrawalService.validate: the gates', () => {
   it('refuses when royalties are not enabled', async () => {
     const { service } = setup({ royaltiesEnabled: false });

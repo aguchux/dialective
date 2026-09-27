@@ -1636,6 +1636,13 @@ export class PlatformSettingsService {
     vdclEnabled?: boolean;
     trainingEconomyEnabled?: boolean;
     vdclPayoutSuppressionEnabled?: boolean;
+    // Stream revenue sharing. Writable only through RoyaltyAdminController,
+    // which step-ups each change and binds the direction. royaltySharePercent is
+    // deliberately NOT here: settlement resolves the rate from the
+    // RoyaltyRatePeriod schedule, and a settings write would let a late
+    // settlement reprice usage already streamed (5.4).
+    royaltiesEnabled?: boolean;
+    royaltyShadowMode?: boolean;
     vdclCatalogueCoverageFilterEnabled?: boolean;
     vdclEnforcementEnabled?: boolean;
     vdclRetentionExemptionEnabled?: boolean;

@@ -177,6 +177,40 @@ describe('RoyaltySettlementService: gates refuse the whole run', () => {
   });
 });
 
+describe('RoyaltySettlementService: defence in depth', () => {
+  it('cannot double-credit one contributor inside a pool', async () => {
+    // Belt and braces beyond the claim guard. If a pool somehow carried two
+    // accruals for one contributor, the ledger's (walletId, type, reference)
+    // unique constraint must stop the second credit and roll the whole pool
+    // back -- leaving it UNSETTLED rather than half-credited.
+    const { prisma, tx, service } = setup({
+      pools: [
+        pool({
+          accruals: [
+            { contributorId: 'same', amountDl: new Prisma.Decimal('50') },
+            { contributorId: 'same', amountDl: new Prisma.Decimal('50') },
+          ],
+        }),
+      ],
+    });
+    tx.ledgerEntry.create
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(
+        new Prisma.PrismaClientKnownRequestError('dup', {
+          code: 'P2002',
+          clientVersion: 'test',
+        }),
+      );
+
+    const result = await service.settlePeriod(MARCH_START);
+
+    expect(result.poolsSettled).toBe(0);
+    // Only one increment was attempted before the rollback.
+    expect(tx.wallet.update).toHaveBeenCalledTimes(1);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('RoyaltySettlementService: the money path', () => {
   it('claims the pool before writing anything', async () => {
     const { tx, service } = setup({ pools: [pool()] });

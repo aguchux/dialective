@@ -177,7 +177,30 @@ export function adminActionContextHash(
     // silently resume creating withdrawal liabilities.
     | { action: 'training-economy-toggle'; direction: 'enable' | 'disable' }
     | { action: 'vdcl-payout-suppression-toggle'; direction: 'enable' | 'disable' }
+    // Switching Stream revenue sharing on or off, and leaving or re-entering
+    // shadow mode. Direction-bound for the same reason as the toggles above: a
+    // code issued to STOP settlement must not be replayable to start it.
+    //
+    // royalty-shadow-mode is the higher-stakes of the two -- disabling shadow
+    // mode is the moment royalty settlement begins crediting real balances.
+    | { action: 'royalties-enabled-toggle'; direction: 'enable' | 'disable' }
+    | { action: 'royalty-shadow-mode-toggle'; direction: 'enable' | 'disable' }
+    // Scheduling a contributor share-rate change. Binds the RATE and the period
+    // it takes effect from, so a code issued for one rate cannot schedule a
+    // different one, and a code cannot be held and replayed into a later period.
+    | { action: 'royalty-rate-schedule'; sharePercent: number; effectiveFrom: string }
     | { action: 'phone-verification-revoke'; userId: string }
+    // Resolving a royalty payout. Binds the OUTCOME as well as the request,
+    // because on this rail the two directions are not symmetric: the DL was
+    // already debited when the contributor requested it, so `paid` only flips a
+    // status while `rejected` CREDITS DL back into royaltyBalance. A code issued
+    // to reject must not be replayable to mark paid, and vice versa.
+    | {
+        action: 'royalty-withdrawal-resolve';
+        id: string;
+        tokenAmount: number;
+        outcome: 'paid' | 'rejected';
+      }
     // Countersigning a VDCL grants commercial rights over a real person's
     // voice, which is why it joins the step-up set. It binds the MANIFEST
     // HASH, not just the version id: an admin confirming a licence over
