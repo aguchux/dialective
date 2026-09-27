@@ -658,12 +658,12 @@ stopping payouts.
 | **2** ✅ | `SubscriptionPayment` + `invoice.payment_succeeded` / refund handlers | Records money; moves none |
 | **3** ✅ | Usage aggregation → `RecordingUsagePeriod`; live estimates | None |
 | **4** ✅ | Pool computation in **shadow mode** (`settledAt: null`, no mint) + `RoyaltyRatePeriod` schedule | None |
-| **5** | `royaltyBalance` column + the five integration fixes in §6.1 | Column exists, unused |
+| **5** ✅ | `royaltyBalance` column + the five integration fixes in §6.1 | Column exists, unused |
 | **6** | Accrual settlement: reserve inflow + mint + ledger + credit, plus refund reversal (§5.5) | **Money.** Gated off |
 | **7** | Royalty withdrawal (own model, existing rails, KYC + OTP) | **Money.** Gated off |
 | **8** | Contributor dashboard: accrued vs estimated | None |
 
-**Shipped:** 0 through 4 are built, deployed and migrated (see git history from
+**Shipped:** 0 through 5 are built, deployed and migrated (see git history from
 `64fa907d`). Phase 1 made 9,861 domain-conversation recordings across 939
 contributors licensable for the first time; Phase 2 records money received but
 moves none. Nothing is contributor-visible yet: VDCL remains gated off.
@@ -700,10 +700,42 @@ discovered or streamed, so no royalty design can pay for them.
 **Phase 4 must run a full period before Phase 6.** Non-negotiable: the split
 rule has never seen real traffic.
 
-**Phase 5's audit fixes are prerequisites for Phase 6, not follow-ups.** In
-particular the reversal path (§6.1a) and the supply invariant (§6.1b) — shipping
-6 without them means royalty DL can become spendable, and total supply
-under-reports. Neither is acceptable with money attached.
+**Phase 5's audit fixes shipped with the column, as required.** All five
+landed, and each was re-verified against live code first rather than trusted
+from the original audit:
+
+- **(a) the laundering path** is closed by `WithdrawalRequest.royaltyFundedAmount`
+  plus one shared `planWithdrawalReversal` helper, used by BOTH reversal sites
+  (the admin reject in `wallet.controller.ts` and the auto-reject on account
+  lock in `auth.service.ts`). Each funding source returns to the column it came
+  from. An ordinary withdrawal — every row that exists today, split 0 — plans
+  exactly the single `WITHDRAWAL_REVERSED` write it always did, so this is a
+  no-op for existing behaviour on a live money path.
+- **(b) supply accounting** now counts `royaltyBalance` in both `totalMinted`
+  and `redeemable`, and the aggregate query selects the column. A test asserts
+  the query shape, because `?? 0` absorbs an absent key — the omission was
+  invisible precisely because every other assertion still passed. Another test
+  pins the direction: the same reserve against a larger liability must report
+  LOWER coverage. The function's doc comment claimed deriving from `Wallet`
+  made drift "structurally impossible"; this bug disproved it, and the comment
+  now says so — columns are still enumerated by hand.
+- **(c) the two unfiltered sums** filter on a shared
+  `ROYALTY_LEDGER_ENTRY_TYPES` denylist (distributor totals) and render in a
+  dedicated `royalty` bucket (proof-account PDF), disclaimed as "NOT part of
+  the available balance". A test asserts the denylist matches every
+  `ROYALTY_*` value in the enum, so a fifth type cannot silently rejoin the
+  totals. The proof-account **narrative needed no change**: "total earned"
+  builds from `LIFETIME_CREDIT_ENTRY_TYPES`, an allowlist, so `ROYALTY_ACCRUAL`
+  was excluded by construction — which is the pattern to prefer.
+- **(d) withdrawable display** reports `royaltyWithdrawableTokens` separately,
+  never summed. `minWalletBalanceTokens` is deliberately NOT deducted from it:
+  that floor exists to keep a working balance available for task stakes, and
+  royalty DL can never fund a stake.
+- **(e) admin totals** gained `totalRoyaltyTokens`, on its own line rather than
+  folded into `totalWalletBalance`.
+
+Each of (a), (b) and (d) was mutation-tested — the behaviour reverted, the
+specific test confirmed failing.
 
 **Phase 6's open questions are now answered** (§5.4 rate changes, §5.5
 chargebacks). What remains before it is *enabled* -- not merely written -- is the

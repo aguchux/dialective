@@ -31,9 +31,25 @@ const HELD_TEXT = '#8a5a0f';
  * no total ever mixes the two, and 'purchase' keeps marketplace spending (real
  * spending, but not a fee either) out of the fee total as well.
  */
-type Bucket = 'earned' | 'held' | 'paidout' | 'fee' | 'purchase' | 'other';
+type Bucket = 'earned' | 'held' | 'paidout' | 'fee' | 'purchase' | 'royalty' | 'other';
 
 const TYPE_INFO: Record<string, { label: string; bucket: Bucket; note?: string }> = {
+  // Royalty entries move Wallet.royaltyBalance, not Wallet.balance, so they get
+  // their own bucket and their own clearly-separated section. Folding them into
+  // 'earned' would break the reconciliation this whole document exists to
+  // demonstrate: every other section sums toward the available balance, and
+  // these never touched it. See docs/Stream-Revenue-Sharing-Engine.md 6.1(c).
+  ROYALTY_ACCRUAL: {
+    label: 'Stream royalty earned',
+    bucket: 'royalty',
+    note: 'Held separately; withdraw-only',
+  },
+  ROYALTY_WITHDRAWAL: { label: 'Stream royalty withdrawn', bucket: 'royalty' },
+  ROYALTY_WITHDRAWAL_REVERSED: {
+    label: 'Stream royalty withdrawal returned',
+    bucket: 'royalty',
+  },
+  ROYALTY_ADJUSTMENT: { label: 'Stream royalty adjustment', bucket: 'royalty' },
   TRAINING_PAYOUT: { label: 'Training payout', bucket: 'earned', note: 'Paid for a scored task' },
   COURSE_COMPLETION_REWARD: { label: 'Course completed', bucket: 'earned' },
   TESTIMONY_APPROVED_REWARD: { label: 'Testimony approved', bucket: 'earned' },
@@ -414,6 +430,12 @@ export function renderProofAccountPdf(
         title: 'Fees charged by the platform',
         color: DEBIT,
         hint: 'The only category the platform charged you. Everything else above is your own money',
+      },
+      {
+        bucket: 'royalty',
+        title: 'Stream royalties (separate balance)',
+        color: MUTED,
+        hint: 'Held in a separate withdraw-only balance. These are NOT part of the available balance above',
       },
       { bucket: 'other', title: 'Other activity', color: MUTED, hint: '' },
     ];

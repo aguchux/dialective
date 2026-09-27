@@ -46,6 +46,7 @@ import { adminActionContextHash } from '../wallet/otp-context.util';
 import { generateOtpCode, hashOtpCode, resolveOtpDestination } from '../otp/otp.util';
 import { isOnAuditHold } from '../common/audit-hold.util';
 import { trainerRatingValue } from '../common/trainer-rating.util';
+import { planWithdrawalReversal } from '../wallet/withdrawal-reversal.util';
 
 const SMSLIVE247_NATIVE_OTP_REQUEST_ID = 'smslive247-native';
 
@@ -1974,6 +1975,11 @@ export class AuthService {
         },
       });
       for (const withdrawal of openWithdrawals) {
+        // Same routing rule as the admin reject in wallet.controller.ts: each
+        // funding source returns to the column it came from, so locking an
+        // account cannot convert a pending royalty withdrawal into spendable
+        // DL. See planWithdrawalReversal.
+        const reversals = planWithdrawalReversal(withdrawal);
         await this.prisma.$transaction([
           this.prisma.withdrawalRequest.update({
             where: { id: withdrawal.id },
@@ -1983,18 +1989,20 @@ export class AuthService {
               adminNote: 'Auto-rejected: account locked by admin',
             },
           }),
-          this.prisma.ledgerEntry.create({
-            data: {
-              walletId: withdrawal.walletId,
-              type: 'WITHDRAWAL_REVERSED',
-              amount: withdrawal.tokenAmount,
-              reference: withdrawal.id,
-            },
-          }),
-          this.prisma.wallet.update({
-            where: { id: withdrawal.walletId },
-            data: { balance: { increment: withdrawal.tokenAmount } },
-          }),
+          ...reversals.flatMap((reversal) => [
+            this.prisma.ledgerEntry.create({
+              data: {
+                walletId: withdrawal.walletId,
+                type: reversal.type,
+                amount: reversal.amount,
+                reference: withdrawal.id,
+              },
+            }),
+            this.prisma.wallet.update({
+              where: { id: withdrawal.walletId },
+              data: { [reversal.column]: { increment: reversal.amount } },
+            }),
+          ]),
         ]);
       }
     }

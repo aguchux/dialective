@@ -17,6 +17,7 @@ import {
   CreateDistributorAllocationDto,
   UpdateDistributorSettingsDto,
 } from './dto/distributor.dto';
+import { ROYALTY_LEDGER_ENTRY_TYPES } from '../wallet/royalty-ledger-types.const';
 
 const { Decimal } = Prisma;
 
@@ -209,7 +210,14 @@ export class DistributorsService {
       .filter((id): id is string => Boolean(id));
     const entries = walletIds.length
       ? await this.prisma.ledgerEntry.findMany({
-          where: { walletId: { in: walletIds } },
+          // Royalty entries move Wallet.royaltyBalance, never balance, so
+          // including them would inflate these credit/debit totals against the
+          // tokenBalance shown beside them -- see 6.1(c) of the revenue-sharing
+          // design and ROYALTY_LEDGER_ENTRY_TYPES.
+          where: {
+            walletId: { in: walletIds },
+            type: { notIn: ROYALTY_LEDGER_ENTRY_TYPES },
+          },
           select: { walletId: true, amount: true },
         })
       : [];
@@ -468,7 +476,14 @@ export class DistributorsService {
       .filter((id): id is string => Boolean(id));
     const entries = walletIds.length
       ? await this.prisma.ledgerEntry.findMany({
-          where: { walletId: { in: walletIds } },
+          // Royalty entries move Wallet.royaltyBalance, never balance, so
+          // including them would inflate these credit/debit totals against the
+          // tokenBalance shown beside them -- see 6.1(c) of the revenue-sharing
+          // design and ROYALTY_LEDGER_ENTRY_TYPES.
+          where: {
+            walletId: { in: walletIds },
+            type: { notIn: ROYALTY_LEDGER_ENTRY_TYPES },
+          },
           select: { walletId: true, amount: true },
         })
       : [];

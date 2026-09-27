@@ -131,6 +131,54 @@ describe('renderProofAccountPdf fee wording', () => {
     expect(text).toContain('no platform fees at all');
   });
 
+  // Royalty entries move Wallet.royaltyBalance, not Wallet.balance. This whole
+  // document exists to reconcile "total earned" against "available balance", so
+  // folding in a credit that never reached that balance would break exactly the
+  // claim it makes -- see docs/Stream-Revenue-Sharing-Engine.md 6.1(c).
+  it('shows stream royalties in their own section, disclaimed as separate', async () => {
+    const text = await render([
+      ...REAL_ACCOUNT_TOTALS,
+      { type: 'ROYALTY_ACCRUAL', count: 3, totalAmount: '500' },
+    ]);
+
+    expect(text).toContain('Stream royalties (separate balance)');
+    expect(text).toContain('Stream royalty earned');
+    expect(text).toContain(
+      'Held in a separate withdraw-only balance. These are NOT part of the available balance above',
+    );
+  });
+
+  it('does not let a royalty accrual inflate the platform fee total', async () => {
+    const withRoyalty = await render([
+      ...REAL_ACCOUNT_TOTALS,
+      { type: 'ROYALTY_ACCRUAL', count: 3, totalAmount: '500' },
+    ]);
+
+    // The fee total is bucket-scoped, so a 500 DL royalty must leave it at the
+    // same 1 DL the account actually paid.
+    expect(withRoyalty).toContain(
+      'Total fees charged by the platform, for the entire life of this account: 1 DL.',
+    );
+  });
+
+  it('does not file a royalty accrual as earnings a member can spend', async () => {
+    const text = await render([
+      ...REAL_ACCOUNT_TOTALS,
+      { type: 'ROYALTY_ACCRUAL', count: 1, totalAmount: '500' },
+    ]);
+
+    // It must not land in "Earned", which is the section that sums toward the
+    // spendable balance, nor drop into the unlabelled "Other activity" catch-all
+    // where a reader has no way to tell it apart.
+    const royaltyIndex = text.indexOf('Stream royalty earned');
+    const earnedIndex = text.indexOf('New value added to the lifetime total');
+    const separateIndex = text.indexOf('Stream royalties (separate balance)');
+    expect(royaltyIndex).toBeGreaterThan(-1);
+    expect(royaltyIndex).toBeGreaterThan(earnedIndex);
+    expect(royaltyIndex).toBeGreaterThan(separateIndex);
+    expect(text).not.toContain('royalty accrual');
+  });
+
   it('does not count an admin correction as a platform fee', async () => {
     const text = await render([
       ...REAL_ACCOUNT_TOTALS.filter((r) => r.type !== 'PHONE_VERIFICATION_FEE'),

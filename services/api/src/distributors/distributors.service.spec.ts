@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@dialectiva/db';
 import { DistributorsService } from './distributors.service';
+import { ROYALTY_LEDGER_ENTRY_TYPES } from '../wallet/royalty-ledger-types.const';
 
 const { Decimal } = Prisma;
 
@@ -419,9 +420,37 @@ describe('DistributorsService.listAdmin', () => {
     ]);
     // Wallet-less distributor never gets pulled into the walletId IN (...) query.
     expect(prisma.ledgerEntry.findMany).toHaveBeenCalledWith({
-      where: { walletId: { in: ['w1'] } },
+      where: {
+        walletId: { in: ['w1'] },
+        type: { notIn: ROYALTY_LEDGER_ENTRY_TYPES },
+      },
       select: { walletId: true, amount: true },
     });
+  });
+
+  it('excludes royalty entries, which never touched the balance shown beside them', async () => {
+    // These totals sit next to tokenBalance, which is Wallet.balance. A
+    // ROYALTY_ACCRUAL moves Wallet.royaltyBalance instead, so counting it here
+    // would show a credit total the balance cannot account for -- see
+    // docs/Stream-Revenue-Sharing-Engine.md 6.1(c).
+    const { service, prisma } = setup();
+    prisma.user.findMany.mockResolvedValue([
+      {
+        id: 'd1',
+        firstName: 'Ada',
+        lastName: null,
+        email: 'ada@x.com',
+        status: 'ACTIVE',
+        createdAt: new Date(),
+        wallet: { id: 'w1', balance: new Decimal('120'), lockedBalance: new Decimal('0') },
+      },
+    ]);
+
+    await service.listAdmin();
+
+    const where = prisma.ledgerEntry.findMany.mock.calls[0][0].where;
+    expect(where.type.notIn).toContain('ROYALTY_ACCRUAL');
+    expect(where.type.notIn).toContain('ROYALTY_WITHDRAWAL');
   });
 });
 

@@ -177,7 +177,9 @@ export class TokenomicsService {
       this.prisma.tokenAccount.findMany({
         select: { kind: true, available: true, locked: true },
       }),
-      this.prisma.wallet.aggregate({ _sum: { balance: true, lockedBalance: true } }),
+      this.prisma.wallet.aggregate({
+        _sum: { balance: true, lockedBalance: true, royaltyBalance: true },
+      }),
       this.prisma.valuationSnapshot.findFirst({ orderBy: { createdAt: 'desc' } }),
     ]);
     const supply = summarizeSupply(accounts, walletTotals);
@@ -604,15 +606,28 @@ export class TokenomicsService {
  * Deriving from Wallet rather than backfilling the mirror is deliberate. A
  * backfill fixes today's number and then drifts again the moment any new
  * credit path forgets to mint -- which is exactly how this happened. Reading
- * the authoritative balance makes that class of bug structurally impossible
- * instead of merely corrected.
+ * the authoritative balance removes that class of bug.
+ *
+ * It does NOT make drift structurally impossible, and an earlier version of
+ * this comment overstated it: the columns are still enumerated by hand below,
+ * so a NEW balance column is silently omitted until someone adds it here. That
+ * is precisely what happened when royaltyBalance landed
+ * (docs/Stream-Revenue-Sharing-Engine.md 6.1(b)) -- it was real minted DL
+ * missing from totalMinted and redeemable, which inflates the coverage ratio.
+ * Adding a balance column to Wallet means adding it here in the same change.
  *
  * TREASURY/BURN accounts have no Wallet counterpart and keep coming from
  * TokenAccount, which is the right source for them.
  */
 function summarizeSupply(
   accounts: Array<{ kind: TokenAccountKind; available: Prisma.Decimal; locked: Prisma.Decimal }>,
-  walletTotals: { _sum: { balance: Prisma.Decimal | null; lockedBalance: Prisma.Decimal | null } },
+  walletTotals: {
+    _sum: {
+      balance: Prisma.Decimal | null;
+      lockedBalance: Prisma.Decimal | null;
+      royaltyBalance: Prisma.Decimal | null;
+    };
+  },
 ) {
   let treasury = 0;
   let burned = 0;
@@ -626,14 +641,24 @@ function summarizeSupply(
 
   const circulating = walletTotals._sum.balance?.toNumber() ?? 0;
   const locked = walletTotals._sum.lockedBalance?.toNumber() ?? 0;
+  // Royalty DL is real minted DL held by a real user. Omitting it makes
+  // totalMinted understate issued supply and redeemable understate platform
+  // liability, which directly inflates the coverage ratio the reserve engine
+  // exists to keep honest -- see docs/Stream-Revenue-Sharing-Engine.md 6.1(b).
+  //
+  // It counts toward redeemable because it IS redeemable: withdraw-only still
+  // means withdrawable, and a liability the platform owes is a liability
+  // whichever column holds it.
+  const royalty = walletTotals._sum.royaltyBalance?.toNumber() ?? 0;
 
   return {
-    totalMinted: circulating + treasury + locked + burned,
+    totalMinted: circulating + treasury + locked + burned + royalty,
     circulating,
     treasury,
     locked,
     burned,
-    redeemable: circulating + locked,
+    royalty,
+    redeemable: circulating + locked + royalty,
   };
 }
 

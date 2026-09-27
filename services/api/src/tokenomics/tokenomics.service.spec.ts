@@ -222,6 +222,82 @@ describe('TokenomicsService', () => {
       expect(status.supply.redeemable).toBe(1000);
     });
 
+    // Royalty DL is real minted DL held by a real user. Omitting it understates
+    // both issued supply and platform liability, and since redeemable is the
+    // denominator of coverageRatio and the published DL value, the omission
+    // makes reserve coverage look healthier than it is -- the same failure mode
+    // as the TokenAccount-mirror bug above, one column later. See
+    // docs/Stream-Revenue-Sharing-Engine.md 6.1(b).
+    it('counts royaltyBalance in both totalMinted and redeemable', async () => {
+      const prisma = makeStatusHarness();
+      prisma.wallet.aggregate.mockResolvedValue({
+        _sum: {
+          balance: new Prisma.Decimal(900),
+          lockedBalance: new Prisma.Decimal(100),
+          royaltyBalance: new Prisma.Decimal(250),
+        },
+      });
+      const settings = { getTokenUsdRate: jest.fn().mockResolvedValue(0.1) };
+      const service = new TokenomicsService(prisma as never, settings as never);
+
+      const status = await service.getStatus();
+
+      expect(status.supply.royalty).toBe(250);
+      expect(status.supply.redeemable).toBe(1250);
+      expect(status.supply.totalMinted).toBe(1250);
+    });
+
+    it('asks the database for royaltyBalance at all', async () => {
+      // The omission this fixes was invisible because `?? 0` absorbs an absent
+      // key: a query that never selects the column reports zero royalty supply
+      // forever, with every assertion above still passing.
+      const prisma = makeStatusHarness();
+      const settings = { getTokenUsdRate: jest.fn().mockResolvedValue(0.1) };
+      const service = new TokenomicsService(prisma as never, settings as never);
+
+      await service.getStatus();
+
+      expect(prisma.wallet.aggregate).toHaveBeenCalledWith({
+        _sum: { balance: true, lockedBalance: true, royaltyBalance: true },
+      });
+    });
+
+    it('deflates the coverage ratio once royalties exist, never inflates it', async () => {
+      // The consequence in one number: the same reserve against a larger
+      // liability must report LOWER coverage, not the same.
+      const reserve = [{ balanceUsd: new Prisma.Decimal(100), fetchedAt: new Date(), provider: 'f', currency: 'USD', balanceRaw: new Prisma.Decimal(100) }];
+      const withoutRoyalty = makeStatusHarness();
+      withoutRoyalty.reserveBalanceSnapshot.findMany.mockResolvedValue(reserve);
+      withoutRoyalty.wallet.aggregate.mockResolvedValue({
+        _sum: {
+          balance: new Prisma.Decimal(1000),
+          lockedBalance: new Prisma.Decimal(0),
+          royaltyBalance: new Prisma.Decimal(0),
+        },
+      });
+      const withRoyalty = makeStatusHarness();
+      withRoyalty.reserveBalanceSnapshot.findMany.mockResolvedValue(reserve);
+      withRoyalty.wallet.aggregate.mockResolvedValue({
+        _sum: {
+          balance: new Prisma.Decimal(1000),
+          lockedBalance: new Prisma.Decimal(0),
+          royaltyBalance: new Prisma.Decimal(1000),
+        },
+      });
+      const settings = { getTokenUsdRate: jest.fn().mockResolvedValue(0.1) };
+
+      const before = await new TokenomicsService(
+        withoutRoyalty as never,
+        settings as never,
+      ).getStatus();
+      const after = await new TokenomicsService(
+        withRoyalty as never,
+        settings as never,
+      ).getStatus();
+
+      expect(after.coverageRatio).toBeLessThan(before.coverageRatio!);
+    });
+
     it('still counts TREASURY and BURN from TokenAccount, which have no wallet', async () => {
       const prisma = makeStatusHarness();
       prisma.wallet.aggregate.mockResolvedValue({

@@ -682,7 +682,10 @@ describe('WalletController Flutterwave webhook', () => {
 });
 
 describe('WalletController withdrawal payout automation', () => {
-  const decimal = (value: number) => ({ toNumber: () => value, toString: () => String(value) });
+  // A real Prisma.Decimal, not a toNumber/toString stub: code under test does
+  // real arithmetic on these (planWithdrawalReversal compares and subtracts),
+  // and a stub that only stringifies passes right up until it does.
+  const decimal = (value: number) => new Prisma.Decimal(value);
 
   function baseWithdrawal(overrides: Record<string, unknown> = {}) {
     return {
@@ -1211,7 +1214,10 @@ describe('WalletController withdrawal payout automation', () => {
 });
 
 describe('WalletController Flutterwave payout submission', () => {
-  const decimal = (value: number) => ({ toNumber: () => value, toString: () => String(value) });
+  // A real Prisma.Decimal, not a toNumber/toString stub: code under test does
+  // real arithmetic on these (planWithdrawalReversal compares and subtracts),
+  // and a stub that only stringifies passes right up until it does.
+  const decimal = (value: number) => new Prisma.Decimal(value);
 
   beforeEach(() => {
     process.env.PAYOUT_ACCOUNT_ENCRYPTION_KEY = 'test-payout-encryption-key';
@@ -2800,6 +2806,7 @@ describe('WalletController.getTrainerDashboard', () => {
             id: 'wallet-1',
             balance: { toString: () => '15.0097', toNumber: () => 15.0097 },
             lockedBalance: { toString: () => '1.8', toNumber: () => 1.8 },
+            royaltyBalance: { toString: () => '500', toNumber: () => 500 },
           }),
       },
       referralSettings: {
@@ -2867,5 +2874,16 @@ describe('WalletController.getTrainerDashboard', () => {
     );
     expect(trainerReport.getTotalTokensSinceJoin).toHaveBeenCalledWith('user-1');
     expect(trainerReport.getOtherCreditsSinceJoin).toHaveBeenCalledWith('user-1');
+
+    // Royalty withdrawable is reported SEPARATELY and never summed into the
+    // spendable figure. Royalties withdraw by their own path with their own
+    // gating, and section 8 forbids spending across both columns in one
+    // request -- so a combined number would promise an amount no single request
+    // can move. The 500 DL royalty balance must leave the spendable figure
+    // derived from balance (15.0097) alone. See 6.1(d).
+    expect(result.royaltyWithdrawableTokens).toBe('500');
+    expect(result.royaltyBalance).toBe('500');
+    expect(Number(result.withdrawableBalanceTokens)).toBeLessThanOrEqual(15.0097);
   });
+
 });

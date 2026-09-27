@@ -78,6 +78,7 @@ function maskWithdrawalReviewPhone(phoneNumber: string | null): string | null {
 }
 import { GetEarningsChartDto } from './dto/get-earnings-chart.dto';
 import { GetWithdrawalMinAmountDto } from './dto/get-withdrawal-min-amount.dto';
+import { planWithdrawalReversal } from './withdrawal-reversal.util';
 import { ListWithdrawalsAdminDto } from './dto/list-withdrawals-admin.dto';
 import { BulkResolveWithdrawalsDto } from './dto/bulk-resolve-withdrawals.dto';
 import { GetTrainerReportDto } from './dto/get-trainer-report.dto';
@@ -578,6 +579,19 @@ export class WalletController {
         wallet.balance.toNumber() - minWalletBalanceTokens,
         0,
       ).toString(),
+      // Reported SEPARATELY, deliberately not summed into the figure above.
+      // Royalties withdraw by their own path with their own gating and their
+      // own minimum, so one combined "withdrawable" number would tell a
+      // contributor they can withdraw an amount that no single request can
+      // actually move -- see docs/Stream-Revenue-Sharing-Engine.md 6.1(d)
+      // and section 8 (one column per request, so the balance guard stays a
+      // single atomic updateMany).
+      //
+      // minWalletBalanceTokens is not deducted here: that floor exists to keep
+      // a working balance available for task stakes, and royalty DL can never
+      // fund a stake.
+      royaltyBalance: wallet.royaltyBalance.toString(),
+      royaltyWithdrawableTokens: wallet.royaltyBalance.toString(),
       localCurrency: dashboardLocalCurrency,
       balanceInLocalCurrency: dashboardLocalCurrency
         ? tokensToLocalCurrency(
@@ -4065,20 +4079,29 @@ export class WalletController {
           'This withdrawal was updated by someone else -- reload and try again',
         );
       }
-      await this.prisma.$transaction([
-        this.prisma.ledgerEntry.create({
-          data: {
-            walletId: withdrawal.walletId,
-            type: 'WITHDRAWAL_REVERSED',
-            amount: withdrawal.tokenAmount,
-            reference: withdrawal.id,
-          },
-        }),
-        this.prisma.wallet.update({
-          where: { id: withdrawal.walletId },
-          data: { balance: { increment: withdrawal.tokenAmount } },
-        }),
-      ]);
+      // Each funding source returns to the column it came from. A royalty
+      // withdrawal credited back to `balance` would turn withdraw-only
+      // earnings into spendable, P2P-tradeable DL -- see
+      // planWithdrawalReversal and docs/Stream-Revenue-Sharing-Engine.md
+      // 6.1(a). An ordinary withdrawal plans exactly the single
+      // WITHDRAWAL_REVERSED write it always did.
+      const reversals = planWithdrawalReversal(withdrawal);
+      await this.prisma.$transaction(
+        reversals.flatMap((reversal) => [
+          this.prisma.ledgerEntry.create({
+            data: {
+              walletId: withdrawal.walletId,
+              type: reversal.type,
+              amount: reversal.amount,
+              reference: withdrawal.id,
+            },
+          }),
+          this.prisma.wallet.update({
+            where: { id: withdrawal.walletId },
+            data: { [reversal.column]: { increment: reversal.amount } },
+          }),
+        ]),
+      );
       void this.notifyWithdrawalOwnerSmsSafe(
         withdrawal.walletId,
         () => this.platformSettings.isWalletSmsWithdrawalRejectedEnabled(),
@@ -4506,7 +4529,9 @@ export class WalletController {
       this.prisma.wordRecording.count({ where: { status: SubmissionStatus.SCORED } }),
       this.prisma.wordRecording.count({ where: { status: SubmissionStatus.SETTLED } }),
       this.prisma.wallet.count(),
-      this.prisma.wallet.aggregate({ _sum: { balance: true, lockedBalance: true } }),
+      this.prisma.wallet.aggregate({
+        _sum: { balance: true, lockedBalance: true, royaltyBalance: true },
+      }),
       this.prisma.deposit.aggregate({
         where: { status: 'confirmed' },
         _sum: { usdAmount: true, tokenAmount: true },
@@ -4590,6 +4615,11 @@ export class WalletController {
       walletsCount,
       totalWalletBalance: walletAgg._sum.balance?.toString() ?? '0',
       totalLockedTokens: walletAgg._sum.lockedBalance?.toString() ?? '0',
+      // Without this the admin dashboard's wallet totals stop summing to issued
+      // supply the moment a royalty settles -- see 6.1(e). Its own line rather
+      // than folded into totalWalletBalance, because the two are held in
+      // different columns with different spendability.
+      totalRoyaltyTokens: walletAgg._sum.royaltyBalance?.toString() ?? '0',
       totalDepositsUsd: depositAgg._sum.usdAmount?.toString() ?? '0',
       totalTokensFunded: depositAgg._sum.tokenAmount?.toString() ?? '0',
       pendingDeposits,

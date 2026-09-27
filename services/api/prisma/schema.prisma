@@ -2065,6 +2065,17 @@ enum LedgerEntryType {
   P2P_ESCROW_REFUND
   P2P_ESCROW_RELEASE
   P2P_ESCROW_CREDIT
+  // Stream revenue sharing. These move Wallet.royaltyBalance, never
+  // Wallet.balance -- see docs/Stream-Revenue-Sharing-Engine.md 6.2.
+  //
+  // Deliberately in the SAME ledger table as everything else: one honest
+  // record per wallet beats two places to look for the truth. The cost is
+  // that every unfiltered sum over LedgerEntry now has a type it did not
+  // account for, which is why 6.1(c) exists.
+  ROYALTY_ACCRUAL // +, credits royaltyBalance when a pool settles
+  ROYALTY_WITHDRAWAL // -, debits royaltyBalance when a payout is requested
+  ROYALTY_WITHDRAWAL_REVERSED // +, returns a REJECTED payout to royaltyBalance -- never to balance
+  ROYALTY_ADJUSTMENT // signed admin/compensating correction against royaltyBalance (e.g. chargeback recovery, 5.5)
   // Reverses the BONUS portion only of a TRAINING_PAYOUT after enough
   // distinct peer validators independently flagged the recording NO_AUDIO
   // -- always negative. The trainer's original stake (WordRecording
@@ -2364,6 +2375,23 @@ model Wallet {
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   balance       Decimal  @default(0) @db.Decimal(20, 8) // spendable
   lockedBalance Decimal  @default(0) @db.Decimal(20, 8) // held pending a submission/recording's outcome -- see TASK_LOCK/TASK_REFUND
+  /// Stream revenue-sharing earnings. WITHDRAW-ONLY, and deliberately a
+  /// separate column rather than a flag on `balance`.
+  ///
+  /// Never a task stake, never P2P escrow, never a distributor allocation. An
+  /// audit of every balance write (docs/Stream-Revenue-Sharing-Engine.md 6.1)
+  /// found that every stake and escrow path guards on `balance >= amount` and
+  /// moves only balance/lockedBalance -- so a separate column is non-stakeable
+  /// and non-escrowable BY CONSTRUCTION, with no changes to p2p.service.ts,
+  /// words.service.ts or domain-conversations.service.ts.
+  ///
+  /// Credited only by royalty settlement (ROYALTY_ACCRUAL), debited only by
+  /// royalty withdrawal (ROYALTY_WITHDRAWAL), and restored only to ITSELF on a
+  /// rejected payout (ROYALTY_WITHDRAWAL_REVERSED). That last one is the
+  /// non-obvious half: the ordinary reversal path credits `balance`, so a
+  /// rejected royalty payout returning there would quietly make royalty DL
+  /// spendable and P2P-tradeable -- see WithdrawalRequest.royaltyFundedAmount.
+  royaltyBalance Decimal @default(0) @db.Decimal(20, 8)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -2505,6 +2533,22 @@ model WithdrawalRequest {
   adminNote             String?
   createdAt             DateTime         @default(now())
   resolvedAt            DateTime?
+
+  /// How much of `tokenAmount` was funded from Wallet.royaltyBalance rather
+  /// than Wallet.balance.
+  ///
+  /// Persisted at request time so a REJECTION can return each portion to the
+  /// column it came from. Without it the reversal path credits `balance`
+  /// unconditionally, and a rejected royalty payout would come back as
+  /// SPENDABLE DL -- laundering withdraw-only earnings into P2P-tradeable
+  /// balance through the back door. That is the hole 6.1(a) identifies as the
+  /// single most important correctness item in the design.
+  ///
+  /// 0 for every ordinary withdrawal, which is every row that exists today.
+  /// A royalty withdrawal (Phase 7) sets it equal to tokenAmount: 5.8 forbids
+  /// spending across both columns in one request, because that cannot be
+  /// expressed as one atomic updateMany guard.
+  royaltyFundedAmount Decimal @default(0) @db.Decimal(20, 8)
 
   // Fiat rail (Flutterwave) -- payoutMethod disambiguates which
   // destination-column group below is authoritative for this row; CRYPTO
