@@ -1,0 +1,67 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: royalty-pools
+spec:
+  # 06:00 UTC on the 2nd of each month -- three hours after usage-aggregation,
+  # on the same closed period.
+  #
+  # The gap is deliberate. This job re-aggregates the period itself before
+  # computing pools (aggregation is recompute-and-replace, so doing it twice is
+  # free), which means it does not depend on the earlier job having succeeded.
+  # But running them apart keeps the two failures distinguishable in the job
+  # history: "aggregation is broken" and "pooling is broken" are different
+  # problems with different fixes.
+  #
+  # SHADOW MODE. Every pool this writes carries settledAt NULL -- computed,
+  # frozen, allocated, paying nobody. It mints no DL, credits no balance and
+  # writes no ledger row. royaltiesEnabled is false in production, so today it
+  # does nothing at all beyond confirming the graph resolves.
+  schedule: '0 6 2 * *'
+  # Forbid: two concurrent runs over one period would race on pool creation.
+  # The unique constraint on RoyaltyPool.paymentId makes that safe rather than
+  # duplicating, but a race is still not something to schedule on purpose.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: royalty-pools
+              image: golojan/dialect-api:latest
+              command: ['node', 'dist/royalty-pools.js']
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-creds
+                      key: connection_string
+                # Booting AppModule starts this repo's Redis Streams consumers,
+                # which this job does not use but which connect anyway. Without
+                # the password they emit a dozen NOAUTH errors per run -- noise
+                # that would mask a real failure in the job's own output.
+                - name: REDIS_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: redis-auth
+                      key: password
+
+              # Explicit sizing so this is Burstable, not BestEffort -- an
+              # unsized container is the first thing the kernel OOM-kills under
+              # node memory pressure, and this node pool is shared with the
+              # unrelated `bitocard` namespace. See api-deployment.yaml for the
+              # incident this came from.
+              #
+              # Same sizing as usage-aggregation, which it runs internally: that
+              # pass is the memory-heavy half, holding a period of grouped
+              # buckets before writing.
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 384Mi
+                limits:
+                  memory: 768Mi

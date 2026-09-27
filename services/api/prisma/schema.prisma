@@ -250,6 +250,7 @@ model User {
   vdclAgreements                    VdclAgreement[]                  @relation("VdclContributor")
   vdclSignatureEvents               VdclSignatureEvent[]             @relation("VdclSignatureActor")
   contributorDecks                  ContributorDeck[]                @relation("ContributorDeckOwner")
+  royaltyAccruals                   RoyaltyAccrual[]                 @relation("RoyaltyAccrualContributor")
   kycVerifications                  KycVerification[]
   kycPeerReviews                    KycPeerReview[]                  @relation("KycPeerReviewer")
   kycPeerReviewClaims               KycPeerReviewClaim[]             @relation("KycPeerReviewClaimant")
@@ -3139,6 +3140,32 @@ model PlatformSettings {
   /// real gate. Until then the audio checks already stop unlicensed data
   /// leaving; this only stops advertising it.
   vdclCatalogueCoverageFilterEnabled         Boolean   @default(false)
+  /// Master switch for Stream revenue sharing. Off means no usage
+  /// aggregation, no pool computation and no accrual whatsoever.
+  ///
+  /// Separate from royaltyShadowMode below: this one decides whether the
+  /// engine runs at all, that one decides whether what it computes moves
+  /// money. Off is the safe default while nothing contributor-facing exists.
+  royaltiesEnabled                           Boolean   @default(false)
+  /// Whether pool computation stops short of minting.
+  ///
+  /// True means pools are computed and written with settledAt null: every
+  /// input frozen, every share allocated, nothing minted and no balance
+  /// credited. This is how the split rule earns the right to handle money --
+  /// docs/Stream-Revenue-Sharing-Engine.md 7 requires at least one full
+  /// period of real traffic through it first.
+  ///
+  /// Defaults TRUE, and leaving it is the moment money starts moving, so it
+  /// is OTP-guarded exactly as the payout switches are.
+  royaltyShadowMode                          Boolean   @default(true)
+  /// The contributor share of collected subscription revenue, as a percentage.
+  ///
+  /// Settlement NEVER reads this value. Writing it schedules a
+  /// RoyaltyRatePeriod effective from the next period, and settlement resolves
+  /// the rate in force for the period it is settling. That indirection is what
+  /// makes a late or re-run settlement produce the same answer as a timely one
+  /// across a rate change -- see 5.4 of the design doc.
+  royaltySharePercent                        Decimal   @default(30.00) @db.Decimal(5, 2)
   reverseWordTrainingEnabled                 Boolean   @default(false)
   adminPayoutOtpEnabled                      Boolean   @default(false) // when true, admin/training-payouts and admin/withdrawals/:id/resolve require the acting admin to verify an emailed OTP first
   sessionIdleTimeoutMinutes                  Int       @default(30) // minutes of inactivity before any authenticated session (trainer or admin) is force-signed-out and must reauthenticate -- enforced both client-side (activity-tracking sign-out) and server-side (frontend/proxy.ts compares against the JWT's lastActiveAt claim, so it can't be bypassed by disabling client JS)
@@ -3928,6 +3955,9 @@ model SubscriptionPayment {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  /// At most one, enforced by RoyaltyPool.paymentId being unique.
+  royaltyPool RoyaltyPool?
 
   @@index([organizationId, paidAt])
   @@index([periodStart])
@@ -5680,4 +5710,126 @@ model ContributorDeck {
   @@index([ownerUserId])
   @@index([dialectTag])
   @@map("contributor_decks")
+}
+
+/// One royalty pool per subscriber payment.
+///
+/// Per-subscriber, not platform-wide: a platform pool would dilute a niche
+/// dialect streamed heavily by one subscriber against total platform usage. A
+/// contributor streamed by ten subscribers draws from ten pools.
+///
+/// Every input is frozen on the row at computation time -- the FX rate, the
+/// share percent, the token rate, the denominator. That is not audit garnish:
+/// it is what makes a later change to any of those settings unable to reprice
+/// a pool that has already been computed (5.4).
+model RoyaltyPool {
+  id             String @id @default(uuid())
+  /// Admin-only. A contributor must never learn WHICH organisations streamed
+  /// their work -- see the mutual-anonymity constraint in section 9 of the
+  /// design doc. No FK, matching RecordingUsagePeriod.organizationId: a pool
+  /// that has paid out must survive the organisation being deleted.
+  organizationId String
+
+  /// The payment this pool was computed from.
+  ///
+  /// Unique, and this is the entire idempotency story: one pool per payment
+  /// means a re-run cannot double-mint, however many times it runs.
+  paymentId String              @unique
+  payment   SubscriptionPayment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  /// The usage period whose RecordingUsagePeriod rows this pool divides.
+  periodStart DateTime
+
+  /// Collected revenue converted to USD, and the rate that converted it.
+  ///
+  /// Country.usdExchangeRate is units of local currency per 1 USD, so the
+  /// conversion DIVIDES by this rate. Recorded so a historical settlement is
+  /// recomputable from its own row; 1.0 for a payment already in USD.
+  collectedUsd Decimal @db.Decimal(14, 2)
+  fxRateUsed   Decimal @db.Decimal(18, 8)
+
+  /// Resolved from the RoyaltyRatePeriod schedule for periodStart, never from
+  /// the current PlatformSettings value.
+  sharePercentUsed Decimal @db.Decimal(5, 2)
+  tokenUsdRateUsed Decimal @db.Decimal(18, 8)
+
+  /// pool_dl = (collectedUsd * sharePercentUsed / 100) / tokenUsdRateUsed.
+  /// The accruals below must sum to exactly this.
+  poolDl Decimal @db.Decimal(20, 8)
+
+  /// This subscriber's total allowed stream count in the period -- the
+  /// denominator each contributor's share divides by.
+  totalStreamCount Int
+
+  /// Set only when every accrual balanced AND the money path committed.
+  ///
+  /// Null is shadow mode's natural representation: the pool exists, the split
+  /// is recorded, nothing was minted and no balance was credited.
+  settledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accruals RoyaltyAccrual[]
+
+  @@index([periodStart])
+  @@index([organizationId, periodStart])
+  /// For "which pools are still unsettled" without scanning the table.
+  @@index([settledAt])
+  @@map("royalty_pools")
+}
+
+/// One contributor's share of one pool.
+///
+/// onDelete: Restrict on both relations is deliberate. A royalty that has been
+/// accrued -- and possibly withdrawn -- must not become erasable by deleting
+/// its pool or its contributor.
+model RoyaltyAccrual {
+  id     String      @id @default(uuid())
+  poolId String
+  pool   RoyaltyPool @relation(fields: [poolId], references: [id], onDelete: Restrict)
+
+  contributorId String
+  contributor   User   @relation("RoyaltyAccrualContributor", fields: [contributorId], references: [id], onDelete: Restrict)
+
+  /// This contributor's allowed streams from this subscriber in the period --
+  /// the numerator. Stored so the share is checkable against the pool's
+  /// totalStreamCount without re-reading usage that may since have been
+  /// re-aggregated.
+  streamCount Int
+
+  amountDl Decimal @db.Decimal(20, 8)
+
+  createdAt DateTime @default(now())
+
+  @@unique([poolId, contributorId])
+  @@index([contributorId, createdAt])
+  @@map("royalty_accruals")
+}
+
+/// Append-only schedule of the contributor share rate.
+///
+/// Settlement reads the rate in force for the period being settled, NOT the
+/// current PlatformSettings value. Without this, a rate change made before a
+/// late settlement run would silently reprice usage that was streamed under
+/// the old rate -- and the promise in the design doc (5.4) is that a change
+/// applies only to usage streamed after it.
+///
+/// effectiveFrom is always a future period at write time, so one period always
+/// settles at exactly one rate.
+model RoyaltyRatePeriod {
+  id           String  @id @default(uuid())
+  sharePercent Decimal @db.Decimal(5, 2)
+
+  /// First period this rate applies to, as a period anchor (first UTC midnight
+  /// of a month), matching RecordingUsagePeriod.periodStart.
+  effectiveFrom DateTime @unique
+
+  /// Who scheduled it. Nullable: the seeded baseline row has no author, and an
+  /// admin account may later be deleted without erasing the rate history.
+  changedByUserId String?
+
+  createdAt DateTime @default(now())
+
+  @@map("royalty_rate_periods")
 }

@@ -656,14 +656,14 @@ stopping payouts.
 | **0** ✅ | `StreamRecordKind`, kind util, `StreamAccessLog` index | None |
 | **1** ✅ | Domain conversations licensable (§2), incl. `RightsService` kind-awareness | None |
 | **2** ✅ | `SubscriptionPayment` + `invoice.payment_succeeded` / refund handlers | Records money; moves none |
-| **3** | Usage aggregation → `RecordingUsagePeriod`; live estimates | None |
-| **4** | Pool computation in **shadow mode** (`settledAt: null`, no mint) + `RoyaltyRatePeriod` schedule | None |
+| **3** ✅ | Usage aggregation → `RecordingUsagePeriod`; live estimates | None |
+| **4** ✅ | Pool computation in **shadow mode** (`settledAt: null`, no mint) + `RoyaltyRatePeriod` schedule | None |
 | **5** | `royaltyBalance` column + the five integration fixes in §6.1 | Column exists, unused |
 | **6** | Accrual settlement: reserve inflow + mint + ledger + credit, plus refund reversal (§5.5) | **Money.** Gated off |
 | **7** | Royalty withdrawal (own model, existing rails, KYC + OTP) | **Money.** Gated off |
 | **8** | Contributor dashboard: accrued vs estimated | None |
 
-**Shipped:** 0, 1 and 2 are built, deployed and migrated (see git history from
+**Shipped:** 0 through 4 are built, deployed and migrated (see git history from
 `64fa907d`). Phase 1 made 9,861 domain-conversation recordings across 939
 contributors licensable for the first time; Phase 2 records money received but
 moves none. Nothing is contributor-visible yet: VDCL remains gated off.
@@ -674,7 +674,24 @@ licensing, catalogue and rights half. The `StreamDeckItem`/manifest path carries
 domain conversations yet, so in practice they are licensable and discoverable
 rather than actually streamed.
 
-**3–4 are safe to build now** and carry no financial surface.
+**Phase 3 and 4 as built.** Usage aggregation writes `RecordingUsagePeriod`
+from `allowed` audio requests only, recompute-and-replace so a re-run converges.
+Pool computation resolves the period's rate from the `RoyaltyRatePeriod`
+schedule (never the current setting), converts collected revenue to USD by
+**dividing** by `Country.usdExchangeRate` -- which is local units per USD, and
+multiplying would inflate an NGN pool ~1,500x -- freezes every input on the pool
+row, splits by stream count with the rounding remainder to the largest share,
+and **asserts the allocations sum to `poolDl` exactly**, abandoning a pool that
+does not balance rather than writing it.
+
+Both run from one CronJob pair on the 2nd of the month (`usage-aggregation`
+03:00, `royalty-pools` 06:00). The pool job re-aggregates the period itself
+before pooling, so it does not depend on the earlier job having succeeded; they
+stay separate schedules only so the two failure modes remain distinguishable.
+
+`royaltiesEnabled` is **false** in production and `royaltyShadowMode` is
+**true**, so today the pool job confirms the graph resolves and computes
+nothing. When enabled, every pool it writes carries `settledAt: null`.
 
 **Phase 1 is the largest and least glamorous**, and it is what "every streamed
 dataset" actually requires: 9,861 recordings currently cannot be licensed,

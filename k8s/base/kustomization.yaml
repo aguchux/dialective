@@ -49,3 +49,4 @@ resources:
   - asr-backfill-cronjob.yaml
   - reserve-balance-poll-cronjob.yaml
   - usage-aggregation-cronjob.yaml
+  - royalty-pools-cronjob.yaml

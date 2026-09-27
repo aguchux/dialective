@@ -539,6 +539,45 @@ export class PlatformSettingsService {
   }
 
   /**
+   * Whether Stream revenue sharing runs at all.
+   *
+   * fetchRow, not getRow: this gates pool computation, which is the step that
+   * becomes a minting decision in Phase 6. A cached read would keep computing
+   * obligations for the life of the TTL after an admin switched it off, which
+   * is the same reasoning as isTrainingEconomyEnabled above.
+   */
+  async areRoyaltiesEnabled(): Promise<boolean> {
+    const row = await this.fetchRow();
+    return row.royaltiesEnabled;
+  }
+
+  /**
+   * Whether pool computation stops short of minting.
+   *
+   * fetchRow for the same reason: leaving shadow mode is the moment money
+   * starts moving, and re-entering it is an emergency stop that must take
+   * effect immediately rather than after a cache TTL.
+   */
+  async isRoyaltyShadowMode(): Promise<boolean> {
+    const row = await this.fetchRow();
+    return row.royaltyShadowMode;
+  }
+
+  /**
+   * The CONFIGURED contributor share rate.
+   *
+   * Deliberately not what settlement reads -- RoyaltyRateService resolves the
+   * rate in force for the period being settled from the RoyaltyRatePeriod
+   * schedule. This accessor exists for the admin UI, to show what is currently
+   * set and what a change would schedule. Using it to price a pool would make
+   * a late settlement reprice usage streamed under the old rate.
+   */
+  async getRoyaltySharePercent(): Promise<number> {
+    const row = await this.getRow();
+    return row.royaltySharePercent.toNumber();
+  }
+
+  /**
    * Whether catalogue search is narrowed to manifest-covered recordings.
    *
    * getRow, not fetchRow: this shapes a browse listing, not a money or
