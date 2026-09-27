@@ -37,6 +37,7 @@ import { TokenomicsModule } from './tokenomics/tokenomics.module';
 import { AssistantModule } from './assistant/assistant.module';
 import { SettlementAdminModule } from './settlement-admin/settlement-admin.module';
 import { VoiceStreamModule } from './voice-stream/voice-stream.module';
+import { RevenueModule } from './voice-stream/revenue/revenue.module';
 import { VdclModule } from './vdcl/vdcl.module';
 import { FaqsModule } from './faqs/faqs.module';
 import { TrainerProfilesModule } from './trainer-profiles/trainer-profiles.module';
@@ -84,6 +85,10 @@ import { AnalyticsModule } from './analytics/analytics.module';
     AssistantModule,
     SettlementAdminModule,
     VoiceStreamModule,
+    // Usage accounting for contributor revenue sharing. Registered here rather
+    // than inside VoiceStreamModule so the standalone aggregation CronJob can
+    // resolve it from an application context.
+    RevenueModule,
     VdclModule,
     FaqsModule,
     TrainerProfilesModule,

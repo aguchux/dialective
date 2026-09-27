@@ -1,0 +1,51 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: usage-aggregation
+spec:
+  # 03:00 UTC on the 2nd of each month. Aggregates the month that just closed.
+  #
+  # The 2nd, not the 1st: a stream that started at 23:59 on the last day can
+  # still be writing its access-log row after midnight, and aggregating a period
+  # while rows are still landing in it would undercount. A day of slack costs
+  # nothing -- a closed period does not change.
+  #
+  # Staggered off the other daily jobs (audio-retention 04:00,
+  # tokenomics-valuation 00:00, fx-rate 03:30) so they do not contend.
+  schedule: '0 3 2 * *'
+  # Forbid, not Replace: a long-running aggregation must not be killed and
+  # restarted mid-transaction, and two concurrent runs over the same period
+  # would race on the delete-then-insert replacement.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: usage-aggregation
+              image: golojan/dialect-api:latest
+              command: ['node', 'dist/usage-aggregation.js']
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres-creds
+                      key: connection_string
+
+              # Explicit sizing so this is Burstable, not BestEffort -- an unsized
+              # container is the first thing the kernel OOM-kills under node memory
+              # pressure, and this node pool is shared with the unrelated `bitocard`
+              # namespace. See api-deployment.yaml for the incident this came from.
+              #
+              # Sized above the other CronJobs because this one holds a period's
+              # worth of grouped buckets in memory before writing.
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 384Mi
+                limits:
+                  memory: 768Mi

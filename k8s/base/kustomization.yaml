@@ -48,3 +48,4 @@ resources:
   - weekly-trainer-report-cronjob.yaml
   - asr-backfill-cronjob.yaml
   - reserve-balance-poll-cronjob.yaml
+  - usage-aggregation-cronjob.yaml

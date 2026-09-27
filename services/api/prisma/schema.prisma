@@ -4741,6 +4741,69 @@ model AnomalyEvent {
   @@map("anomaly_events")
 }
 
+/// Per-record, per-subscriber, per-period stream usage -- the accounting
+/// source for contributor revenue sharing.
+///
+/// StreamAccessLog already carries every signal this needs, but it is an
+/// audit trail, not an accounting source: append-only, unbounded, no
+/// retention policy. Settling from it directly would scan every stream
+/// request ever made, and would recompute a historical period differently
+/// once rows aged out.
+///
+/// Keyed by organisation as well as record because pools are PER SUBSCRIBER:
+/// the same recording earns separately from every subscriber that streams it.
+/// A single platform-wide pool would dilute a niche dialect used heavily by
+/// one subscriber against total platform usage.
+///
+/// Rows are derived and idempotent -- re-running the aggregator for a period
+/// must produce the same numbers, so it recomputes and overwrites rather than
+/// incrementing. That is what makes a re-run safe after a partial failure.
+model RecordingUsagePeriod {
+  id String @id @default(uuid())
+
+  /// Which dataset the record belongs to. Part of its identity: the two
+  /// record tables have independent uuid spaces.
+  recordKind  StreamRecordKind @default(WORD_RECORDING)
+  recordingId String
+
+  /// Denormalised at aggregation time, deliberately. WordRecording.userId is
+  /// nullable (onDelete: SetNull), so a contributor deleting their account
+  /// would otherwise make already-earned usage unattributable -- and a royalty
+  /// already earned is already owed.
+  contributorId String
+
+  /// No FK: the row must survive an organisation being deleted, for the same
+  /// reason as contributorId above -- usage that has been paid for cannot
+  /// become unexplainable.
+  organizationId String
+
+  /// First day of the period, UTC midnight. Same anchor convention as
+  /// UsageCounter.periodStart.
+  periodStart DateTime
+
+  /// THE measure for splitting a pool. Counted from `allowed` audio requests
+  /// only -- a 403 is not usage.
+  streamCount Int @default(0)
+
+  /// Recorded for reporting, deliberately NOT used to split a pool.
+  /// StreamAccessLog.durationStreamedMs holds the record's FULL duration
+  /// regardless of the bytes a range request actually served, so splitting by
+  /// it would over-reward a client that makes many small range requests.
+  durationMs    BigInt @default(0)
+  bytesStreamed BigInt @default(0)
+
+  /// When this row was last recomputed, so a stale aggregation is visible.
+  aggregatedAt DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@unique([recordKind, recordingId, organizationId, periodStart])
+  /// The pool query: one subscriber's usage for one period.
+  @@index([organizationId, periodStart])
+  /// The contributor-facing query: what did I earn this period.
+  @@index([contributorId, periodStart])
+  @@map("recording_usage_periods")
+}
+
 /// Accumulated monthly usage per organization, incremented at
 /// StreamAccessLogService.record()'s choke point (every manifest/metadata/
 /// audio/usage request). periodStart is always the first-of-month UTC

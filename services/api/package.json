@@ -9,6 +9,7 @@
     "start:dev": "nest start --watch",
     "withdrawal-reconcile": "node dist/withdrawal-reconcile.js",
     "tokenomics-valuation": "node dist/tokenomics-valuation.js",
+    "usage-aggregation": "node dist/usage-aggregation.js",
     "weekly-trainer-report": "node dist/weekly-trainer-report.js",
     "reserve-balance-poll": "node dist/reserve-balance-poll.js",
     "asr-backfill": "node dist/asr-backfill.js",
