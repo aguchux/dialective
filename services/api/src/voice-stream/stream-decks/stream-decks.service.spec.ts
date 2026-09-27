@@ -228,7 +228,12 @@ describe('StreamDecksService', () => {
       const result = await service.addItem('org-1', 'deck-1', 'user-1', 'rec-1');
 
       expect(prisma.streamDeckItem.create).toHaveBeenCalledWith({
-        data: { deckId: 'deck-1', recordingId: 'rec-1', addedByUserId: 'user-1' },
+        data: {
+          deckId: 'deck-1',
+          recordKind: 'WORD_RECORDING',
+          recordingId: 'rec-1',
+          addedByUserId: 'user-1',
+        },
       });
       // The add now reports where this clip stands licence-wise, so an org
       // never accumulates unlicensed items blind.

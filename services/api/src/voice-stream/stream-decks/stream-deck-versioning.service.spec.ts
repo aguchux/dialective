@@ -34,7 +34,7 @@ const baseRecording = {
 describe('StreamDeckVersioningService.writeNewVersionIfMaterial', () => {
   it('creates version 1 when no prior version exists', async () => {
     const { prisma, catalogue, service } = setup();
-    prisma.streamDeckItem.findMany.mockResolvedValue([{ recordingId: 'rec-1' }]);
+    prisma.streamDeckItem.findMany.mockResolvedValue([{ recordKind: 'WORD_RECORDING', recordingId: 'rec-1' }]);
     catalogue.getEligibleRecording.mockResolvedValue(baseRecording);
     prisma.streamDeckVersion.create.mockResolvedValue({ id: 'ver-1' });
 
@@ -56,13 +56,14 @@ describe('StreamDeckVersioningService.writeNewVersionIfMaterial', () => {
 
   it('is a no-op when membership and fields are unchanged from the current version', async () => {
     const { prisma, catalogue, service } = setup();
-    prisma.streamDeckItem.findMany.mockResolvedValue([{ recordingId: 'rec-1' }]);
+    prisma.streamDeckItem.findMany.mockResolvedValue([{ recordKind: 'WORD_RECORDING', recordingId: 'rec-1' }]);
     catalogue.getEligibleRecording.mockResolvedValue(baseRecording);
     prisma.streamDeckCurrentVersion.findUnique.mockResolvedValue({
       version: {
         version: 3,
         items: [
           {
+            recordKind: 'WORD_RECORDING',
             recordingId: 'rec-1',
             durationMs: 5000,
             dialectTag: 'ig',
@@ -83,10 +84,10 @@ describe('StreamDeckVersioningService.writeNewVersionIfMaterial', () => {
   it('increments off the existing pointer version when material', async () => {
     const { prisma, catalogue, service } = setup();
     prisma.streamDeckItem.findMany.mockResolvedValue([
-      { recordingId: 'rec-1' },
-      { recordingId: 'rec-2' },
+      { recordKind: 'WORD_RECORDING', recordingId: 'rec-1' },
+      { recordKind: 'WORD_RECORDING', recordingId: 'rec-2' },
     ]);
-    catalogue.getEligibleRecording.mockImplementation((id: string) =>
+    catalogue.getEligibleRecording.mockImplementation((_kind: string, id: string) =>
       Promise.resolve({ ...baseRecording, id }),
     );
     prisma.streamDeckCurrentVersion.findUnique.mockResolvedValue({
@@ -94,6 +95,7 @@ describe('StreamDeckVersioningService.writeNewVersionIfMaterial', () => {
         version: 3,
         items: [
           {
+            recordKind: 'WORD_RECORDING',
             recordingId: 'rec-1',
             durationMs: 5000,
             dialectTag: 'ig',
@@ -116,13 +118,14 @@ describe('StreamDeckVersioningService.writeNewVersionIfMaterial', () => {
 
   it('treats a per-item field change (isvs) as material even with identical membership', async () => {
     const { prisma, catalogue, service } = setup();
-    prisma.streamDeckItem.findMany.mockResolvedValue([{ recordingId: 'rec-1' }]);
+    prisma.streamDeckItem.findMany.mockResolvedValue([{ recordKind: 'WORD_RECORDING', recordingId: 'rec-1' }]);
     catalogue.getEligibleRecording.mockResolvedValue(baseRecording);
     prisma.streamDeckCurrentVersion.findUnique.mockResolvedValue({
       version: {
         version: 1,
         items: [
           {
+            recordKind: 'WORD_RECORDING',
             recordingId: 'rec-1',
             durationMs: 5000,
             dialectTag: 'ig',

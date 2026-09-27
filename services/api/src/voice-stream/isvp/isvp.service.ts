@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { ValidationAuditAction, ValidationReviewStatus, WebhookEventType } from '@dialectiva/db';
+import { StreamRecordKind, ValidationAuditAction, ValidationReviewStatus, WebhookEventType } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisStreamsService } from '../../redis-streams/redis-streams.service';
 import { CatalogueService } from '../catalogue/catalogue.service';
@@ -41,7 +41,14 @@ export class IsvpService {
     recordingId: string,
     dto: SubmitValidationDto,
   ) {
-    const eligible = await this.catalogue.isEligible(recordingId);
+    // Word recordings only. SubscriberValidation scores transcript accuracy
+    // against a recordingId with no kind column, and a domain conversation has
+    // no transcript to score -- so ISVP stays scoped to the one kind it can
+    // actually assess. Extending it is separate work.
+    const eligible = await this.catalogue.isEligible(
+      StreamRecordKind.WORD_RECORDING,
+      recordingId,
+    );
     if (!eligible) {
       throw new NotFoundException('Recording not found or not available for Voice Stream');
     }

@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, WebhookEventType } from '@dialectiva/db';
+import { Prisma, StreamRecordKind, WebhookEventType } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogueService } from '../catalogue/catalogue.service';
 import { WebhookEventService } from '../webhooks/webhook-event.service';
 
 interface SnapshotItem {
+  recordKind: StreamRecordKind;
   recordingId: string;
   durationMs: number | null;
   dialectTag: string;
@@ -45,20 +46,39 @@ export class StreamDeckVersioningService {
     if (items.length === 0) return [];
 
     const recordings = await Promise.all(
-      items.map((item) => this.catalogue.getEligibleRecording(item.recordingId)),
+      items.map(async (item) => {
+        const recording = await this.catalogue.getEligibleRecording(
+          item.recordKind,
+          item.recordingId,
+        );
+        // Kind travels WITH the resolved record: the record itself does not
+        // carry it, and the snapshot needs it to distinguish two same-id
+        // records of different kinds.
+        return recording ? { recordKind: item.recordKind, recording } : null;
+      }),
     );
     const eligible = recordings.filter((r): r is NonNullable<typeof r> => r !== null);
 
+    // ISVC exists for word recordings only, so the lookup is scoped to those
+    // ids -- querying with a domain-conversation id would simply miss, but
+    // filtering makes the intent explicit rather than incidental.
     const isvcCurrents = await this.prisma.isvcCurrent.findMany({
-      where: { recordingId: { in: eligible.map((r) => r.id) } },
+      where: {
+        recordingId: {
+          in: eligible
+            .filter((r) => r.recordKind === StreamRecordKind.WORD_RECORDING)
+            .map((r) => r.recording.id),
+        },
+      },
       include: { aggregation: true },
     });
     const isvcByRecordingId = new Map(isvcCurrents.map((c) => [c.recordingId, c.aggregation]));
 
     return eligible
-      .map((recording) => {
+      .map(({ recordKind, recording }) => {
         const isvc = isvcByRecordingId.get(recording.id);
         return {
+          recordKind,
           recordingId: recording.id,
           durationMs: recording.durationMs,
           dialectTag: recording.dialectVariant?.dialect.tag ?? recording.dialectTag,
@@ -68,7 +88,12 @@ export class StreamDeckVersioningService {
           isvcVersion: isvc?.version ?? null,
         };
       })
-      .sort((a, b) => a.recordingId.localeCompare(b.recordingId));
+      // Sorted by (kind, id) so the comparison below lines up the same records
+      // on both sides even when two kinds share an id.
+      .sort(
+        (a, b) =>
+          a.recordKind.localeCompare(b.recordKind) || a.recordingId.localeCompare(b.recordingId),
+      );
   }
 
   private snapshotsEqual(a: SnapshotItem[], b: SnapshotItem[]): boolean {
@@ -77,6 +102,7 @@ export class StreamDeckVersioningService {
       const x = a[i];
       const y = b[i];
       if (
+        x.recordKind !== y.recordKind ||
         x.recordingId !== y.recordingId ||
         x.durationMs !== y.durationMs ||
         x.dialectTag !== y.dialectTag ||
@@ -110,6 +136,7 @@ export class StreamDeckVersioningService {
     if (current) {
       const currentItems: SnapshotItem[] = current.version.items
         .map((item) => ({
+          recordKind: item.recordKind,
           recordingId: item.recordingId,
           durationMs: item.durationMs,
           dialectTag: item.dialectTag,
@@ -118,7 +145,12 @@ export class StreamDeckVersioningService {
           isvs: item.isvs ? Number(item.isvs).toFixed(2) : null,
           isvcVersion: item.isvcVersion,
         }))
-        .sort((a, b) => a.recordingId.localeCompare(b.recordingId));
+        // Same (kind, id) ordering as the fresh snapshot, or the comparison
+        // would pair up different records and report a spurious change.
+        .sort(
+          (a, b) =>
+            a.recordKind.localeCompare(b.recordKind) || a.recordingId.localeCompare(b.recordingId),
+        );
 
       if (this.snapshotsEqual(fresh, currentItems)) {
         return;
@@ -136,6 +168,7 @@ export class StreamDeckVersioningService {
           createdReason: reason,
           items: {
             create: fresh.map((item) => ({
+              recordKind: item.recordKind,
               recordingId: item.recordingId,
               durationMs: item.durationMs,
               dialectTag: item.dialectTag,

@@ -9,6 +9,7 @@ import { randomBytes } from 'crypto';
 import {
   ActivityEventType,
   StreamDeckType,
+  StreamRecordKind,
   VdclPurpose,
   WebhookEventType,
 } from '@dialectiva/db';
@@ -197,35 +198,48 @@ export class StreamDecksService {
     return this.deckCoverage.forDeck(deckId, purposes);
   }
 
-  async addItem(organizationId: string, deckId: string, userId: string, recordingId: string) {
+  async addItem(
+    organizationId: string,
+    deckId: string,
+    userId: string,
+    recordingId: string,
+    /**
+     * Defaults to WORD_RECORDING rather than being required, so every existing
+     * caller and API client is unchanged -- before this parameter existed, a
+     * deck item could only ever be a word recording.
+     */
+    recordKind: StreamRecordKind = StreamRecordKind.WORD_RECORDING,
+  ) {
     const deck = await this.get(organizationId, deckId);
     if (deck.type === StreamDeckType.SMART) {
       throw new BadRequestException('Smart Deck membership is rule-driven; edit the rule instead');
     }
 
-    const eligible = await this.catalogue.isEligible(recordingId);
+    const eligible = await this.catalogue.isEligible(recordKind, recordingId);
     if (!eligible) {
       throw new NotFoundException('Recording not found or not available for Voice Stream');
     }
 
     const alreadyMember = await this.prisma.streamDeckItem.findUnique({
-      where: { deckId_recordingId: { deckId, recordingId } },
+      where: { deckId_recordKind_recordingId: { deckId, recordKind, recordingId } },
     });
     if (alreadyMember) {
       throw new ConflictException('This recording is already in the deck');
     }
 
     const item = await this.prisma.streamDeckItem.create({
-      data: { deckId, recordingId, addedByUserId: userId },
+      data: { deckId, recordKind, recordingId, addedByUserId: userId },
     });
     await this.versioning.writeNewVersionIfMaterial(deckId, 'manual_add');
     void this.webhookEvents.emit(organizationId, WebhookEventType.DECK_ITEM_ADDED, {
       organization_id: organizationId,
       deck_id: deckId,
+      record_kind: recordKind,
       recording_id: recordingId,
     });
     void this.orgActivity.record(organizationId, ActivityEventType.DECK_ITEM_ADDED, userId, {
       deckId,
+      recordKind,
       recordingId,
     });
 

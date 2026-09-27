@@ -4,7 +4,7 @@ import { StreamManifestService } from './stream-manifest.service';
 function setup() {
   const prisma = {
     streamDeck: { findMany: jest.fn(), findUnique: jest.fn() },
-    streamDeckItem: { findMany: jest.fn(), findUnique: jest.fn() },
+    streamDeckItem: { findMany: jest.fn(), findUnique: jest.fn(), findFirst: jest.fn() },
     streamAccessLog: { count: jest.fn(), findMany: jest.fn() },
     isvcCurrent: { findMany: jest.fn().mockResolvedValue([]) },
     streamDeckCurrentVersion: { findUnique: jest.fn().mockResolvedValue(null) },
@@ -16,7 +16,14 @@ function setup() {
   // existing manifest assertions stay about manifest behaviour; the
   // partial-coverage case has its own test.
   const rights = {
-    filterUsableForCredential: jest.fn().mockImplementation((ids: string[]) => new Set(ids)),
+    // Returns composite (kind, id) keys, matching the real service -- a
+    // bare-id Set here would make these tests pass against a service that had
+    // stopped distinguishing the two record kinds.
+    filterUsableForCredential: jest
+      .fn()
+      .mockImplementation((refs: { recordKind: string; recordingId: string }[]) =>
+        new Set(refs.map((r) => `${r.recordKind}:${r.recordingId}`)),
+      ),
   };
   const service = new StreamManifestService(prisma as never, catalogue as never, rights as never);
   return { service, prisma, catalogue, rights };
@@ -58,19 +65,21 @@ describe('StreamManifestService.getEligibleItemMetadata', () => {
   it('resolves the organization plan floor and passes it to getEligibleRecording', async () => {
     const { service, prisma, catalogue } = setup();
     prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1' });
-    prisma.streamDeckItem.findUnique.mockResolvedValue({ deckId: 'deck-1', recordingId: 'rec-1' });
+    prisma.streamDeckItem.findFirst.mockResolvedValue({ recordKind: 'WORD_RECORDING', deckId: 'deck-1', recordingId: 'rec-1' });
     prisma.subscription.findUnique.mockResolvedValue({ plan: { minIsvcConfidence: 'VERY_HIGH' } });
     catalogue.getEligibleRecording.mockResolvedValue({ id: 'rec-1' });
 
     await service.getEligibleItemMetadata(orgWideKey, 'deck-1', 'rec-1');
 
-    expect(catalogue.getEligibleRecording).toHaveBeenCalledWith('rec-1', 'VERY_HIGH');
+    expect(catalogue.getEligibleRecording).toHaveBeenCalledWith(
+        'WORD_RECORDING',
+        'rec-1', 'VERY_HIGH');
   });
 
   it('throws when the recording is gated out by the plan floor (getEligibleRecording returns null)', async () => {
     const { service, prisma, catalogue } = setup();
     prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1' });
-    prisma.streamDeckItem.findUnique.mockResolvedValue({ deckId: 'deck-1', recordingId: 'rec-1' });
+    prisma.streamDeckItem.findFirst.mockResolvedValue({ recordKind: 'WORD_RECORDING', deckId: 'deck-1', recordingId: 'rec-1' });
     prisma.subscription.findUnique.mockResolvedValue({ plan: { minIsvcConfidence: 'VERY_HIGH' } });
     catalogue.getEligibleRecording.mockResolvedValue(null);
 
@@ -85,10 +94,10 @@ describe('StreamManifestService.listEligibleItems', () => {
     const { service, prisma, catalogue } = setup();
     prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1' });
     prisma.streamDeckItem.findMany.mockResolvedValue([
-      { id: 'item-1', recordingId: 'rec-1' },
-      { id: 'item-2', recordingId: 'rec-2' },
+      { id: 'item-1', recordKind: 'WORD_RECORDING', recordingId: 'rec-1' },
+      { id: 'item-2', recordKind: 'WORD_RECORDING', recordingId: 'rec-2' },
     ]);
-    catalogue.getEligibleRecording.mockImplementation((id: string) =>
+    catalogue.getEligibleRecording.mockImplementation((_kind: string, id: string) =>
       id === 'rec-1' ? Promise.resolve({ id: 'rec-1' }) : Promise.resolve(null),
     );
 
@@ -101,13 +110,15 @@ describe('StreamManifestService.listEligibleItems', () => {
   it('resolves the organization plan floor and passes it to getEligibleRecording', async () => {
     const { service, prisma, catalogue } = setup();
     prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1' });
-    prisma.streamDeckItem.findMany.mockResolvedValue([{ id: 'item-1', recordingId: 'rec-1' }]);
+    prisma.streamDeckItem.findMany.mockResolvedValue([{ id: 'item-1', recordKind: 'WORD_RECORDING', recordingId: 'rec-1' }]);
     prisma.subscription.findUnique.mockResolvedValue({ plan: { minIsvcConfidence: 'HIGH' } });
     catalogue.getEligibleRecording.mockResolvedValue({ id: 'rec-1' });
 
     await service.listEligibleItems(orgWideKey, 'deck-1');
 
-    expect(catalogue.getEligibleRecording).toHaveBeenCalledWith('rec-1', 'HIGH');
+    expect(catalogue.getEligibleRecording).toHaveBeenCalledWith(
+        'WORD_RECORDING',
+        'rec-1', 'HIGH');
   });
 });
 
@@ -179,7 +190,7 @@ describe('StreamManifestService.getManifest', () => {
       organizationId: 'org-1',
       deckKey: 'DLSD-NG-IGB-NSK-A1B2C3',
     });
-    prisma.streamDeckItem.findMany.mockResolvedValue([{ id: 'item-1', recordingId: 'rec-1' }]);
+    prisma.streamDeckItem.findMany.mockResolvedValue([{ id: 'item-1', recordKind: 'WORD_RECORDING', recordingId: 'rec-1' }]);
     catalogue.getEligibleRecording.mockResolvedValue({
       id: 'rec-1',
       dialectTag: 'ig',
@@ -212,10 +223,10 @@ describe('StreamManifestService.getManifest', () => {
       deckKey: 'DLSD-NG-IGB-NSK-A1B2C3',
     });
     prisma.streamDeckItem.findMany.mockResolvedValue([
-      { id: 'item-1', recordingId: 'rec-1' },
-      { id: 'item-2', recordingId: 'rec-2' },
+      { id: 'item-1', recordKind: 'WORD_RECORDING', recordingId: 'rec-1' },
+      { id: 'item-2', recordKind: 'WORD_RECORDING', recordingId: 'rec-2' },
     ]);
-    catalogue.getEligibleRecording.mockImplementation((id: string) =>
+    catalogue.getEligibleRecording.mockImplementation((_kind: string, id: string) =>
       Promise.resolve({
         id,
         dialectTag: 'ig',
@@ -226,7 +237,7 @@ describe('StreamManifestService.getManifest', () => {
     );
     prisma.streamDeckCurrentVersion.findUnique.mockResolvedValue({ version: { version: 3 } });
     // Only rec-1 is licensed for this credential's declared purposes.
-    rights.filterUsableForCredential.mockResolvedValue(new Set(['rec-1']));
+    rights.filterUsableForCredential.mockResolvedValue(new Set(['WORD_RECORDING:rec-1']));
 
     const manifest = await service.getManifest(orgWideKey, 'deck-1');
 
@@ -381,7 +392,7 @@ describe('StreamManifestService.getEligibleItemMetadata', () => {
   it('404s when the recording is not a member of the deck', async () => {
     const { service, prisma } = setup();
     prisma.streamDeck.findUnique.mockResolvedValue({ id: 'deck-1', organizationId: 'org-1' });
-    prisma.streamDeckItem.findUnique.mockResolvedValue(null);
+    prisma.streamDeckItem.findFirst.mockResolvedValue(null);
 
     await expect(service.getEligibleItemMetadata(orgWideKey, 'deck-1', 'rec-1')).rejects.toThrow(
       NotFoundException,

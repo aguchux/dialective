@@ -1,6 +1,6 @@
 import { BadRequestException, Controller, Get, Param, Req, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
-import { StreamKeyScope, VdclPurpose, WebhookEventType } from '@dialectiva/db';
+import { StreamKeyScope, StreamRecordKind, VdclPurpose, WebhookEventType } from '@dialectiva/db';
 import { StorageService } from '../../storage/storage.service';
 import { AuthenticatedStreamKeyRequest } from './stream-key-auth.guard';
 import { StreamKeyScopesGuard } from './stream-key-scopes.guard';
@@ -61,6 +61,10 @@ export class StreamAudioController {
     let resultCode = 200;
     let entitlementDecision = 'allowed';
     let durationStreamedMs: number | undefined;
+    // Resolved from the deck item inside the try below. Undefined if we never
+    // got that far (a 404 on deck membership), which is the honest value --
+    // the log row then records that no record was identified.
+    let recordKind: StreamRecordKind | undefined;
     const isReservedCapacityOrg = req.streamKey.isReservedCapacityOrg ?? false;
     void this.dedicatedCapacity.trackStart(isReservedCapacityOrg);
 
@@ -88,7 +92,13 @@ export class StreamAudioController {
       // data for, matched against each contributor's itemised grants -- not a
       // fixed assumption. A key declaring TTS_TRAINING is refused a clip
       // whose contributor granted only ASR_TRAINING.
-      const rightsDecision = await this.rights.mayUseForCredential(recordingId, req.streamKey);
+      // The kind comes from the deck item resolved above, never from the
+      // route: the caller supplies an id, the deck says which dataset it is.
+      recordKind = recording.recordKind;
+      const rightsDecision = await this.rights.mayUseForCredential(
+        { recordKind, recordingId },
+        req.streamKey,
+      );
       if (!rightsDecision.allowed) {
         entitlementDecision = rightsDecision.entitlementDecision;
         resultCode = 403;
@@ -157,6 +167,7 @@ export class StreamAudioController {
         credentialType: req.streamKey.credentialType,
         organizationId: req.streamKey.organizationId,
         deckId,
+        recordKind,
         recordingId,
         requestType: 'audio',
         requestedRange: req.headers.range,

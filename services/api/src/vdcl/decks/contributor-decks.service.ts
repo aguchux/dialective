@@ -14,7 +14,14 @@ import {
   VdclVersionStatus,
 } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ELIGIBILITY_SELECT, classify } from '../compilation/eligibility';
+import {
+  DOMAIN_ELIGIBILITY_SELECT,
+  ELIGIBILITY_SELECT,
+  classify,
+  domainCandidate,
+  wordCandidate,
+} from '../compilation/eligibility';
+import { kindKey } from '../../voice-stream/stream-record-kind.util';
 
 /**
  * The seeded singleton SubscriberOrganization every contributor deck is
@@ -285,13 +292,14 @@ export class ContributorDecksService {
           },
         },
       },
-      select: { recordingId: true },
+      select: { recordKind: true, recordingId: true },
       // activeFor above already narrows to one manifest, whose
-      // @@unique([manifestId, recordingId]) makes ids distinct -- but
-      // StreamDeckItem's own @@unique([deckId, recordingId]) would make a
-      // duplicate a failed publish rather than a deduplicated one, so this
-      // does not lean on an invariant two constraints away.
-      distinct: ['recordingId'],
+      // @@unique([manifestId, recordKind, recordingId]) makes these distinct
+      // -- but StreamDeckItem's own unique would make a duplicate a failed
+      // publish rather than a deduplicated one, so this does not lean on an
+      // invariant two constraints away. Distinct on BOTH columns, since the
+      // same id can legitimately appear once per kind.
+      distinct: ['recordKind', 'recordingId'],
     });
     if (items.length === 0) {
       throw new BadRequestException('There are no licensed recordings in that dialect to publish');
@@ -321,6 +329,7 @@ export class ContributorDecksService {
         await tx.streamDeckItem.createMany({
           data: items.map((item) => ({
             deckId: streamDeck.id,
+            recordKind: item.recordKind,
             recordingId: item.recordingId,
             addedByUserId: DIALECT_LIBRARY_PLATFORM_ORG_ID,
           })),
@@ -442,21 +451,37 @@ export class ContributorDecksService {
 
     const covered = await this.prisma.vdclManifestItem.findMany({
       where: { manifest: { vdclVersion: { agreement: { contributorId } } } },
-      select: { recordingId: true },
+      select: { recordKind: true, recordingId: true },
     });
-    const coveredIds = new Set(covered.map((row) => row.recordingId));
+    // Keyed by (kind, id): the two record tables have independent uuid spaces,
+    // so a bare id set could mask one kind's recording as covered because the
+    // other kind's happened to share the id.
+    const coveredKeys = new Set(covered.map((row) => kindKey(row.recordKind, row.recordingId)));
 
-    const candidates = await this.prisma.wordRecording.findMany({
-      where: {
-        userId: contributorId,
-        dialectTag: { in: tags },
-        status: { not: SubmissionStatus.PENDING },
-      },
-      select: ELIGIBILITY_SELECT,
-    });
+    const where = {
+      userId: contributorId,
+      dialectTag: { in: tags },
+      status: { not: SubmissionStatus.PENDING },
+    };
+
+    // Both kinds, because both can be licensed. Counting only word recordings
+    // would tell a contributor their conversation work is already covered when
+    // it is not.
+    const [words, conversations] = await Promise.all([
+      this.prisma.wordRecording.findMany({ where, select: ELIGIBILITY_SELECT }),
+      this.prisma.domainConversationRecording.findMany({
+        where,
+        select: DOMAIN_ELIGIBILITY_SELECT,
+      }),
+    ]);
+
+    const candidates = [
+      ...words.map((row) => wordCandidate(row)),
+      ...conversations.map((row) => domainCandidate(row)),
+    ];
 
     for (const candidate of candidates) {
-      if (coveredIds.has(candidate.id)) continue;
+      if (coveredKeys.has(kindKey(candidate.recordKind, candidate.id))) continue;
       if (!classify(candidate, { contributorId }).eligible) continue;
       result.set(candidate.dialectTag, (result.get(candidate.dialectTag) ?? 0) + 1);
     }

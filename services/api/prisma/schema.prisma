@@ -3995,13 +3995,16 @@ model StreamDeckItem {
   id            String     @id @default(uuid())
   deckId        String
   deck          StreamDeck @relation(fields: [deckId], references: [id], onDelete: Cascade)
-  recordingId   String // WordRecording.id -- no FK by design: keeps the Voice Stream domain
-  // loosely coupled to the trainer-facing schema, and a WordRecording can
-  // be legitimately purged (audio retention) without needing deck cleanup logic
+  /// Which table `recordingId` points at -- see VdclManifestItem.recordKind.
+  recordKind    StreamRecordKind @default(WORD_RECORDING)
+  recordingId   String // WordRecording.id or DomainConversationRecording.id per recordKind --
+  // no FK by design: keeps the Voice Stream domain loosely coupled to the
+  // trainer-facing schema, and a recording can be legitimately purged (audio
+  // retention) without needing deck cleanup logic
   addedByUserId String
   addedAt       DateTime   @default(now())
 
-  @@unique([deckId, recordingId])
+  @@unique([deckId, recordKind, recordingId])
   @@index([deckId])
   @@map("stream_deck_items")
 }
@@ -4068,6 +4071,9 @@ model StreamDeckVersionItem {
   id               String            @id @default(uuid())
   deckVersionId    String
   deckVersion      StreamDeckVersion @relation(fields: [deckVersionId], references: [id], onDelete: Cascade)
+  /// Frozen alongside the id: a pinned version must resolve to the same
+  /// record years later, and the id alone cannot say which table.
+  recordKind       StreamRecordKind  @default(WORD_RECORDING)
   recordingId      String
   durationMs       Int?
   dialectTag       String
@@ -4076,7 +4082,7 @@ model StreamDeckVersionItem {
   isvs             Decimal?          @db.Decimal(5, 2)
   isvcVersion      Int?
 
-  @@unique([deckVersionId, recordingId])
+  @@unique([deckVersionId, recordKind, recordingId])
   @@index([deckVersionId])
   @@map("stream_deck_version_items")
 }
@@ -4467,6 +4473,9 @@ model StreamAccessLog {
   credentialType      String   @default("stream_key") // "stream_key" | "oauth_client"
   organizationId      String
   deckId              String?
+  /// Which table `recordingId` points at. Nullable like recordingId itself --
+  /// manifest and usage requests are not about one record.
+  recordKind          StreamRecordKind?
   recordingId         String?
   requestType         String // "manifest" | "metadata" | "audio" | "usage"
   requestedRange      String? // raw Range header, audio requests only
@@ -4480,6 +4489,11 @@ model StreamAccessLog {
 
   @@index([streamApiKeyId, createdAt])
   @@index([organizationId, createdAt])
+  /// For the revenue-sharing rollup, which reads one organisation's allowed
+  /// audio requests for a period and groups them per record. Without this the
+  /// monthly aggregation is a full scan of an append-only table that only
+  /// ever grows.
+  @@index([organizationId, createdAt, recordKind, recordingId])
   @@map("stream_access_logs")
 }
 
@@ -5109,6 +5123,21 @@ model CommunityModeratorAction {
 /// it among typically excluded rights. Those are reconcilable, but the
 /// rights service needs one unambiguous value either way, so it exists here
 /// and is simply never granted for now.
+/// What kind of record a licensed, streamed or earning item points at.
+///
+/// A NEW enum rather than reusing ValidatorRecordKind, which has the same two
+/// values today. That one is scoped to the validator workspace, and adding a
+/// value there for a streaming-only dataset would widen what a validator can
+/// be handed as a side effect of a Stream change. Same values, different
+/// lifecycles, so they get to diverge.
+///
+/// Every column carrying this defaults to WORD_RECORDING, so existing rows --
+/// which are all word recordings -- stay correct with no backfill.
+enum StreamRecordKind {
+  WORD_RECORDING
+  DOMAIN_CONVERSATION_RECORDING
+}
+
 enum VdclPurpose {
   ASR_TRAINING // speech recognition model training/fine-tuning
   TTS_TRAINING // speech synthesis model training
@@ -5348,12 +5377,23 @@ model VdclManifestItem {
   id          String       @id @default(uuid())
   manifestId  String
   manifest    VdclManifest @relation(fields: [manifestId], references: [id], onDelete: Cascade)
+  /// Which table `recordingId` points at. Required alongside the id because
+  /// the two record kinds have independent uuid spaces -- an id alone cannot
+  /// say which table to read, and resolving the wrong one in a rights check
+  /// would answer with the wrong contributor's licence.
+  recordKind  StreamRecordKind @default(WORD_RECORDING)
   recordingId String
 
   durationMs     Int?
   dialectTag     String
   compositeScore Decimal? @db.Decimal(5, 2)
+  /// WORD_RECORDING only. DomainConversationRecording has no `score` column
+  /// at all (no consensus/exact-match step exists for it), so this stays null
+  /// for those items rather than being faked from compositeScore.
   score          Decimal? @db.Decimal(5, 2)
+  /// WORD_RECORDING only -- domain conversations have no transcript column
+  /// and no ASR step, so this is legitimately false for them rather than
+  /// meaning "transcription pending".
   hasTranscript  Boolean  @default(false)
 
   /// Set when audio-retention-job purges a covered recording despite the
@@ -5362,9 +5402,14 @@ model VdclManifestItem {
   /// worth surfacing rather than a routine state.
   audioPurgedAt DateTime?
 
-  @@unique([manifestId, recordingId])
+  /// Includes recordKind, mirroring ValidatorDeckItem: the same uuid could in
+  /// principle exist in both tables, and collapsing them would silently drop
+  /// one of the two items.
+  @@unique([manifestId, recordKind, recordingId])
   @@index([manifestId])
-  @@index([recordingId])
+  /// Lookups come in as (kind, id) from RightsService and the royalty
+  /// aggregator, so the index leads with kind.
+  @@index([recordKind, recordingId])
   @@map("vdcl_manifest_items")
 }
 

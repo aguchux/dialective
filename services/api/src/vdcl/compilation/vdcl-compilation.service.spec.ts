@@ -39,8 +39,10 @@ describe('VdclCompilationService', () => {
   function makeService(opts: {
     version?: Record<string, unknown> | null;
     recordings?: Record<string, unknown>[];
+    conversations?: Record<string, unknown>[];
   } = {}) {
     const recordings = opts.recordings ?? [recordingRow()];
+    const conversations = opts.conversations ?? [];
     const tx = {
       vdclManifest: { create: jest.fn().mockResolvedValue({ id: 'm1' }) },
       vdclVersion: { update: jest.fn().mockResolvedValue({}) },
@@ -61,6 +63,14 @@ describe('VdclCompilationService', () => {
         findMany: jest.fn().mockImplementation(({ cursor }) =>
           Promise.resolve(cursor ? [] : recordings),
         ),
+      },
+      // Empty by default: these tests are about the word-recording pass, and a
+      // second populated dataset would change every aggregate they assert on.
+      // The domain-conversation pass has its own tests.
+      domainConversationRecording: {
+        findMany: jest
+          .fn()
+          .mockImplementation(({ cursor }) => Promise.resolve(cursor ? [] : conversations)),
       },
       $transaction: jest.fn((fn: (t: unknown) => Promise<unknown>) => fn(tx)),
     };
@@ -296,6 +306,77 @@ describe('VdclCompilationService', () => {
       const first = await makeService().service.compileVersion('v1');
       const second = await makeService().service.compileVersion('v1');
       expect(first.manifestHash).toBe(second.manifestHash);
+    });
+  });
+
+  describe('multi-dataset manifests', () => {
+    /** A settled domain conversation: no score, no transcript, no ASR engine. */
+    function conversationRow(overrides: Record<string, unknown> = {}) {
+      return {
+        id: 'dc-1',
+        userId: 'user-1',
+        dialectTag: 'ig',
+        status: SubmissionStatus.SETTLED,
+        compositeScore: decimal('71.00'),
+        durationMs: 9000,
+        audioKey: 'dc/1.webm',
+        audioDeletedAt: null,
+        ...overrides,
+      };
+    }
+
+    it('licenses domain conversations alongside word recordings', async () => {
+      // The 9,861 settled conversations in production could not be licensed at
+      // all before this -- the compiler only ever read one table.
+      const { service, tx } = makeService({ conversations: [conversationRow()] });
+
+      await service.compileVersion('ver-1');
+
+      const items = tx.vdclManifest.create.mock.calls[0][0].data.items.createMany.data;
+      expect(items).toHaveLength(2);
+      expect(items.map((i: { recordKind: string }) => i.recordKind).sort()).toEqual([
+        'DOMAIN_CONVERSATION_RECORDING',
+        'WORD_RECORDING',
+      ]);
+    });
+
+    it('counts a conversation in the manifest totals but not the transcript count', async () => {
+      // A conversation has no transcript column and no ASR step, so it is
+      // legitimately absent from transcript coverage rather than pending it.
+      const { service, tx } = makeService({ conversations: [conversationRow()] });
+
+      await service.compileVersion('ver-1');
+
+      const manifest = tx.vdclManifest.create.mock.calls[0][0].data;
+      expect(manifest.recordingCount).toBe(2);
+      expect(manifest.transcriptCount).toBe(1);
+    });
+
+    it('excludes an unscored conversation without excluding a word recording', async () => {
+      const { service, tx } = makeService({
+        conversations: [conversationRow({ compositeScore: null })],
+      });
+
+      await service.compileVersion('ver-1');
+
+      const items = tx.vdclManifest.create.mock.calls[0][0].data.items.createMany.data;
+      expect(items).toHaveLength(1);
+      expect(items[0].recordKind).toBe('WORD_RECORDING');
+    });
+
+    it('produces a manifest from conversations alone', async () => {
+      // A contributor who only ever recorded conversations still has something
+      // to license. Before this they would have hit "nothing to license".
+      const { service, tx } = makeService({
+        recordings: [],
+        conversations: [conversationRow()],
+      });
+
+      await service.compileVersion('ver-1');
+
+      const items = tx.vdclManifest.create.mock.calls[0][0].data.items.createMany.data;
+      expect(items).toHaveLength(1);
+      expect(items[0].recordKind).toBe('DOMAIN_CONVERSATION_RECORDING');
     });
   });
 

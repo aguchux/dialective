@@ -230,6 +230,7 @@ describe('StreamAudioController (HTTP layer)', () => {
       allowedIps: [],
     });
     manifest.getEligibleItemMetadata.mockResolvedValue({
+      recordKind: 'WORD_RECORDING',
       audioBucket: 'bucket',
       audioKey: 'path/to/audio.wav',
       durationMs: 1234,
@@ -268,7 +269,11 @@ describe('StreamAudioController (HTTP layer)', () => {
       expiresAt: null,
       allowedIps: [],
     });
-    manifest.getEligibleItemMetadata.mockResolvedValue({ audioBucket: null, audioKey: null });
+    manifest.getEligibleItemMetadata.mockResolvedValue({
+      recordKind: 'WORD_RECORDING',
+      audioBucket: null,
+      audioKey: null,
+    });
 
     const res = await request(app.getHttpServer())
       .get(`/stream/v1/decks/${DECK_ID}/items/${RECORDING_ID}/audio`)
@@ -291,6 +296,7 @@ describe('StreamAudioController (HTTP layer)', () => {
       allowedIps: [],
     });
     manifest.getEligibleItemMetadata.mockResolvedValue({
+      recordKind: 'WORD_RECORDING',
       audioBucket: 'bucket',
       audioKey: 'path/to/audio.wav',
       durationMs: 1234,
@@ -307,7 +313,9 @@ describe('StreamAudioController (HTTP layer)', () => {
       .set('Authorization', `Bearer ${PLAIN_KEY}`);
 
     expect(rights.mayUseForCredential).toHaveBeenCalledWith(
-      RECORDING_ID,
+      // A ref, not a bare id: the kind comes from the resolved deck item, so
+      // the rights check can never resolve against the wrong table.
+      { recordKind: 'WORD_RECORDING', recordingId: RECORDING_ID },
       expect.objectContaining({ purposes: [VdclPurpose.TTS_TRAINING] }),
     );
   });
@@ -326,6 +334,7 @@ describe('StreamAudioController (HTTP layer)', () => {
       allowedIps: [],
     });
     manifest.getEligibleItemMetadata.mockResolvedValue({
+      recordKind: 'WORD_RECORDING',
       audioBucket: 'bucket',
       audioKey: 'path/to/audio.wav',
       durationMs: 1234,

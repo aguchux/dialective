@@ -43,6 +43,7 @@ describe('ContributorDecksService', () => {
     vdclAgreement: { findUnique: jest.Mock };
     vdclManifestItem: { findMany: jest.Mock };
     wordRecording: { findMany: jest.Mock };
+    domainConversationRecording: { findMany: jest.Mock };
     dialect: { findMany: jest.Mock; findFirst: jest.Mock };
     contributorDeck: { findMany: jest.Mock; create: jest.Mock };
     streamDeck: { findMany: jest.Mock; create: jest.Mock };
@@ -55,6 +56,9 @@ describe('ContributorDecksService', () => {
       vdclAgreement: { findUnique: jest.fn() },
       vdclManifestItem: { findMany: jest.fn().mockResolvedValue([]) },
       wordRecording: { findMany: jest.fn().mockResolvedValue([]) },
+      // countUncovered reads both licensable datasets. Empty by default so
+      // these tests stay about word-recording grouping.
+      domainConversationRecording: { findMany: jest.fn().mockResolvedValue([]) },
       dialect: {
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn().mockResolvedValue({ country: { code: 'NG' } }),
@@ -190,7 +194,9 @@ describe('ContributorDecksService', () => {
 
   it('counts eligible recordings made after signing as uncovered', async () => {
     withActiveVersion([manifestItem()]);
-    prisma.vdclManifestItem.findMany.mockResolvedValue([{ recordingId: 'covered-1' }]);
+    prisma.vdclManifestItem.findMany.mockResolvedValue([
+      { recordKind: 'WORD_RECORDING', recordingId: 'covered-1' },
+    ]);
     prisma.wordRecording.findMany.mockResolvedValue([
       recording({ id: 'covered-1' }),
       recording({ id: 'new-1' }),
@@ -201,6 +207,61 @@ describe('ContributorDecksService', () => {
 
     // Only the two not already in a manifest.
     expect(deck.uncoveredCount).toBe(2);
+  });
+
+  it('counts uncovered domain conversations too', async () => {
+    // Both datasets are licensable, so a contributor whose conversation work is
+    // outside the manifest must be told. Counting only word recordings would
+    // report their conversations as already covered.
+    withActiveVersion([manifestItem({ dialectTag: 'ig' })]);
+    prisma.wordRecording.findMany.mockResolvedValue([recording({ id: 'new-word' })]);
+    prisma.domainConversationRecording.findMany.mockResolvedValue([
+      {
+        id: 'new-dc',
+        userId: CONTRIBUTOR,
+        dialectTag: 'ig',
+        status: SubmissionStatus.SETTLED,
+        compositeScore: new Prisma.Decimal('72'),
+        durationMs: 8000,
+        audioKey: 'dc/new.webm',
+        audioDeletedAt: null,
+      },
+    ]);
+
+    const [deck] = (await service.listForContributor(CONTRIBUTOR)).decks;
+
+    expect(deck.uncoveredCount).toBe(2);
+  });
+
+  it('does not let a shared uuid across kinds mask one as covered', async () => {
+    // The two tables have independent uuid spaces. Keying covered items by id
+    // alone would treat the conversation as already licensed because a word
+    // recording with the same uuid is.
+    const shared = 'same-uuid';
+    withActiveVersion([manifestItem({ dialectTag: 'ig' })]);
+    prisma.vdclManifestItem.findMany.mockResolvedValue([
+      { recordKind: 'WORD_RECORDING', recordingId: shared },
+    ]);
+    prisma.wordRecording.findMany.mockResolvedValue([
+      recording({ id: shared, dialectTag: 'ig' }),
+    ]);
+    prisma.domainConversationRecording.findMany.mockResolvedValue([
+      {
+        id: shared,
+        userId: CONTRIBUTOR,
+        dialectTag: 'ig',
+        status: SubmissionStatus.SETTLED,
+        compositeScore: new Prisma.Decimal('72'),
+        durationMs: 8000,
+        audioKey: 'dc/shared.webm',
+        audioDeletedAt: null,
+      },
+    ]);
+
+    const [deck] = (await service.listForContributor(CONTRIBUTOR)).decks;
+
+    // The word recording is covered; the conversation is not.
+    expect(deck.uncoveredCount).toBe(1);
   });
 
   it('does not count ineligible recordings as uncovered', async () => {

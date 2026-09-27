@@ -1,4 +1,4 @@
-import { SubmissionStatus } from '@dialectiva/db';
+import { StreamRecordKind, SubmissionStatus } from '@dialectiva/db';
 import { EligibilityCandidate, classify, isTransient } from './eligibility';
 
 /**
@@ -14,6 +14,7 @@ describe('VDCL eligibility', () => {
 
   function recording(overrides: Partial<EligibilityCandidate> = {}): EligibilityCandidate {
     return {
+      recordKind: StreamRecordKind.WORD_RECORDING,
       id: 'rec-1',
       userId: 'user-1',
       dialectTag: 'ig-ng',
@@ -133,6 +134,57 @@ describe('VDCL eligibility', () => {
     // promise.
     const input = recording();
     expect(classify(input, agreement)).toEqual(classify(input, agreement));
+  });
+
+  describe('domain conversations', () => {
+    /** A domain conversation carries no score, transcript or validator flags. */
+    function conversation(
+      overrides: Partial<EligibilityCandidate> = {},
+    ): EligibilityCandidate {
+      return recording({
+        recordKind: StreamRecordKind.DOMAIN_CONVERSATION_RECORDING,
+        score: null,
+        transcript: null,
+        misplacedDialectAt: null,
+        noAudioClawedBackAt: null,
+        ...overrides,
+      });
+    }
+
+    it('accepts one scored only by compositeScore', () => {
+      // The whole point of Phase 1: this table has no `score` column, so
+      // requiring one would exclude every domain conversation forever.
+      expect(classify(conversation(), agreement).eligible).toBe(true);
+    });
+
+    it('excludes one with no compositeScore', () => {
+      // And the converse: compositeScore is the ONLY score it can have, so a
+      // missing one means genuinely unscored rather than scored-another-way.
+      expect(classify(conversation({ compositeScore: null }), agreement)).toEqual({
+        eligible: false,
+        reason: 'not_yet_scored',
+      });
+    });
+
+    it('still applies every non-score exclusion', () => {
+      // The shared checks must not be skipped just because the kind differs.
+      expect(
+        classify(conversation({ audioDeletedAt: new Date(), audioKey: null }), agreement).reason,
+      ).toBe('audio_purged');
+      expect(classify(conversation({ userId: 'someone-else' }), agreement).reason).toBe(
+        'wrong_contributor',
+      );
+      expect(
+        classify(conversation({ status: SubmissionStatus.REJECTED }), agreement).reason,
+      ).toBe('rejected_by_quality_gate');
+    });
+
+    it('does not accept a word recording scored the way only a conversation can be', () => {
+      // The asymmetry runs both ways. A word recording with neither score is
+      // unscored; it must not inherit the conversation branch's looser rule.
+      const word = recording({ score: null, compositeScore: null });
+      expect(classify(word, agreement).reason).toBe('not_yet_scored');
+    });
   });
 
   describe('isTransient', () => {

@@ -92,7 +92,13 @@ export class StreamDecksController {
     @Param('id') id: string,
     @Body() dto: AddStreamDeckItemDto,
   ) {
-    return this.decks.addItem(subscriber.organizationId, id, subscriber.sub, dto.recordingId);
+    return this.decks.addItem(
+      subscriber.organizationId,
+      id,
+      subscriber.sub,
+      dto.recordingId,
+      dto.recordKind,
+    );
   }
 
   @Delete(':id/items/:itemId')

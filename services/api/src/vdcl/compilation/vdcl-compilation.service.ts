@@ -2,10 +2,13 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { Prisma, VdclCompilationStage, VdclVersionStatus } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
+  DOMAIN_ELIGIBILITY_SELECT,
   ELIGIBILITY_SELECT,
   EligibilityCandidate,
   ExclusionReason,
   classify,
+  domainCandidate,
+  wordCandidate,
 } from './eligibility';
 import {
   CanonicalManifestItem,
@@ -214,62 +217,96 @@ export class VdclCompilationService {
     let scoreCount = 0;
     const asrEngines = new Set<string>();
 
+    /**
+     * One candidate's contribution to the manifest. Shared by both dataset
+     * passes below so the eligibility decision, the exclusion tally and the
+     * metric accumulation cannot drift between kinds -- a second copy of this
+     * body is how one dataset quietly starts being scored differently.
+     */
+    const consider = (
+      recording: EligibilityCandidate & { asrEngine?: string | null },
+    ): void => {
+      const outcome = classify(recording, { contributorId: agreement.contributorId });
+      if (!outcome.eligible) {
+        const reason = outcome.reason as ExclusionReason;
+        // wrong_contributor is not an "exclusion" in any sense the
+        // contributor would recognise -- it is someone else's recording,
+        // and counting it would inflate the rejection figure on their
+        // review screen with work that was never theirs.
+        if (reason !== 'wrong_contributor') {
+          exclusionsByReason[reason] = (exclusionsByReason[reason] ?? 0) + 1;
+        }
+        return;
+      }
+
+      const hasTranscript = Boolean(recording.transcript);
+      if (hasTranscript) transcriptCount += 1;
+      if (recording.durationMs) totalDurationMs += BigInt(recording.durationMs);
+      if (recording.asrEngine) asrEngines.add(recording.asrEngine);
+
+      const composite = recording.compositeScore ?? recording.score;
+      if (composite !== null) {
+        scoreSum += Number(composite.toString());
+        scoreCount += 1;
+      }
+
+      covered.push({
+        recordKind: recording.recordKind,
+        recordingId: recording.id,
+        durationMs: recording.durationMs,
+        dialectTag: recording.dialectTag,
+        compositeScore: canonicalDecimal(recording.compositeScore),
+        score: canonicalDecimal(recording.score),
+        hasTranscript,
+      });
+      itemRows.push({
+        recordKind: recording.recordKind,
+        recordingId: recording.id,
+        durationMs: recording.durationMs,
+        dialectTag: recording.dialectTag,
+        compositeScore: recording.compositeScore,
+        score: recording.score,
+        hasTranscript,
+      });
+    };
+
+    // Pass 1: word recordings.
     let cursor: string | undefined;
     for (;;) {
-      const batch = (await this.prisma.wordRecording.findMany({
+      const batch = await this.prisma.wordRecording.findMany({
         where: { userId: agreement.contributorId },
-        select: { ...ELIGIBILITY_SELECT, asrEngine: true, qualityGateCheckedAt: true },
+        select: { ...ELIGIBILITY_SELECT, asrEngine: true },
         orderBy: { id: 'asc' },
         take: INVENTORY_BATCH_SIZE,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      })) as (EligibilityCandidate & {
-        asrEngine: string | null;
-        qualityGateCheckedAt: Date | null;
-      })[];
+      });
       if (batch.length === 0) break;
       cursor = batch[batch.length - 1].id;
 
-      for (const recording of batch) {
-        const outcome = classify(recording, { contributorId: agreement.contributorId });
-        if (!outcome.eligible) {
-          const reason = outcome.reason as ExclusionReason;
-          // wrong_contributor is not an "exclusion" in any sense the
-          // contributor would recognise -- it is someone else's recording,
-          // and counting it would inflate the rejection figure on their
-          // review screen with work that was never theirs.
-          if (reason !== 'wrong_contributor') {
-            exclusionsByReason[reason] = (exclusionsByReason[reason] ?? 0) + 1;
-          }
-          continue;
-        }
+      for (const row of batch) {
+        const { asrEngine, ...candidate } = row;
+        consider({ ...wordCandidate(candidate), asrEngine });
+      }
 
-        const hasTranscript = Boolean(recording.transcript);
-        if (hasTranscript) transcriptCount += 1;
-        if (recording.durationMs) totalDurationMs += BigInt(recording.durationMs);
-        if (recording.asrEngine) asrEngines.add(recording.asrEngine);
+      if (batch.length < INVENTORY_BATCH_SIZE) break;
+    }
 
-        const composite = recording.compositeScore ?? recording.score;
-        if (composite !== null) {
-          scoreSum += Number(composite.toString());
-          scoreCount += 1;
-        }
+    // Pass 2: domain conversations. Same contributor, same eligibility rules,
+    // no ASR engine (there is no transcription step for this kind at all).
+    let domainCursor: string | undefined;
+    for (;;) {
+      const batch = await this.prisma.domainConversationRecording.findMany({
+        where: { userId: agreement.contributorId },
+        select: DOMAIN_ELIGIBILITY_SELECT,
+        orderBy: { id: 'asc' },
+        take: INVENTORY_BATCH_SIZE,
+        ...(domainCursor ? { cursor: { id: domainCursor }, skip: 1 } : {}),
+      });
+      if (batch.length === 0) break;
+      domainCursor = batch[batch.length - 1].id;
 
-        covered.push({
-          recordingId: recording.id,
-          durationMs: recording.durationMs,
-          dialectTag: recording.dialectTag,
-          compositeScore: canonicalDecimal(recording.compositeScore),
-          score: canonicalDecimal(recording.score),
-          hasTranscript,
-        });
-        itemRows.push({
-          recordingId: recording.id,
-          durationMs: recording.durationMs,
-          dialectTag: recording.dialectTag,
-          compositeScore: recording.compositeScore,
-          score: recording.score,
-          hasTranscript,
-        });
+      for (const row of batch) {
+        consider(domainCandidate(row));
       }
 
       if (batch.length < INVENTORY_BATCH_SIZE) break;

@@ -1,4 +1,4 @@
-import { Prisma, SubmissionStatus } from '@dialectiva/db';
+import { Prisma, StreamRecordKind, SubmissionStatus } from '@dialectiva/db';
 
 /**
  * Why a recording did not make it into a manifest.
@@ -49,17 +49,82 @@ export const ELIGIBILITY_SELECT = {
   noAudioClawedBackAt: true,
 } satisfies Prisma.WordRecordingSelect;
 
+/**
+ * The same, for domain conversations. A separate constant rather than a subset
+ * of the above because the columns genuinely differ -- this table has no
+ * `score`, `transcript`, `misplacedDialectAt` or `noAudioClawedBackAt` -- and a
+ * shared select would have to be the intersection, dropping signal the word
+ * path needs.
+ */
+export const DOMAIN_ELIGIBILITY_SELECT = {
+  id: true,
+  userId: true,
+  dialectTag: true,
+  status: true,
+  compositeScore: true,
+  durationMs: true,
+  audioKey: true,
+  audioDeletedAt: true,
+} satisfies Prisma.DomainConversationRecordingSelect;
+
+/**
+ * Lift a WordRecording row into a candidate.
+ *
+ * These two mappers are the only place the shape difference is written down.
+ * A caller that builds a candidate literal by hand would have to decide what
+ * to put in `score` for a domain conversation, and the tempting wrong answer
+ * (`compositeScore`) would make an unscored clip look scored.
+ */
+export function wordCandidate(
+  row: Prisma.WordRecordingGetPayload<{ select: typeof ELIGIBILITY_SELECT }>,
+): EligibilityCandidate {
+  return { recordKind: StreamRecordKind.WORD_RECORDING, ...row };
+}
+
+export function domainCandidate(
+  row: Prisma.DomainConversationRecordingGetPayload<{ select: typeof DOMAIN_ELIGIBILITY_SELECT }>,
+): EligibilityCandidate {
+  return {
+    recordKind: StreamRecordKind.DOMAIN_CONVERSATION_RECORDING,
+    ...row,
+    // Columns this table does not have. Null, never derived from another
+    // column -- see the note on EligibilityCandidate.
+    score: null,
+    transcript: null,
+    misplacedDialectAt: null,
+    noAudioClawedBackAt: null,
+  };
+}
+
 export type EligibilityCandidate = {
+  /**
+   * Which dataset this candidate came from. Carried so an exclusion can be
+   * reported against the right record and so the manifest item records it --
+   * `classify` itself branches on it only where the two kinds genuinely
+   * differ (see below).
+   */
+  recordKind: StreamRecordKind;
   id: string;
   userId: string | null;
   dialectTag: string;
   status: SubmissionStatus;
-  score: Prisma.Decimal | null;
   compositeScore: Prisma.Decimal | null;
   durationMs: number | null;
-  transcript: string | null;
   audioKey: string | null;
   audioDeletedAt: Date | null;
+  /**
+   * The next four exist on WordRecording only. DomainConversationRecording has
+   * no `score`, no `transcript`, and neither validator flag -- so they are
+   * `null` for that kind, never absent-and-therefore-ignored.
+   *
+   * That distinction is what keeps `classify` conservative across both kinds:
+   * `misplacedDialectAt` and `noAudioClawedBackAt` can only ever EXCLUDE, so a
+   * kind that cannot carry them is not being let through a check it should
+   * have faced -- the check does not exist for it. `score` is different and is
+   * handled explicitly below.
+   */
+  score: Prisma.Decimal | null;
+  transcript: string | null;
   misplacedDialectAt: Date | null;
   noAudioClawedBackAt: Date | null;
 };
@@ -124,11 +189,32 @@ export function classify(
       return { eligible: false, reason: 'not_yet_scored' };
   }
 
-  // A SCORED/SETTLED row should always carry a score, but the column is
+  // A SCORED/SETTLED row should always carry a score, but the columns are
   // nullable and this is a rights decision, so it is checked rather than
   // assumed.
-  if (recording.score === null && recording.compositeScore === null) {
-    return { eligible: false, reason: 'not_yet_scored' };
+  //
+  // The two kinds differ here and the difference is load-bearing. A word
+  // recording can be scored two ways (`score` from consensus/exact-match,
+  // `compositeScore` from audio quality) and either is enough. A domain
+  // conversation has no `score` column at all, so requiring one would exclude
+  // every domain conversation forever -- and accepting its absence for a word
+  // recording would admit clips that were never actually scored.
+  //
+  // Hence: compositeScore is required for both, and `score` is an additional
+  // way for a WORD_RECORDING to qualify. Written as an explicit switch so
+  // adding a kind forces a decision about what "scored" means for it rather
+  // than inheriting whichever branch happens to be first.
+  switch (recording.recordKind) {
+    case StreamRecordKind.WORD_RECORDING:
+      if (recording.score === null && recording.compositeScore === null) {
+        return { eligible: false, reason: 'not_yet_scored' };
+      }
+      break;
+    case StreamRecordKind.DOMAIN_CONVERSATION_RECORDING:
+      if (recording.compositeScore === null) {
+        return { eligible: false, reason: 'not_yet_scored' };
+      }
+      break;
   }
 
   return { eligible: true };

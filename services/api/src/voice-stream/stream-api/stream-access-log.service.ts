@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { StreamRecordKind } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UsageCounterService } from './usage-counter.service';
 
@@ -7,6 +8,12 @@ export interface StreamAccessLogEntry {
   credentialType?: 'stream_key' | 'oauth_client';
   organizationId: string;
   deckId?: string;
+  /**
+   * Which dataset `recordingId` names. Undefined for manifest/usage requests,
+   * which are not about one record -- and this is the field the revenue-sharing
+   * rollup groups by, so an audio row without it cannot be attributed.
+   */
+  recordKind?: StreamRecordKind;
   recordingId?: string;
   requestType: 'manifest' | 'metadata' | 'audio' | 'usage';
   requestedRange?: string;
@@ -37,6 +44,7 @@ export class StreamAccessLogService {
           credentialType: entry.credentialType ?? 'stream_key',
           organizationId: entry.organizationId,
           deckId: entry.deckId,
+          recordKind: entry.recordKind,
           recordingId: entry.recordingId,
           requestType: entry.requestType,
           requestedRange: entry.requestedRange,

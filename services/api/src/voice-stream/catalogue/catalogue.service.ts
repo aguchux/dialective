@@ -1,5 +1,11 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { IsvcConfidence, Prisma, SubmissionStatus, VdclPurpose } from '@dialectiva/db';
+import {
+  IsvcConfidence,
+  Prisma,
+  StreamRecordKind,
+  SubmissionStatus,
+  VdclPurpose,
+} from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { StorageService } from '../../storage/storage.service';
 import { RightsService } from '../../vdcl/rights/rights.service';
@@ -106,7 +112,9 @@ export class CatalogueService {
    * is the intended split: revoking a licence removes PERMISSION, it does not
    * remove the recordings from Stream.
    */
-  private async vdclCoverageWhere(): Promise<Prisma.WordRecordingWhereInput> {
+  private async vdclCoverageWhere(
+    recordKind: StreamRecordKind = StreamRecordKind.WORD_RECORDING,
+  ): Promise<{ id?: { in: string[] } }> {
     if (!(await this.settings.isVdclCatalogueCoverageFilterEnabled())) return {};
     return {
       // Correlated existence check rather than a fetched id list: the
@@ -114,7 +122,7 @@ export class CatalogueService {
       // every covered recordingId into memory to build an `in` clause would
       // not survive scale.
       id: {
-        in: await this.coveredRecordingIds(),
+        in: await this.coveredRecordingIds(recordKind),
       },
     };
   }
@@ -127,8 +135,13 @@ export class CatalogueService {
    * cannot be expressed as a nested `where` and has to resolve the id set
    * first -- the same two-step the ISVC filters in `search` already use.
    */
-  private async coveredRecordingIds(): Promise<string[]> {
+  private async coveredRecordingIds(recordKind: StreamRecordKind): Promise<string[]> {
+    // Scoped BY KIND, not pooled across both. The two record tables have
+    // independent uuid spaces, so a pooled id set would let a licensed domain
+    // conversation vouch for an unlicensed word recording that happened to
+    // share its id -- a coverage filter answering about the wrong dataset.
     const rows = await this.prisma.vdclManifestItem.findMany({
+      where: { recordKind },
       select: { recordingId: true },
       distinct: ['recordingId'],
     });
@@ -436,19 +449,32 @@ export class CatalogueService {
     userId: string,
     recordingId: string,
     planMinConfidence?: IsvcConfidence,
+    recordKind: StreamRecordKind = StreamRecordKind.WORD_RECORDING,
   ): Promise<{ url: string; expiresInSeconds: number }> {
     // The coverage filter applies here too, so a recording outside every
     // manifest 404s rather than reaching the rights check below and
     // returning a 403 that implies the clip exists and is merely unlicensed.
-    const coverage = await this.vdclCoverageWhere();
-    const recording = await this.prisma.wordRecording.findFirst({
-      where: { id: recordingId, ...this.eligibleWhere({}), ...coverage },
-      select: { audioBucket: true, audioKey: true },
-    });
+    const coverage = await this.vdclCoverageWhere(recordKind);
+    const recording =
+      recordKind === StreamRecordKind.WORD_RECORDING
+        ? await this.prisma.wordRecording.findFirst({
+            where: { id: recordingId, ...this.eligibleWhere({}), ...coverage },
+            select: { audioBucket: true, audioKey: true },
+          })
+        : await this.prisma.domainConversationRecording.findFirst({
+            where: { id: recordingId, ...this.domainEligibleWhere(), ...coverage },
+            select: { audioBucket: true, audioKey: true },
+          });
     if (!recording?.audioBucket || !recording.audioKey) {
       throw new NotFoundException('Recording not found or not available for preview');
     }
-    if (planMinConfidence && !(await this.meetsConfidenceFloor(recordingId, planMinConfidence))) {
+    // Word-only, for the reason given in getEligibleRecording: no domain
+    // conversation will ever have an ISVC aggregation to meet a floor with.
+    if (
+      recordKind === StreamRecordKind.WORD_RECORDING &&
+      planMinConfidence &&
+      !(await this.meetsConfidenceFloor(recordingId, planMinConfidence))
+    ) {
       throw new NotFoundException('Recording not found or not available for preview');
     }
 
@@ -465,7 +491,10 @@ export class CatalogueService {
     // purpose in the enum, rather than a training purpose the contributor
     // may well have refused. A contributor who grants nothing at all still
     // has their clip withheld from preview.
-    const decision = await this.rights.mayUse(recordingId, VdclPurpose.LINGUISTIC_RESEARCH);
+    const decision = await this.rights.mayUse(
+      { recordKind, recordingId },
+      VdclPurpose.LINGUISTIC_RESEARCH,
+    );
     if (!decision.allowed) {
       void this.rights.recordDecision({
         recordingId,
@@ -494,12 +523,50 @@ export class CatalogueService {
    * deck even by an org that learned its id some other way. Without this the
    * search filter would only be a display convention.
    */
-  async isEligible(recordingId: string): Promise<boolean> {
-    const coverage = await this.vdclCoverageWhere();
-    const count = await this.prisma.wordRecording.count({
-      where: { id: recordingId, ...this.eligibleWhere({}), ...coverage },
-    });
-    return count > 0;
+  async isEligible(
+    recordKind: StreamRecordKind,
+    recordingId: string,
+  ): Promise<boolean> {
+    // Resolved for the kind being asked about, once -- see
+    // coveredRecordingIds on why a pooled id set would be wrong.
+    const coverage = await this.vdclCoverageWhere(recordKind);
+
+    // The eligibility predicate is the same for both kinds -- settled, audio
+    // still present -- but it has to be applied to the right table. An
+    // exhaustive switch rather than a table lookup, so adding a record kind
+    // fails the build here instead of silently answering "not eligible" and
+    // making a whole dataset unaddable to any deck.
+    switch (recordKind) {
+      case StreamRecordKind.WORD_RECORDING: {
+        const count = await this.prisma.wordRecording.count({
+          where: { id: recordingId, ...this.eligibleWhere({}), ...coverage },
+        });
+        return count > 0;
+      }
+      case StreamRecordKind.DOMAIN_CONVERSATION_RECORDING: {
+        const count = await this.prisma.domainConversationRecording.count({
+          where: { id: recordingId, ...this.domainEligibleWhere(), ...coverage },
+        });
+        return count > 0;
+      }
+    }
+  }
+
+  /**
+   * The domain-conversation counterpart of eligibleWhere.
+   *
+   * Separate rather than generic: the two tables share these four column names
+   * today, but a shared predicate typed against one of them would silently
+   * stop applying if either diverged. The duplication is four lines and it
+   * makes the divergence a compile error rather than a missing filter.
+   */
+  private domainEligibleWhere(): Prisma.DomainConversationRecordingWhereInput {
+    return {
+      status: SubmissionStatus.SETTLED,
+      audioBucket: { not: null },
+      audioKey: { not: null },
+      audioDeletedAt: null,
+    };
   }
 
   /**
@@ -515,26 +582,61 @@ export class CatalogueService {
    * "not licensed for this purpose" denial into a bare 404 and duplicate
    * enforcement in a weaker, presence-only form.
    */
-  async getEligibleRecording(recordingId: string, planMinConfidence?: IsvcConfidence) {
-    const recording = await this.prisma.wordRecording.findFirst({
-      where: { id: recordingId, ...this.eligibleWhere({}) },
+  async getEligibleRecording(
+    recordKind: StreamRecordKind,
+    recordingId: string,
+    planMinConfidence?: IsvcConfidence,
+  ) {
+    const variantSelect = {
       select: {
-        id: true,
-        dialectTag: true,
-        durationMs: true,
-        compositeScore: true,
-        audioBucket: true,
-        audioKey: true,
-        dialectVariant: {
-          select: {
-            tag: true,
-            dialect: { select: { tag: true, country: { select: { code: true } } } },
-          },
-        },
+        tag: true,
+        dialect: { select: { tag: true, country: { select: { code: true } } } },
       },
-    });
+    };
+
+    const recording =
+      recordKind === StreamRecordKind.WORD_RECORDING
+        ? await this.prisma.wordRecording.findFirst({
+            where: { id: recordingId, ...this.eligibleWhere({}) },
+            select: {
+              id: true,
+              dialectTag: true,
+              durationMs: true,
+              compositeScore: true,
+              audioBucket: true,
+              audioKey: true,
+              dialectVariant: variantSelect,
+            },
+          })
+        : await this.prisma.domainConversationRecording.findFirst({
+            where: { id: recordingId, ...this.domainEligibleWhere() },
+            select: {
+              id: true,
+              dialectTag: true,
+              durationMs: true,
+              compositeScore: true,
+              audioBucket: true,
+              audioKey: true,
+              dialectVariant: variantSelect,
+            },
+          });
     if (!recording) return null;
-    if (planMinConfidence && !(await this.meetsConfidenceFloor(recordingId, planMinConfidence))) {
+
+    // The ISVC confidence floor is a WORD_RECORDING concept: ISVC aggregates
+    // subscriber validations, and no ISVP/ISVC path scores a domain
+    // conversation, so none will ever have an aggregation. Applying the floor
+    // to them would make every domain conversation invisible on any paid tier
+    // that sets one -- excluded for failing a test that cannot be taken.
+    //
+    // Stated rather than silently skipped: a tier's confidence floor therefore
+    // does NOT currently constrain domain conversations. If that becomes
+    // wrong, the fix is to give them a quality signal of their own, not to
+    // borrow one that means something else.
+    if (
+      recordKind === StreamRecordKind.WORD_RECORDING &&
+      planMinConfidence &&
+      !(await this.meetsConfidenceFloor(recordingId, planMinConfidence))
+    ) {
       return null;
     }
     return recording;

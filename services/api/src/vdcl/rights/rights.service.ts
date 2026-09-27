@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { VdclPurpose, VdclVersionStatus } from '@dialectiva/db';
+import { StreamRecordKind, VdclPurpose, VdclVersionStatus } from '@dialectiva/db';
+import { kindKey } from '../../voice-stream/stream-record-kind.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { PlatformSettingsService } from '../../settings/platform-settings.service';
 
@@ -69,6 +70,21 @@ function deny(reason: RightsDenialReason, ids?: { agreementId?: string; versionI
  * allowed and records nothing, so the code can sit in production being
  * exercised before it starts refusing anything.
  */
+/**
+ * A record identified the only way it can be: kind plus id.
+ *
+ * Every rights entry point takes one of these rather than a bare string,
+ * because `WordRecording` and `DomainConversationRecording` have independent
+ * uuid spaces. A rights check resolved on the id alone could match the other
+ * table's manifest item and answer with a different contributor's grants --
+ * the one failure mode here that is worse than a wrong answer, because it
+ * would be a confidently wrong one.
+ */
+export interface RecordRef {
+  recordKind: StreamRecordKind;
+  recordingId: string;
+}
+
 @Injectable()
 export class RightsService {
   private readonly logger = new Logger(RightsService.name);
@@ -87,17 +103,22 @@ export class RightsService {
    * things. Deck-level coverage is a computed roll-up of this, never an
    * assumption baked into the deck.
    */
-  async mayUse(recordingId: string, purpose: VdclPurpose): Promise<RightsDecision> {
+  async mayUse(ref: RecordRef, purpose: VdclPurpose): Promise<RightsDecision> {
     if (!(await this.settings.isVdclEnforcementEnabled())) {
       return ALLOWED;
     }
+    const { recordKind, recordingId } = ref;
 
     // The manifest is the authority on coverage, not the recording's own
     // dialectTag or owner: a contributor's licence covers exactly the clips
     // frozen into its manifest at signing time, and nothing else. A recording
     // made after signing is not retroactively covered.
     const items = await this.prisma.vdclManifestItem.findMany({
-      where: { recordingId },
+      // recordKind is part of the key, not a filter refinement. Without it a
+      // domain conversation could resolve against a word recording's licence
+      // that happened to share its uuid -- answering a rights question with
+      // the wrong contributor's grants.
+      where: { recordKind, recordingId },
       select: {
         manifest: {
           select: {
@@ -173,7 +194,7 @@ export class RightsService {
    * in every refused one.
    */
   async mayUseForCredential(
-    recordingId: string,
+    ref: RecordRef,
     credential: { purposes: VdclPurpose[] },
   ): Promise<RightsDecision> {
     if (!(await this.settings.isVdclEnforcementEnabled())) {
@@ -187,7 +208,7 @@ export class RightsService {
 
     let last: RightsDecision = ALLOWED;
     for (const purpose of purposes) {
-      last = await this.mayUse(recordingId, purpose);
+      last = await this.mayUse(ref, purpose);
       if (!last.allowed) return last;
     }
     return last;
@@ -199,20 +220,34 @@ export class RightsService {
    * recordingId absent from the returned map is denied.
    */
   async mayUseMany(
-    recordingIds: string[],
+    refs: RecordRef[],
     purpose: VdclPurpose,
   ): Promise<Map<string, RightsDecision>> {
+    // Keyed by kindKey(kind, id), NOT bare id -- the two record tables have
+    // independent uuid spaces, so a bare-id map could let one kind's decision
+    // answer for the other's.
     const result = new Map<string, RightsDecision>();
-    if (recordingIds.length === 0) return result;
+    if (refs.length === 0) return result;
 
     if (await this.settings.isVdclEnforcementEnabled().then((on) => !on)) {
-      for (const id of recordingIds) result.set(id, ALLOWED);
+      for (const ref of refs) result.set(kindKey(ref.recordKind, ref.recordingId), ALLOWED);
       return result;
     }
 
+    // One OR term per kind present, rather than an id-only `in` that would
+    // match the other table's rows too.
+    const kinds = [...new Set(refs.map((r) => r.recordKind))];
     const items = await this.prisma.vdclManifestItem.findMany({
-      where: { recordingId: { in: recordingIds } },
+      where: {
+        OR: kinds.map((recordKind) => ({
+          recordKind,
+          recordingId: {
+            in: refs.filter((r) => r.recordKind === recordKind).map((r) => r.recordingId),
+          },
+        })),
+      },
       select: {
+        recordKind: true,
         recordingId: true,
         manifest: {
           select: {
@@ -230,34 +265,35 @@ export class RightsService {
       },
     });
 
-    for (const id of recordingIds) result.set(id, deny('no_vdcl'));
+    for (const ref of refs) result.set(kindKey(ref.recordKind, ref.recordingId), deny('no_vdcl'));
 
     for (const item of items) {
       const version = item.manifest.vdclVersion;
       const ids = { agreementId: version.agreementId, versionId: version.id };
-      const current = result.get(item.recordingId);
+      const key = kindKey(item.recordKind, item.recordingId);
+      const current = result.get(key);
       if (current?.allowed) continue;
 
       if (version.agreement.withdrawnAt) {
-        result.set(item.recordingId, deny('licence_withdrawn', ids));
+        result.set(key, deny('licence_withdrawn', ids));
         continue;
       }
       if (version.status === VdclVersionStatus.SUSPENDED) {
-        result.set(item.recordingId, deny('licence_suspended', ids));
+        result.set(key, deny('licence_suspended', ids));
         continue;
       }
       if (
         version.status !== VdclVersionStatus.ACTIVE ||
         version.agreement.activeVersionId !== version.id
       ) {
-        result.set(item.recordingId, deny('licence_not_active', ids));
+        result.set(key, deny('licence_not_active', ids));
         continue;
       }
       if (!version.grants.some((g) => g.purpose === purpose)) {
-        result.set(item.recordingId, deny('purpose_not_granted', ids));
+        result.set(key, deny('purpose_not_granted', ids));
         continue;
       }
-      result.set(item.recordingId, { ...ALLOWED, ...ids });
+      result.set(key, { ...ALLOWED, ...ids });
     }
 
     return result;
@@ -273,27 +309,29 @@ export class RightsService {
    * rather than failing.
    */
   async filterUsableForCredential(
-    recordingIds: string[],
+    refs: RecordRef[],
     credential: { purposes: VdclPurpose[] },
   ): Promise<Set<string>> {
+    // Returns a Set of kindKey(kind, id), so callers test membership with the
+    // same composite key rather than a bare id.
     if (!(await this.settings.isVdclEnforcementEnabled())) {
-      return new Set(recordingIds);
+      return new Set(refs.map((r) => kindKey(r.recordKind, r.recordingId)));
     }
 
     const purposes = declaredPurposes(credential);
     if (purposes.length === 0) return new Set();
-    if (recordingIds.length === 0) return new Set();
+    if (refs.length === 0) return new Set();
 
     // Start from everything, then intersect per declared purpose -- a
     // recording survives only if EVERY declared purpose is granted, matching
     // mayUseForCredential's all-not-any rule.
-    let usable = new Set(recordingIds);
+    let usable = refs;
     for (const purpose of purposes) {
-      const decisions = await this.mayUseMany([...usable], purpose);
-      usable = new Set([...usable].filter((id) => decisions.get(id)?.allowed));
-      if (usable.size === 0) break;
+      const decisions = await this.mayUseMany(usable, purpose);
+      usable = usable.filter((r) => decisions.get(kindKey(r.recordKind, r.recordingId))?.allowed);
+      if (usable.length === 0) break;
     }
-    return usable;
+    return new Set(usable.map((r) => kindKey(r.recordKind, r.recordingId)));
   }
 
   /**
@@ -306,6 +344,7 @@ export class RightsService {
    * audit write failing must not turn an allowed request into an error.
    */
   async recordDecision(params: {
+    recordKind?: StreamRecordKind;
     recordingId: string;
     /** Undefined when the credential declared none -- the denial itself is what matters then. */
     purpose?: VdclPurpose;

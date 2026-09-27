@@ -135,7 +135,7 @@ describe('PublicDecksService', () => {
           organization: { name: 'Org 2' },
           createdAt: new Date(),
           license: null,
-          items: [{ recordingId: 'rec-1' }],
+          items: [{ recordKind: 'WORD_RECORDING', recordingId: 'rec-1' }],
           _count: { items: 1 },
         },
         {
@@ -146,7 +146,7 @@ describe('PublicDecksService', () => {
           organization: { name: 'Org 3' },
           createdAt: new Date(),
           license: null,
-          items: [{ recordingId: 'rec-2' }],
+          items: [{ recordKind: 'WORD_RECORDING', recordingId: 'rec-2' }],
           _count: { items: 1 },
         },
       ]);
@@ -294,8 +294,8 @@ describe('PublicDecksService', () => {
       });
       prisma.deckLicense.findUnique.mockResolvedValue(null);
       prisma.streamDeckItem.findMany.mockResolvedValue([
-        { recordingId: 'rec-1' },
-        { recordingId: 'rec-2' },
+        { recordKind: 'WORD_RECORDING', recordingId: 'rec-1' },
+        { recordKind: 'WORD_RECORDING', recordingId: 'rec-2' },
       ]);
       prisma.streamDeckItem.findUnique.mockResolvedValue(null);
       catalogue.isEligible.mockResolvedValue(true);
@@ -332,8 +332,8 @@ describe('PublicDecksService', () => {
       });
       prisma.deckLicense.findUnique.mockResolvedValue(null);
       prisma.streamDeckItem.findMany.mockResolvedValue([
-        { recordingId: 'rec-1' },
-        { recordingId: 'rec-2' },
+        { recordKind: 'WORD_RECORDING', recordingId: 'rec-1' },
+        { recordKind: 'WORD_RECORDING', recordingId: 'rec-2' },
       ]);
       prisma.streamDeckItem.findUnique.mockResolvedValue(null);
       catalogue.isEligible.mockResolvedValue(true);
@@ -364,7 +364,7 @@ describe('PublicDecksService', () => {
         visibility: 'PUBLIC',
       });
       prisma.deckLicense.findUnique.mockResolvedValue(null);
-      prisma.streamDeckItem.findMany.mockResolvedValue([{ recordingId: 'rec-purged' }]);
+      prisma.streamDeckItem.findMany.mockResolvedValue([{ recordKind: 'WORD_RECORDING', recordingId: 'rec-purged' }]);
       catalogue.isEligible.mockResolvedValue(false);
       decks.create.mockResolvedValue({ id: 'new-deck-1' });
       decks.get.mockResolvedValue({ id: 'new-deck-1' });
@@ -385,8 +385,8 @@ describe('PublicDecksService', () => {
       });
       prisma.deckLicense.findUnique.mockResolvedValue(null);
       prisma.streamDeckItem.findMany.mockResolvedValue([
-        { recordingId: 'rec-1' },
-        { recordingId: 'rec-2' },
+        { recordKind: 'WORD_RECORDING', recordingId: 'rec-1' },
+        { recordKind: 'WORD_RECORDING', recordingId: 'rec-2' },
       ]);
       prisma.validationQueueItem.findUnique
         .mockResolvedValueOnce(null)

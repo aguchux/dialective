@@ -27,6 +27,7 @@ describe('VDCL manifest hash', () => {
       purposes: ['ASR_TRAINING', 'LLM_TRAINING'],
       items: [
         {
+          recordKind: 'WORD_RECORDING',
           recordingId: 'rec-b',
           durationMs: 2400,
           dialectTag: 'ig-ng',
@@ -35,6 +36,7 @@ describe('VDCL manifest hash', () => {
           hasTranscript: true,
         },
         {
+          recordKind: 'WORD_RECORDING',
           recordingId: 'rec-a',
           durationMs: 2400,
           dialectTag: 'ig-ng',
@@ -114,7 +116,37 @@ describe('VDCL manifest hash', () => {
   });
 
   it('embeds the canonical version, so the rules can change without breaking old hashes', () => {
-    expect(canonicalise(manifest())).toContain('"canonicalVersion":2');
+    expect(canonicalise(manifest())).toContain('"canonicalVersion":3');
+  });
+
+  it('includes recordKind in each item, so two kinds sharing a uuid cannot collide', () => {
+    // The kind is part of an item's IDENTITY, not metadata about it. If it were
+    // outside the hash, a manifest covering a domain conversation would produce
+    // the same hash as one covering a word recording with the same uuid -- and
+    // the hash is what a subscriber checks provenance against.
+    const word = manifest();
+    const domain = manifest();
+    domain.items = domain.items.map((item) => ({
+      ...item,
+      recordKind: 'DOMAIN_CONVERSATION_RECORDING',
+    }));
+
+    expect(hashManifest(word)).not.toEqual(hashManifest(domain));
+  });
+
+  it('does not let record-kind order change the hash', () => {
+    // Items sort by (recordKind, recordingId). Without the kind in the sort,
+    // two items sharing an id would order unstably and the hash would depend
+    // on query order.
+    const a = manifest();
+    a.items = [
+      { ...a.items[0], recordKind: 'DOMAIN_CONVERSATION_RECORDING', recordingId: 'shared' },
+      { ...a.items[0], recordKind: 'WORD_RECORDING', recordingId: 'shared' },
+    ];
+    const b = manifest();
+    b.items = [...a.items].reverse();
+
+    expect(hashManifest(a)).toEqual(hashManifest(b));
   });
 
   it('does not let dialect order change the hash', () => {

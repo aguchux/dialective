@@ -1,3 +1,4 @@
+import { StreamRecordKind } from '@dialectiva/db';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { CatalogueService } from './catalogue.service';
 
@@ -409,7 +410,7 @@ describe('CatalogueService', () => {
       const { prisma, service } = setup();
       prisma.wordRecording.findFirst.mockResolvedValue(recordingRow);
 
-      const result = await service.getEligibleRecording('rec-1');
+      const result = await service.getEligibleRecording(StreamRecordKind.WORD_RECORDING, 'rec-1');
 
       expect(result).toEqual(recordingRow);
     });
@@ -421,7 +422,7 @@ describe('CatalogueService', () => {
         aggregation: { confidence: 'ESTABLISHED' },
       });
 
-      const result = await service.getEligibleRecording('rec-1', 'VERY_HIGH');
+      const result = await service.getEligibleRecording(StreamRecordKind.WORD_RECORDING, 'rec-1', 'VERY_HIGH');
 
       expect(result).toBeNull();
     });
@@ -431,7 +432,7 @@ describe('CatalogueService', () => {
       prisma.wordRecording.findFirst.mockResolvedValue(recordingRow);
       prisma.isvcCurrent.findUnique.mockResolvedValue(null);
 
-      const result = await service.getEligibleRecording('rec-1', 'HIGH');
+      const result = await service.getEligibleRecording(StreamRecordKind.WORD_RECORDING, 'rec-1', 'HIGH');
 
       expect(result).toBeNull();
     });
@@ -443,7 +444,7 @@ describe('CatalogueService', () => {
         aggregation: { confidence: 'VERY_HIGH' },
       });
 
-      const result = await service.getEligibleRecording('rec-1', 'HIGH');
+      const result = await service.getEligibleRecording(StreamRecordKind.WORD_RECORDING, 'rec-1', 'HIGH');
 
       expect(result).toEqual(recordingRow);
     });
@@ -454,7 +455,7 @@ describe('CatalogueService', () => {
       const { prisma, service } = setup();
       prisma.wordRecording.count.mockResolvedValue(1);
 
-      const result = await service.isEligible('rec-1');
+      const result = await service.isEligible(StreamRecordKind.WORD_RECORDING, 'rec-1');
 
       expect(result).toBe(true);
       expect(prisma.wordRecording.count).toHaveBeenCalledWith({
@@ -466,7 +467,7 @@ describe('CatalogueService', () => {
       const { prisma, service } = setup();
       prisma.wordRecording.count.mockResolvedValue(0);
 
-      const result = await service.isEligible('rec-missing');
+      const result = await service.isEligible(StreamRecordKind.WORD_RECORDING, 'rec-missing');
 
       expect(result).toBe(false);
     });
@@ -524,6 +525,24 @@ describe('CatalogueService', () => {
       ]);
     });
 
+    it('scopes covered ids BY KIND, so one dataset cannot vouch for another', async () => {
+      // WordRecording and DomainConversationRecording have independent uuid
+      // spaces. Pooling covered ids would let a licensed conversation satisfy
+      // the coverage check for an unlicensed word recording sharing its uuid --
+      // a filter answering about the wrong dataset.
+      const { prisma, settings, service } = setup();
+      settings.isVdclCatalogueCoverageFilterEnabled.mockResolvedValue(true);
+      prisma.vdclManifestItem.findMany.mockResolvedValue([]);
+      prisma.wordRecording.count.mockResolvedValue(0);
+      prisma.wordRecording.findMany.mockResolvedValue([]);
+
+      await service.search({ page: 1, pageSize: 20 });
+
+      expect(prisma.vdclManifestItem.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { recordKind: 'WORD_RECORDING' } }),
+      );
+    });
+
     it('keeps the coverage filter when an ISVC filter also sets where.id', async () => {
       // The regression this composition exists for: the ISVC branch assigns
       // where.id outright, so a coverage filter written the same way would be
@@ -566,7 +585,7 @@ describe('CatalogueService', () => {
       prisma.vdclManifestItem.findMany.mockResolvedValue([]);
       prisma.wordRecording.count.mockResolvedValue(0);
 
-      await expect(service.isEligible('unlicensed-1')).resolves.toBe(false);
+      await expect(service.isEligible(StreamRecordKind.WORD_RECORDING, 'unlicensed-1')).resolves.toBe(false);
       expect(prisma.wordRecording.count.mock.calls[0][0].where.id).toEqual({ in: [] });
     });
   });

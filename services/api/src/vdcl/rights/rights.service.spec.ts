@@ -1,4 +1,5 @@
-import { VdclPurpose, VdclVersionStatus } from '@dialectiva/db';
+import { kindKey } from '../../voice-stream/stream-record-kind.util';
+import { StreamRecordKind, VdclPurpose, VdclVersionStatus } from '@dialectiva/db';
 import { RightsService } from './rights.service';
 
 /**
@@ -8,6 +9,25 @@ import { RightsService } from './rights.service';
  * the reason string is written verbatim into StreamAccessLog and is what makes
  * an enforcement decision explainable after the fact.
  */
+/**
+ * Shorthand for a record reference. Every rights entry point takes (kind, id)
+ * rather than a bare id -- the two record tables have independent uuid spaces.
+ */
+function ref(
+  recordingId: string,
+  recordKind: StreamRecordKind = StreamRecordKind.WORD_RECORDING,
+) {
+  return { recordKind, recordingId };
+}
+
+/** The composite map key the batch methods return. */
+function key(
+  recordingId: string,
+  recordKind: StreamRecordKind = StreamRecordKind.WORD_RECORDING,
+) {
+  return kindKey(recordKind, recordingId);
+}
+
 describe('RightsService.mayUse', () => {
   const AGREEMENT_ID = 'agreement-1';
   const VERSION_ID = 'version-1';
@@ -60,7 +80,7 @@ describe('RightsService.mayUse', () => {
 
   it('denies a recording with no VDCL at all -- fail closed is the default', async () => {
     const { service } = makeService([]);
-    const decision = await service.mayUse(RECORDING_ID, VdclPurpose.ASR_TRAINING);
+    const decision = await service.mayUse(ref(RECORDING_ID), VdclPurpose.ASR_TRAINING);
     expect(decision.allowed).toBe(false);
     expect(decision.reason).toBe('no_vdcl');
     expect(decision.entitlementDecision).toBe('denied:no_vdcl');
@@ -68,7 +88,7 @@ describe('RightsService.mayUse', () => {
 
   it('allows a recording covered by an ACTIVE version granting the purpose', async () => {
     const { service } = makeService([buildItem({ purposes: [VdclPurpose.ASR_TRAINING] })]);
-    const decision = await service.mayUse(RECORDING_ID, VdclPurpose.ASR_TRAINING);
+    const decision = await service.mayUse(ref(RECORDING_ID), VdclPurpose.ASR_TRAINING);
     expect(decision.allowed).toBe(true);
     expect(decision.entitlementDecision).toBe('allowed');
     expect(decision.agreementId).toBe(AGREEMENT_ID);
@@ -77,7 +97,7 @@ describe('RightsService.mayUse', () => {
 
   it('denies a purpose the contributor did not grant', async () => {
     const { service } = makeService([buildItem({ purposes: [VdclPurpose.ASR_TRAINING] })]);
-    const decision = await service.mayUse(RECORDING_ID, VdclPurpose.VOICE_CLONING);
+    const decision = await service.mayUse(ref(RECORDING_ID), VdclPurpose.VOICE_CLONING);
     expect(decision.allowed).toBe(false);
     expect(decision.reason).toBe('purpose_not_granted');
   });
@@ -86,14 +106,14 @@ describe('RightsService.mayUse', () => {
     // Withdrawal is the contributor's own decision and must take effect for
     // new access immediately, ahead of any other status.
     const { service } = makeService([buildItem({ withdrawnAt: new Date() })]);
-    const decision = await service.mayUse(RECORDING_ID, VdclPurpose.ASR_TRAINING);
+    const decision = await service.mayUse(ref(RECORDING_ID), VdclPurpose.ASR_TRAINING);
     expect(decision.allowed).toBe(false);
     expect(decision.reason).toBe('licence_withdrawn');
   });
 
   it('denies a suspended licence', async () => {
     const { service } = makeService([buildItem({ status: VdclVersionStatus.SUSPENDED })]);
-    const decision = await service.mayUse(RECORDING_ID, VdclPurpose.ASR_TRAINING);
+    const decision = await service.mayUse(ref(RECORDING_ID), VdclPurpose.ASR_TRAINING);
     expect(decision.allowed).toBe(false);
     expect(decision.reason).toBe('licence_suspended');
   });
@@ -109,7 +129,7 @@ describe('RightsService.mayUse', () => {
     VdclVersionStatus.AMENDMENT_PENDING,
   ])('denies a version in %s -- only ACTIVE grants rights', async (status) => {
     const { service } = makeService([buildItem({ status })]);
-    const decision = await service.mayUse(RECORDING_ID, VdclPurpose.ASR_TRAINING);
+    const decision = await service.mayUse(ref(RECORDING_ID), VdclPurpose.ASR_TRAINING);
     expect(decision.allowed).toBe(false);
     expect(decision.reason).toBe('licence_not_active');
   });
@@ -118,7 +138,7 @@ describe('RightsService.mayUse', () => {
     // A stale manifest must never keep granting rights after the agreement
     // has pointed its active version elsewhere.
     const { service } = makeService([buildItem({ activeVersionId: 'some-newer-version' })]);
-    const decision = await service.mayUse(RECORDING_ID, VdclPurpose.ASR_TRAINING);
+    const decision = await service.mayUse(ref(RECORDING_ID), VdclPurpose.ASR_TRAINING);
     expect(decision.allowed).toBe(false);
     expect(decision.reason).toBe('licence_not_active');
   });
@@ -129,14 +149,14 @@ describe('RightsService.mayUse', () => {
       buildItem({ versionId: 'old', status: VdclVersionStatus.SUPERSEDED, activeVersionId: 'new' }),
       buildItem({ versionId: 'new', purposes: [VdclPurpose.TTS_TRAINING] }),
     ]);
-    const decision = await service.mayUse(RECORDING_ID, VdclPurpose.TTS_TRAINING);
+    const decision = await service.mayUse(ref(RECORDING_ID), VdclPurpose.TTS_TRAINING);
     expect(decision.allowed).toBe(true);
     expect(decision.versionId).toBe('new');
   });
 
   it('returns allowed without querying when enforcement is disabled', async () => {
     const { service, prisma } = makeService([], false);
-    const decision = await service.mayUse(RECORDING_ID, VdclPurpose.ASR_TRAINING);
+    const decision = await service.mayUse(ref(RECORDING_ID), VdclPurpose.ASR_TRAINING);
     expect(decision.allowed).toBe(true);
     // The kill switch must short-circuit entirely -- shipping dark means
     // costing nothing, including a query per streamed clip.
@@ -158,6 +178,7 @@ describe('RightsService.mayUseMany', () => {
 
   function item(recordingId: string, purposes: VdclPurpose[]) {
     return {
+      recordKind: StreamRecordKind.WORD_RECORDING,
       recordingId,
       manifest: {
         vdclVersion: {
@@ -171,15 +192,55 @@ describe('RightsService.mayUseMany', () => {
     };
   }
 
-  it('denies every recordingId absent from the manifest table', async () => {
+  it('denies every record absent from the manifest table', async () => {
     const { service } = makeService([item('covered', [VdclPurpose.ASR_TRAINING])]);
     const result = await service.mayUseMany(
-      ['covered', 'uncovered'],
+      [ref('covered'), ref('uncovered')],
       VdclPurpose.ASR_TRAINING,
     );
-    expect(result.get('covered')?.allowed).toBe(true);
-    expect(result.get('uncovered')?.allowed).toBe(false);
-    expect(result.get('uncovered')?.reason).toBe('no_vdcl');
+    // Keyed by (kind, id), not bare id.
+    expect(result.get(key('covered'))?.allowed).toBe(true);
+    expect(result.get(key('uncovered'))?.allowed).toBe(false);
+    expect(result.get(key('uncovered'))?.reason).toBe('no_vdcl');
+  });
+
+  it('does not let one record kind answer for another sharing its uuid', async () => {
+    // The reason every rights entry point takes (kind, id). A licensed word
+    // recording must not vouch for an unlicensed domain conversation that
+    // happens to share its uuid -- that would be a confidently wrong answer to
+    // a rights question, which is worse than no answer.
+    const shared = 'same-uuid';
+    const { service } = makeService([item(shared, [VdclPurpose.ASR_TRAINING])]);
+
+    const result = await service.mayUseMany(
+      [
+        ref(shared, StreamRecordKind.WORD_RECORDING),
+        ref(shared, StreamRecordKind.DOMAIN_CONVERSATION_RECORDING),
+      ],
+      VdclPurpose.ASR_TRAINING,
+    );
+
+    expect(result.get(key(shared, StreamRecordKind.WORD_RECORDING))?.allowed).toBe(true);
+    expect(
+      result.get(key(shared, StreamRecordKind.DOMAIN_CONVERSATION_RECORDING))?.allowed,
+    ).toBe(false);
+  });
+
+  it('scopes the manifest query by kind, not by id alone', async () => {
+    const { service, prisma } = makeService([]);
+    await service.mayUseMany(
+      [ref('a'), ref('b', StreamRecordKind.DOMAIN_CONVERSATION_RECORDING)],
+      VdclPurpose.ASR_TRAINING,
+    );
+
+    // One OR term per kind present -- an id-only `in` would match the other
+    // table's rows too.
+    const where = prisma.vdclManifestItem.findMany.mock.calls[0][0].where;
+    expect(where.OR).toHaveLength(2);
+    expect(where.OR.map((t: { recordKind: string }) => t.recordKind).sort()).toEqual([
+      'DOMAIN_CONVERSATION_RECORDING',
+      'WORD_RECORDING',
+    ]);
   });
 
   it('returns an empty map for an empty input without querying', async () => {
@@ -191,9 +252,9 @@ describe('RightsService.mayUseMany', () => {
 
   it('allows everything when enforcement is disabled', async () => {
     const { service, prisma } = makeService([], false);
-    const result = await service.mayUseMany(['a', 'b'], VdclPurpose.ASR_TRAINING);
-    expect(result.get('a')?.allowed).toBe(true);
-    expect(result.get('b')?.allowed).toBe(true);
+    const result = await service.mayUseMany([ref('a'), ref('b')], VdclPurpose.ASR_TRAINING);
+    expect(result.get(key('a'))?.allowed).toBe(true);
+    expect(result.get(key('b'))?.allowed).toBe(true);
     expect(prisma.vdclManifestItem.findMany).not.toHaveBeenCalled();
   });
 });
@@ -258,14 +319,14 @@ describe('RightsService.mayUseForCredential', () => {
     // Undeclared must be denied, never defaulted -- guessing a purpose on the
     // subscriber's behalf is exactly the hole this closes.
     const { service } = makeService([VdclPurpose.ASR_TRAINING]);
-    const decision = await service.mayUseForCredential(RECORDING_ID, { purposes: [] });
+    const decision = await service.mayUseForCredential(ref(RECORDING_ID), { purposes: [] });
     expect(decision.allowed).toBe(false);
     expect(decision.reason).toBe('no_declared_purpose');
   });
 
   it('allows when the declared purpose is granted', async () => {
     const { service } = makeService([VdclPurpose.ASR_TRAINING]);
-    const decision = await service.mayUseForCredential(RECORDING_ID, {
+    const decision = await service.mayUseForCredential(ref(RECORDING_ID), {
       purposes: [VdclPurpose.ASR_TRAINING],
     });
     expect(decision.allowed).toBe(true);
@@ -275,7 +336,7 @@ describe('RightsService.mayUseForCredential', () => {
     // A contributor granted speech recognition training and nothing else.
     // A subscriber whose key declares speech synthesis must be refused.
     const { service } = makeService([VdclPurpose.ASR_TRAINING]);
-    const decision = await service.mayUseForCredential(RECORDING_ID, {
+    const decision = await service.mayUseForCredential(ref(RECORDING_ID), {
       purposes: [VdclPurpose.TTS_TRAINING],
     });
     expect(decision.allowed).toBe(false);
@@ -286,7 +347,7 @@ describe('RightsService.mayUseForCredential', () => {
     // A key declaring both ASR and TTS against an ASR-only grant is refused:
     // otherwise one granted purpose would smuggle in every refused one.
     const { service } = makeService([VdclPurpose.ASR_TRAINING]);
-    const decision = await service.mayUseForCredential(RECORDING_ID, {
+    const decision = await service.mayUseForCredential(ref(RECORDING_ID), {
       purposes: [VdclPurpose.ASR_TRAINING, VdclPurpose.TTS_TRAINING],
     });
     expect(decision.allowed).toBe(false);
@@ -299,7 +360,7 @@ describe('RightsService.mayUseForCredential', () => {
       VdclPurpose.TTS_TRAINING,
       VdclPurpose.LLM_TRAINING,
     ]);
-    const decision = await service.mayUseForCredential(RECORDING_ID, {
+    const decision = await service.mayUseForCredential(ref(RECORDING_ID), {
       purposes: [VdclPurpose.ASR_TRAINING, VdclPurpose.TTS_TRAINING],
     });
     expect(decision.allowed).toBe(true);
@@ -307,7 +368,7 @@ describe('RightsService.mayUseForCredential', () => {
 
   it('allows an undeclared credential while enforcement is off', async () => {
     const { service } = makeService([], false);
-    const decision = await service.mayUseForCredential(RECORDING_ID, { purposes: [] });
+    const decision = await service.mayUseForCredential(ref(RECORDING_ID), { purposes: [] });
     expect(decision.allowed).toBe(true);
   });
 });
@@ -315,6 +376,7 @@ describe('RightsService.mayUseForCredential', () => {
 describe('RightsService.filterUsableForCredential', () => {
   function makeService(grantsByRecording: Record<string, VdclPurpose[]>, enabled = true) {
     const rows = Object.entries(grantsByRecording).map(([recordingId, purposes]) => ({
+      recordKind: StreamRecordKind.WORD_RECORDING as StreamRecordKind,
       recordingId,
       manifest: {
         vdclVersion: {
@@ -329,8 +391,16 @@ describe('RightsService.filterUsableForCredential', () => {
     const prisma = {
       vdclManifestItem: {
         findMany: jest.fn().mockImplementation(({ where }) => {
-          const wanted: string[] = where.recordingId.in;
-          return Promise.resolve(rows.filter((r) => wanted.includes(r.recordingId)));
+          // Mirrors the real query shape: an OR of per-kind terms, so the mock
+          // would break if the service went back to an id-only `in`.
+          const terms: { recordKind: string; recordingId: { in: string[] } }[] = where.OR;
+          return Promise.resolve(
+            rows.filter((r) =>
+              terms.some(
+                (t) => t.recordKind === r.recordKind && t.recordingId.in.includes(r.recordingId),
+              ),
+            ),
+          );
         }),
       },
       vdclAuditEvent: { create: jest.fn() },
@@ -347,21 +417,22 @@ describe('RightsService.filterUsableForCredential', () => {
       'rec-b': [VdclPurpose.ASR_TRAINING],
       'rec-c': [],
     });
-    const usable = await service.filterUsableForCredential(['rec-a', 'rec-b', 'rec-c'], {
+    const usable = await service.filterUsableForCredential([ref('rec-a'), ref('rec-b'), ref('rec-c')], {
       purposes: [VdclPurpose.TTS_TRAINING],
     });
-    expect([...usable]).toEqual(['rec-a']);
+    // Composite keys, not bare ids -- see kindKey.
+    expect([...usable]).toEqual([key('rec-a')]);
   });
 
   it('returns nothing for an undeclared credential', async () => {
     const { service } = makeService({ 'rec-a': [VdclPurpose.ASR_TRAINING] });
-    const usable = await service.filterUsableForCredential(['rec-a'], { purposes: [] });
+    const usable = await service.filterUsableForCredential([ref('rec-a')], { purposes: [] });
     expect(usable.size).toBe(0);
   });
 
   it('returns everything untouched while enforcement is off', async () => {
     const { service } = makeService({}, false);
-    const usable = await service.filterUsableForCredential(['rec-a', 'rec-b'], { purposes: [] });
-    expect([...usable].sort()).toEqual(['rec-a', 'rec-b']);
+    const usable = await service.filterUsableForCredential([ref('rec-a'), ref('rec-b')], { purposes: [] });
+    expect([...usable].sort()).toEqual([key('rec-a'), key('rec-b')].sort());
   });
 });

@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { StreamDeckType } from '@dialectiva/db';
+import { StreamDeckType, StreamRecordKind } from '@dialectiva/db';
+import { readRecordKind } from '../stream-record-kind.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RedisStreamsService, StreamMessage } from '../../redis-streams/redis-streams.service';
 import { CatalogueService } from '../catalogue/catalogue.service';
@@ -42,13 +43,18 @@ export class SmartDeckEvaluatorService implements OnModuleInit {
   }
 
   private async handle(message: StreamMessage): Promise<void> {
-    const { trigger, recording_id: recordingId, deck_id: deckId } = message.data;
+    const {
+      trigger,
+      recording_id: recordingId,
+      deck_id: deckId,
+      record_kind: recordKind,
+    } = message.data;
     if (trigger === 'rule_updated' && deckId) {
       await this.evaluateRule(deckId);
       return;
     }
     if ((trigger === 'recording_eligible' || trigger === 'isvc_changed') && recordingId) {
-      await this.evaluateAllRulesFor(recordingId);
+      await this.evaluateAllRulesFor(recordingId, readRecordKind(recordKind));
       return;
     }
     this.logger.warn(
@@ -162,22 +168,35 @@ export class SmartDeckEvaluatorService implements OnModuleInit {
    * whose rule could plausibly match it (cheap country/dialect prefilter)
    * and re-evaluate just those, rather than every Smart Deck in the system.
    */
-  async evaluateAllRulesFor(recordingId: string): Promise<void> {
-    const recording = await this.catalogue.getEligibleRecording(recordingId);
+  async evaluateAllRulesFor(
+    recordingId: string,
+    recordKind: StreamRecordKind = StreamRecordKind.WORD_RECORDING,
+  ): Promise<void> {
+    const recording = await this.catalogue.getEligibleRecording(recordKind, recordingId);
     // A purged/ineligible recording can still be relevant (it may need
     // removing from a Smart Deck it no longer matches), so fall back to
     // evaluating every Smart Deck's rule that has no country/dialect
-    // constraint narrow enough to safely rule out -- fetch the raw
-    // WordRecording's dialectTag directly for the prefilter in that case.
+    // constraint narrow enough to safely rule out -- fetch the raw row's
+    // dialectTag directly for the prefilter in that case, from whichever table
+    // the kind names.
+    const fallbackTag = recording
+      ? undefined
+      : recordKind === StreamRecordKind.WORD_RECORDING
+        ? (
+            await this.prisma.wordRecording.findUnique({
+              where: { id: recordingId },
+              select: { dialectTag: true },
+            })
+          )?.dialectTag
+        : (
+            await this.prisma.domainConversationRecording.findUnique({
+              where: { id: recordingId },
+              select: { dialectTag: true },
+            })
+          )?.dialectTag;
+
     const dialectTag =
-      recording?.dialectVariant?.dialect.tag ??
-      recording?.dialectTag ??
-      (
-        await this.prisma.wordRecording.findUnique({
-          where: { id: recordingId },
-          select: { dialectTag: true },
-        })
-      )?.dialectTag;
+      recording?.dialectVariant?.dialect.tag ?? recording?.dialectTag ?? fallbackTag;
     const countryCode = recording?.dialectVariant?.dialect.country.code;
 
     const candidateDecks = await this.prisma.streamDeck.findMany({

@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { IsvcConfidence, VdclPurpose } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogueService } from '../catalogue/catalogue.service';
+import { kindKey } from '../stream-record-kind.util';
 import { RightsService } from '../../vdcl/rights/rights.service';
 
 interface AuthenticatedStreamKey {
@@ -108,7 +109,9 @@ export class StreamManifestService {
     });
     const minConfidence = await this.planMinConfidence(streamKey.organizationId);
     const recordings = await Promise.all(
-      items.map((item) => this.catalogue.getEligibleRecording(item.recordingId, minConfidence)),
+      items.map((item) =>
+        this.catalogue.getEligibleRecording(item.recordKind, item.recordingId, minConfidence),
+      ),
     );
     return items
       .map((item, i) => ({ item, recording: recordings[i] }))
@@ -129,18 +132,32 @@ export class StreamManifestService {
   ) {
     const deck = await this.getDeck(streamKey, deckIdOrKey);
     const deckId = deck.id;
-    const membership = await this.prisma.streamDeckItem.findUnique({
-      where: { deckId_recordingId: { deckId, recordingId } },
+    // findFirst on (deckId, recordingId) rather than the compound unique,
+    // because the published route takes a bare id and the CALLER does not know
+    // the record kind -- the deck does. The kind then comes from the stored
+    // item, so the id is never resolved against a table the deck did not put
+    // it in. Ambiguity is not possible in practice (the id came from this
+    // deck's own manifest) and would resolve to the deck's own row anyway.
+    const membership = await this.prisma.streamDeckItem.findFirst({
+      where: { deckId, recordingId },
+      select: { recordKind: true },
     });
     if (!membership) {
       throw new NotFoundException('Recording not found in this Stream Deck');
     }
     const minConfidence = await this.planMinConfidence(streamKey.organizationId);
-    const recording = await this.catalogue.getEligibleRecording(recordingId, minConfidence);
+    const recording = await this.catalogue.getEligibleRecording(
+      membership.recordKind,
+      recordingId,
+      minConfidence,
+    );
     if (!recording) {
       throw new NotFoundException('Recording not found or not available for Voice Stream');
     }
-    return recording;
+    // The kind travels out with the record: the audio controller needs it for
+    // the rights check and the access log, and re-deriving it there would mean
+    // a second membership query that could disagree with this one.
+    return { ...recording, recordKind: membership.recordKind };
   }
 
   /**
@@ -170,10 +187,15 @@ export class StreamManifestService {
     // `licensed_*` fields below report the shortfall honestly instead of
     // hiding it.
     const usable = await this.rights.filterUsableForCredential(
-      allEligible.map(({ recording }) => recording.id),
+      allEligible.map(({ item, recording }) => ({
+        recordKind: item.recordKind,
+        recordingId: recording.id,
+      })),
       { purposes: streamKey.purposes ?? [] },
     );
-    const eligible = allEligible.filter(({ recording }) => usable.has(recording.id));
+    const eligible = allEligible.filter(({ item, recording }) =>
+      usable.has(kindKey(item.recordKind, recording.id)),
+    );
 
     const isvcByRecordingId = await this.currentIsvcByRecordingId(
       eligible.map(({ recording }) => recording.id),
@@ -241,10 +263,15 @@ export class StreamManifestService {
     // otherwise pinning an old version would be a way to keep streaming
     // what someone has since withdrawn.
     const usable = await this.rights.filterUsableForCredential(
-      versionRow.items.map((item) => item.recordingId),
+      versionRow.items.map((item) => ({
+        recordKind: item.recordKind,
+        recordingId: item.recordingId,
+      })),
       { purposes: streamKey.purposes ?? [] },
     );
-    const items = versionRow.items.filter((item) => usable.has(item.recordingId));
+    const items = versionRow.items.filter((item) =>
+      usable.has(kindKey(item.recordKind, item.recordingId)),
+    );
 
     const totalDurationMs = items.reduce((sum, item) => sum + (item.durationMs ?? 0), 0);
 

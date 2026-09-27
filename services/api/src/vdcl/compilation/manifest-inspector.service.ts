@@ -257,6 +257,7 @@ export class ManifestInspectorService {
     }
 
     const items: CanonicalManifestItem[] = version.manifest.items.map((i) => ({
+      recordKind: i.recordKind,
       recordingId: i.recordingId,
       durationMs: i.durationMs,
       dialectTag: i.dialectTag,

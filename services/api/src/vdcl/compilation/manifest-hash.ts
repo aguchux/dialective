@@ -25,10 +25,20 @@ import { createHash } from 'crypto';
  * became `dialectTags: string[]`. Old hashes stay verifiable under the v1
  * rules, which is the entire reason this constant is embedded in the
  * hashed payload rather than assumed.
+ *
+ * Bumped 2 -> 3 when manifests began covering more than one dataset:
+ * `recordKind` joined each item. It has to be IN the hash rather than
+ * alongside it -- an item is identified by (kind, id), and hashing the id
+ * alone would let a manifest covering a domain conversation produce the same
+ * hash as one covering a word recording that shares its uuid. Unlikely, and
+ * the hash is the thing a subscriber checks provenance against, so it is
+ * stated exactly rather than left to probability.
  */
-export const CANONICAL_VERSION = 2;
+export const CANONICAL_VERSION = 3;
 
 export interface CanonicalManifestItem {
+  /** WORD_RECORDING | DOMAIN_CONVERSATION_RECORDING -- part of the item's identity, not metadata about it. */
+  recordKind: string;
   recordingId: string;
   durationMs: number | null;
   dialectTag: string;
@@ -100,8 +110,15 @@ function canonicalStringify(value: unknown): string {
  */
 export function canonicalise(manifest: CanonicalManifest): string {
   const items = [...manifest.items]
-    .sort((a, b) => (a.recordingId < b.recordingId ? -1 : a.recordingId > b.recordingId ? 1 : 0))
+    // Sorted by (recordKind, recordingId): id alone is not a total order once
+    // two kinds can share one, and an unstable sort would make the hash depend
+    // on query order -- the exact thing this function exists to prevent.
+    .sort((a, b) => {
+      if (a.recordKind !== b.recordKind) return a.recordKind < b.recordKind ? -1 : 1;
+      return a.recordingId < b.recordingId ? -1 : a.recordingId > b.recordingId ? 1 : 0;
+    })
     .map((item) => ({
+      recordKind: item.recordKind,
       recordingId: item.recordingId,
       durationMs: item.durationMs,
       dialectTag: item.dialectTag,

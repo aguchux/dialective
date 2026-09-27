@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ActivityEventType, StreamDeckVisibility } from '@dialectiva/db';
+import { ActivityEventType, StreamDeckVisibility, StreamRecordKind } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CatalogueService, QualityTier, qualityTierFor } from '../catalogue/catalogue.service';
 import { StreamDecksService } from './stream-decks.service';
@@ -266,14 +266,28 @@ export class PublicDecksService {
 
     let copied = 0;
     for (const item of sourceItems) {
-      const eligible = await this.catalogue.isEligible(item.recordingId);
+      // The source item already knows its kind; carrying it through is what
+      // makes a copied domain conversation land as one rather than being
+      // recorded as a word recording that does not exist.
+      const eligible = await this.catalogue.isEligible(item.recordKind, item.recordingId);
       if (!eligible) continue;
       const already = await this.prisma.streamDeckItem.findUnique({
-        where: { deckId_recordingId: { deckId: newDeck.id, recordingId: item.recordingId } },
+        where: {
+          deckId_recordKind_recordingId: {
+            deckId: newDeck.id,
+            recordKind: item.recordKind,
+            recordingId: item.recordingId,
+          },
+        },
       });
       if (already) continue;
       await this.prisma.streamDeckItem.create({
-        data: { deckId: newDeck.id, recordingId: item.recordingId, addedByUserId: userId },
+        data: {
+          deckId: newDeck.id,
+          recordKind: item.recordKind,
+          recordingId: item.recordingId,
+          addedByUserId: userId,
+        },
       });
       copied++;
     }
@@ -301,7 +315,15 @@ export class PublicDecksService {
     const sourceItems = await this.prisma.streamDeckItem.findMany({ where: { deckId: deck.id } });
     let queued = 0;
     for (const item of sourceItems) {
-      const eligible = await this.catalogue.isEligible(item.recordingId);
+      // Subscriber validation (ISVP/ISVC) is word-recording-only today:
+      // ValidationQueueItem and SubscriberValidation both key on a bare
+      // recordingId, and SubscriberValidation scores transcript accuracy,
+      // which a domain conversation has no transcript for. So other kinds are
+      // skipped rather than queued into a workflow that cannot score them.
+      // Extending ISVP is its own piece of work, not a side effect of making
+      // a dataset streamable.
+      if (item.recordKind !== StreamRecordKind.WORD_RECORDING) continue;
+      const eligible = await this.catalogue.isEligible(item.recordKind, item.recordingId);
       if (!eligible) continue;
       const already = await this.prisma.validationQueueItem.findUnique({
         where: {
