@@ -35,6 +35,17 @@ spec:
                     secretKeyRef:
                       name: postgres-creds
                       key: connection_string
+                # Booting AppModule starts this repo's Redis Streams consumers,
+                # which this job does not use but which connect anyway. Without
+                # the password they emit a dozen NOAUTH errors per run -- noise
+                # that would mask a real failure in the job's own output. The
+                # other AppModule-based CronJobs have the same noise; this one
+                # does not add to it.
+                - name: REDIS_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: redis-auth
+                      key: password
 
               # Explicit sizing so this is Burstable, not BestEffort -- an unsized
               # container is the first thing the kernel OOM-kills under node memory
