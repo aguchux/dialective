@@ -116,16 +116,53 @@ for img in "${PINNED_IMAGES[@]}"; do
 done
 
 if [ "${#missing[@]}" -gt 0 ]; then
-  cat >&2 <<MSG
+  echo >&2
+  echo "error: ${#missing[@]} image(s) have no :$SHA tag. Nothing was applied." >&2
+  echo >&2
 
-error: ${#missing[@]} image(s) have no :$SHA tag. Nothing was applied.
+  # Distinguish "build pending/failed" from "this commit was never built at
+  # all". docker-publish.yml has a `paths:` filter, so a commit touching only
+  # docs, k8s manifests or this script triggers NO build -- there will never be
+  # an image for it, and waiting is futile. Telling someone to wait for a build
+  # that will never start is the wrong answer, and by SHA alone the two cases
+  # look identical.
+  CODE_PATHS=(services packages models chatdialect/apps/agent package.json package-lock.json)
+  LAST_BUILT=""
+  for cand in $(git -C "$REPO_ROOT" rev-list --max-count=40 "$SHA"); do
+    if [ "$cand" = "$SHA" ]; then continue; fi
+    if [ -n "$(git -C "$REPO_ROOT" diff --name-only "$cand" "$SHA" -- "${CODE_PATHS[@]}")" ]; then
+      break   # real code changed after $cand, so $cand is not equivalent
+    fi
+    repo="${REGISTRY_REPO}/dialect-api"
+    token=$(curl -sf "https://auth.docker.io/token?service=registry.docker.io&scope=repository:${repo}:pull" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')
+    code=$(curl -s -o /dev/null -w '%{http_code}'       -H "Authorization: Bearer $token"       -H 'Accept: application/vnd.docker.distribution.manifest.v2+json,application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json'       "https://registry-1.docker.io/v2/${repo}/manifests/${cand}")
+    if [ "$code" = "200" ]; then LAST_BUILT="$cand"; break; fi
+  done
 
-Most likely the build for this commit has not finished (or failed):
+  if [ -n "$LAST_BUILT" ]; then
+    cat >&2 <<MSG
+This commit changed no service code, so docker-publish.yml's \`paths:\` filter
+never triggered a build for it -- no image will ever exist for this SHA.
+Waiting will not help.
+
+No service code differs between $LAST_BUILT and $SHA, so that commit's
+images ARE this commit's code. Deploy it instead:
+
+  k8s/deploy.sh $LAST_BUILT
+MSG
+  else
+    cat >&2 <<MSG
+Either the build for this commit has not finished (or failed):
   gh run list --commit $SHA
+
+...or it changed no service code, in which case docker-publish.yml's
+\`paths:\` filter never triggered a build and none ever will. Check:
+  gh run list --workflow=docker-publish.yml --limit 5
 
 Images are tagged with the FULL 40-char SHA, so a build that is still
 running looks exactly like a build that never happened.
 MSG
+  fi
   exit 1
 fi
 
