@@ -1,4 +1,9 @@
-import { createApi, fetchBaseQuery, type BaseQueryFn } from '@reduxjs/toolkit/query/react';
+import {
+  createApi,
+  fetchBaseQuery,
+  type BaseQueryFn,
+  type FetchArgs,
+} from '@reduxjs/toolkit/query/react';
 import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 import { getCurrentSession } from '@/lib/client-session';
 import { notifyAuthMaintenance } from '@/lib/auth-maintenance-signal';
@@ -183,10 +188,21 @@ const REQUEST_TIMEOUT_MS = 20_000;
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: `${PUBLIC_API_V1_BASE_URL}/community`,
   timeout: REQUEST_TIMEOUT_MS,
-  prepareHeaders: async (headers) => {
+  prepareHeaders: async (headers, { arg }) => {
     headers.set('Content-Type', 'application/json');
+    // This runs last and its result replaces any headers set on the request
+    // object, so the anonymous retry has to be signalled through `arg` --
+    // a header set by the caller would just be overwritten here.
+    if (isAnonymousRetry(arg)) return headers;
+
     const session = await getCurrentSession().catch(() => null);
-    if (session?.accessToken) {
+    // A session carrying authError has an access token the main site
+    // already failed to renew, so sending it can only fail. This app never
+    // renews one itself: it has no credentials provider and no jwt callback
+    // (see lib/auth-options.ts), because two apps rotating the one shared
+    // refresh-token family would trip the API's replay defence and revoke
+    // the family, signing the viewer out of both sites.
+    if (session?.accessToken && !session.authError) {
       headers.set('Authorization', `Bearer ${session.accessToken}`);
     }
     return headers;
@@ -198,7 +214,18 @@ const rawBaseQuery = fetchBaseQuery({
 // authMaintenanceBlockSessions on, and this is the one place every such
 // response passes through in this app.
 const baseQueryWithMaintenanceSignal: BaseQueryFn = async (args, api, extraOptions) => {
-  const result = await rawBaseQuery(args, api, extraOptions);
+  let result = await rawBaseQuery(args, api, extraOptions);
+
+  // A 401 on a request we sent a token with means that token is no longer
+  // accepted. Community reading is public, so retry a read once with no
+  // credentials rather than showing "Could not load this content" to
+  // someone the site still displays as signed in. Reads only: a write
+  // (posting, bookmarking) genuinely needs the identity, so retrying it
+  // anonymously could only produce a second 401.
+  if (result.error?.status === 401 && isReadRequest(args)) {
+    result = await rawBaseQuery(withoutCredentials(args as string | FetchArgs), api, extraOptions);
+  }
+
   if (result.error && result.error.status === 503) {
     const data = result.error.data as
       | { error?: string; authMaintenanceUntil?: string; authMaintenanceMessage?: string | null }
@@ -212,6 +239,31 @@ const baseQueryWithMaintenanceSignal: BaseQueryFn = async (args, api, extraOptio
   }
   return result;
 };
+
+/**
+ * Marks a retry that must go out with no Authorization header. It is a
+ * property on the request object rather than a header because
+ * prepareHeaders runs after the request is assembled and its return value
+ * replaces the headers -- it is the only place that can decide not to
+ * attach the token, and `arg` is what it gets to look at.
+ */
+const ANONYMOUS_RETRY = '__anonymousRetry';
+
+function withoutCredentials(args: string | FetchArgs): FetchArgs {
+  const request: FetchArgs = typeof args === 'string' ? { url: args } : { ...args };
+  return { ...request, [ANONYMOUS_RETRY]: true } as FetchArgs;
+}
+
+function isAnonymousRetry(arg: unknown): boolean {
+  return typeof arg === 'object' && arg !== null && ANONYMOUS_RETRY in arg;
+}
+
+/** RTK Query passes a bare URL string for a GET; anything else names its method. */
+function isReadRequest(args: unknown): boolean {
+  if (typeof args === 'string') return true;
+  const method = (args as FetchArgs | undefined)?.method;
+  return method === undefined || method.toUpperCase() === 'GET';
+}
 
 export interface CommunityApiErrorShape {
   statusCode?: number;
