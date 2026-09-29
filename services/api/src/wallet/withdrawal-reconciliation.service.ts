@@ -7,6 +7,7 @@ import { NowPaymentsService } from './nowpayments.service';
 import { FlutterwaveService } from './flutterwave.service';
 import { FlutterwaveV4Service } from './flutterwave-v4.service';
 import { StripeConnectService } from './stripe-connect.service';
+import { planWithdrawalReversal } from './withdrawal-reversal.util';
 
 const NOWPAYMENTS_PAYOUT_FINISHED_STATUSES = new Set([
   'finished',
@@ -135,6 +136,10 @@ export class WithdrawalReconciliationService {
           paid += 1;
         } else {
           failed += 1;
+          // The provider will not be sending this money, so the DL goes back.
+          // Before the status write, so a crash in between leaves the row
+          // PROCESSING (retried next run) rather than FAILED-and-unrefunded.
+          await this.refundFailedWithdrawal(withdrawal.id, WithdrawalStatus.PROCESSING);
         }
 
         await this.recordNowPaymentsStatus(
@@ -206,6 +211,10 @@ export class WithdrawalReconciliationService {
           paid += 1;
         } else {
           failed += 1;
+          // The provider will not be sending this money, so the DL goes back.
+          // Before the status write, so a crash in between leaves the row
+          // PROCESSING (retried next run) rather than FAILED-and-unrefunded.
+          await this.refundFailedWithdrawal(withdrawal.id, WithdrawalStatus.PROCESSING);
         }
 
         await this.recordFlutterwaveStatus(
@@ -284,6 +293,10 @@ export class WithdrawalReconciliationService {
           paid += 1;
         } else {
           failed += 1;
+          // The provider will not be sending this money, so the DL goes back.
+          // Before the status write, so a crash in between leaves the row
+          // PROCESSING (retried next run) rather than FAILED-and-unrefunded.
+          await this.refundFailedWithdrawal(withdrawal.id, WithdrawalStatus.PROCESSING);
         }
 
         await this.recordFlutterwaveV4Status(
@@ -360,6 +373,10 @@ export class WithdrawalReconciliationService {
           paid += 1;
         } else {
           failed += 1;
+          // The provider will not be sending this money, so the DL goes back.
+          // Before the status write, so a crash in between leaves the row
+          // PROCESSING (retried next run) rather than FAILED-and-unrefunded.
+          await this.refundFailedWithdrawal(withdrawal.id, WithdrawalStatus.PROCESSING);
         }
 
         await this.recordStripeStatus(
@@ -559,5 +576,73 @@ export class WithdrawalReconciliationService {
         },
       }),
     ]);
+  }
+
+  /**
+   * Returns the DL for a withdrawal the provider has terminally failed.
+   *
+   * Marking a row FAILED without this leaves the member debited against a
+   * row that now *looks* resolved, which is worse than leaving it
+   * PROCESSING -- the debit happens at request time, so a failed payout owes
+   * a refund exactly like an admin rejection does. No FAILED row had ever
+   * existed in production when this was written (every terminal failure had
+   * gone through the admin reject path, which does refund), so this closed
+   * the gap before the first one could strand anyone.
+   *
+   * Idempotent by the same guard the admin path relies on: the claim only
+   * succeeds from the status we last read, and LedgerEntry's unique
+   * (walletId, type, reference) rolls the whole transaction back if a
+   * reversal for this withdrawal already exists. Returns false when another
+   * writer got there first.
+   *
+   * Routes each funding source back to its own column via
+   * planWithdrawalReversal -- crediting royalty DL to `balance` would turn
+   * withdraw-only earnings into spendable, P2P-tradeable DL.
+   */
+  private async refundFailedWithdrawal(
+    withdrawalId: string,
+    fromStatus: WithdrawalStatus,
+  ): Promise<boolean> {
+    const withdrawal = await this.prisma.withdrawalRequest.findUnique({
+      where: { id: withdrawalId },
+      select: { id: true, walletId: true, tokenAmount: true, royaltyFundedAmount: true },
+    });
+    if (!withdrawal) return false;
+
+    const reversals = planWithdrawalReversal(withdrawal);
+    if (reversals.length === 0) return false;
+
+    try {
+      await this.prisma.$transaction([
+        this.prisma.withdrawalRequest.updateMany({
+          where: { id: withdrawalId, status: fromStatus },
+          data: { resolvedAt: new Date() },
+        }),
+        ...reversals.flatMap((reversal) => [
+          this.prisma.ledgerEntry.create({
+            data: {
+              walletId: withdrawal.walletId,
+              type: reversal.type,
+              amount: reversal.amount,
+              reference: withdrawal.id,
+            },
+          }),
+          this.prisma.wallet.update({
+            where: { id: withdrawal.walletId },
+            data: { [reversal.column]: { increment: reversal.amount } },
+          }),
+        ]),
+      ]);
+      this.logger.log(
+        `Refunded failed withdrawal=${withdrawalId} amount=${withdrawal.tokenAmount.toString()}`,
+      );
+      return true;
+    } catch (err) {
+      // A unique-constraint rollback here means the reversal already exists,
+      // which is the idempotent outcome, not a failure to act on.
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.warn(`Refund skipped for withdrawal=${withdrawalId}: ${message}`);
+      return false;
+    }
   }
 }

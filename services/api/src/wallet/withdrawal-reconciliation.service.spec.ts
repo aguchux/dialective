@@ -1,3 +1,4 @@
+import { Prisma } from '@dialectiva/db';
 import { WithdrawalReconciliationService } from './withdrawal-reconciliation.service';
 
 describe('WithdrawalReconciliationService', () => {
@@ -10,7 +11,18 @@ describe('WithdrawalReconciliationService', () => {
             Promise.resolve(processingByProvider[where.provider] ?? []),
           ),
         update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findUnique: jest.fn().mockImplementation(({ where }: { where: { id: string } }) =>
+          Promise.resolve({
+            id: where.id,
+            walletId: `wallet-for-${where.id}`,
+            tokenAmount: new Prisma.Decimal(19),
+            royaltyFundedAmount: new Prisma.Decimal(0),
+          }),
+        ),
       },
+      ledgerEntry: { create: jest.fn().mockResolvedValue({}) },
+      wallet: { update: jest.fn().mockResolvedValue({}) },
       nowPaymentsPayoutEvent: { create: jest.fn().mockResolvedValue({}) },
       flutterwavePayoutEvent: { create: jest.fn().mockResolvedValue({}) },
       flutterwaveV4TransferEvent: { create: jest.fn().mockResolvedValue({}) },
@@ -95,6 +107,99 @@ describe('WithdrawalReconciliationService', () => {
 
     expect(result.nowpayments.stillProcessing).toBe(1);
     expect(result.nowpayments.stale).toBe(1);
+  });
+
+  // Regression: the reconciler marked a withdrawal FAILED but never returned
+  // the DL. The debit happens at request time, so a FAILED row with no
+  // reversal leaves the member out of pocket against a row that now looks
+  // resolved -- worse than leaving it PROCESSING. No FAILED row had ever
+  // existed in production, so this gap had never been exercised; the three
+  // NOWPayments payouts rejected on 16 Sep would have been the first.
+  it('refunds the DL when a provider reports a terminal failure', async () => {
+    const { service, prisma, nowPayments } = setup({
+      nowpayments: [{ id: 'w1', providerPayoutId: 'p1', submittedToProviderAt: new Date() }],
+    });
+    nowPayments.getPayoutStatus.mockResolvedValue({ payoutId: 'p1', status: 'REJECTED', raw: {} });
+
+    const result = await service.run();
+
+    expect(result.nowpayments.failed).toBe(1);
+    expect(prisma.ledgerEntry.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        type: 'WITHDRAWAL_REVERSED',
+        reference: 'w1',
+        amount: expect.anything(),
+      }),
+    });
+    expect(prisma.wallet.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { balance: { increment: expect.anything() } },
+      }),
+    );
+  });
+
+  it('does not refund a withdrawal the provider reports as paid', async () => {
+    const { service, prisma, nowPayments } = setup({
+      nowpayments: [{ id: 'w1', providerPayoutId: 'p1', submittedToProviderAt: new Date() }],
+    });
+    nowPayments.getPayoutStatus.mockResolvedValue({ payoutId: 'p1', status: 'finished', raw: {} });
+
+    await service.run();
+
+    expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
+    expect(prisma.wallet.update).not.toHaveBeenCalled();
+  });
+
+  it('does not refund a withdrawal that is still processing', async () => {
+    const { service, prisma, nowPayments } = setup({
+      nowpayments: [{ id: 'w1', providerPayoutId: 'p1', submittedToProviderAt: new Date() }],
+    });
+    nowPayments.getPayoutStatus.mockResolvedValue({ payoutId: 'p1', status: 'CREATING', raw: {} });
+
+    await service.run();
+
+    expect(prisma.ledgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  // A royalty-funded withdrawal must go back to royaltyBalance: crediting it
+  // to `balance` would turn withdraw-only earnings into spendable,
+  // P2P-tradeable DL. See planWithdrawalReversal.
+  it('returns royalty-funded DL to royaltyBalance, not spendable balance', async () => {
+    const { service, prisma, nowPayments } = setup({
+      nowpayments: [{ id: 'w1', providerPayoutId: 'p1', submittedToProviderAt: new Date() }],
+    });
+    prisma.withdrawalRequest.findUnique.mockResolvedValue({
+      id: 'w1',
+      walletId: 'wallet-1',
+      tokenAmount: new Prisma.Decimal(10),
+      royaltyFundedAmount: new Prisma.Decimal(10),
+    });
+    nowPayments.getPayoutStatus.mockResolvedValue({ payoutId: 'p1', status: 'REJECTED', raw: {} });
+
+    await service.run();
+
+    expect(prisma.ledgerEntry.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ type: 'ROYALTY_WITHDRAWAL_REVERSED' }),
+    });
+    expect(prisma.wallet.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { royaltyBalance: { increment: expect.anything() } } }),
+    );
+  });
+
+  it('does not double-refund when the reversal already exists', async () => {
+    const { service, prisma, nowPayments } = setup({
+      nowpayments: [{ id: 'w1', providerPayoutId: 'p1', submittedToProviderAt: new Date() }],
+    });
+    nowPayments.getPayoutStatus.mockResolvedValue({ payoutId: 'p1', status: 'REJECTED', raw: {} });
+    // Mirrors LedgerEntry's unique (walletId, type, reference) rolling the
+    // transaction back on a second reversal for the same withdrawal.
+    prisma.$transaction.mockRejectedValueOnce(new Error('Unique constraint failed'));
+
+    const result = await service.run();
+
+    // Still counted and still recorded -- the refund was simply already done.
+    expect(result.nowpayments.failed).toBe(1);
+    expect(prisma.withdrawalRequest.update).toHaveBeenCalled();
   });
 
   it('marks a NOWPayments withdrawal PAID when the provider reports a finished status', async () => {
