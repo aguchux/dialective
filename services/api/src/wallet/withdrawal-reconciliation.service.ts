@@ -90,10 +90,16 @@ export class WithdrawalReconciliationService {
   }
 
   private async runNowPayments(): Promise<ReconcileTally> {
-    if (!(await this.platformSettings.isNowPaymentsPayoutsEnabled())) {
-      this.logger.log('NOWPayments payouts disabled -- skipping reconciliation');
-      return { checked: 0, paid: 0, failed: 0, stillProcessing: 0, stale: 0 };
-    }
+    // Deliberately NOT gated on NOWPayments's payout kill switch.
+    // Disabling a provider must stop NEW submissions, not abandon money
+    // already sent to it: a withdrawal is debited from the user's wallet
+    // at request time, so a PROCESSING row that stops being polled leaves
+    // them out of pocket with no terminal state and no refund. Three
+    // NOWPayments payouts sat at provider status CREATING for 13 days that
+    // way when withdrawals moved to P2P and the switch went off, which is
+    // also why the stale warning below never fired -- this function used to
+    // return before reaching it. Polling a provider we no longer submit to
+    // is read-only and safe.
 
     const processing = await this.prisma.withdrawalRequest.findMany({
       where: {
@@ -155,10 +161,16 @@ export class WithdrawalReconciliationService {
   }
 
   private async runFlutterwave(): Promise<ReconcileTally> {
-    if (!(await this.platformSettings.isFlutterwavePayoutsEnabled())) {
-      this.logger.log('Flutterwave payouts disabled -- skipping reconciliation');
-      return { checked: 0, paid: 0, failed: 0, stillProcessing: 0, stale: 0 };
-    }
+    // Deliberately NOT gated on Flutterwave's payout kill switch.
+    // Disabling a provider must stop NEW submissions, not abandon money
+    // already sent to it: a withdrawal is debited from the user's wallet
+    // at request time, so a PROCESSING row that stops being polled leaves
+    // them out of pocket with no terminal state and no refund. Three
+    // NOWPayments payouts sat at provider status CREATING for 13 days that
+    // way when withdrawals moved to P2P and the switch went off, which is
+    // also why the stale warning below never fired -- this function used to
+    // return before reaching it. Polling a provider we no longer submit to
+    // is read-only and safe.
 
     const processing = await this.prisma.withdrawalRequest.findMany({
       where: {
@@ -227,10 +239,16 @@ export class WithdrawalReconciliationService {
    * withdrawals still get reconciled).
    */
   private async runFlutterwaveV4(): Promise<ReconcileTally> {
-    if (!(await this.platformSettings.isFlutterwavePayoutsEnabled())) {
-      this.logger.log('Flutterwave payouts disabled -- skipping v4 reconciliation');
-      return { checked: 0, paid: 0, failed: 0, stillProcessing: 0, stale: 0 };
-    }
+    // Deliberately NOT gated on Flutterwave v4's payout kill switch.
+    // Disabling a provider must stop NEW submissions, not abandon money
+    // already sent to it: a withdrawal is debited from the user's wallet
+    // at request time, so a PROCESSING row that stops being polled leaves
+    // them out of pocket with no terminal state and no refund. Three
+    // NOWPayments payouts sat at provider status CREATING for 13 days that
+    // way when withdrawals moved to P2P and the switch went off, which is
+    // also why the stale warning below never fired -- this function used to
+    // return before reaching it. Polling a provider we no longer submit to
+    // is read-only and safe.
 
     const processing = await this.prisma.withdrawalRequest.findMany({
       where: {
@@ -297,10 +315,16 @@ export class WithdrawalReconciliationService {
    * ever reaches provider='stripe' while the flag was on).
    */
   private async runStripe(): Promise<ReconcileTally> {
-    if (!(await this.platformSettings.isStripePayoutsEnabled())) {
-      this.logger.log('Stripe payouts disabled -- skipping reconciliation');
-      return { checked: 0, paid: 0, failed: 0, stillProcessing: 0, stale: 0 };
-    }
+    // Deliberately NOT gated on Stripe's payout kill switch.
+    // Disabling a provider must stop NEW submissions, not abandon money
+    // already sent to it: a withdrawal is debited from the user's wallet
+    // at request time, so a PROCESSING row that stops being polled leaves
+    // them out of pocket with no terminal state and no refund. Three
+    // NOWPayments payouts sat at provider status CREATING for 13 days that
+    // way when withdrawals moved to P2P and the switch went off, which is
+    // also why the stale warning below never fired -- this function used to
+    // return before reaching it. Polling a provider we no longer submit to
+    // is read-only and safe.
 
     const processing = await this.prisma.withdrawalRequest.findMany({
       where: {

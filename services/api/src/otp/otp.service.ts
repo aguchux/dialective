@@ -93,7 +93,14 @@ export class OtpService {
         await primarySend;
       } catch (err) {
         if (!(err instanceof expectedException)) throw err;
-        this.logger.warn(`${channelLabel} delivery failed for user=${userId} purpose=${purpose}`);
+        // PHONE_VERIFICATION has no email fallback by design, so this warning
+        // is the ONLY trace that a member was left with no code at all. It
+        // carries the provider errors because without them a total delivery
+        // outage is indistinguishable from a member not typing the code in:
+        // both just look like an unconsumed OtpCode row.
+        this.logger.warn(
+          `${channelLabel} delivery failed for user=${userId} purpose=${purpose} (no email fallback for this purpose) -- ${describeDeliveryError(err)}`,
+        );
         throw err;
       }
       return;
@@ -115,10 +122,23 @@ export class OtpService {
       throw primaryResult.reason;
     }
     if (primaryResult.status === 'rejected') {
-      this.logger.warn(`${channelLabel} delivery failed for user=${userId} purpose=${purpose}`);
+      this.logger.warn(
+        `${channelLabel} delivery failed for user=${userId} purpose=${purpose} -- ${describeDeliveryError(primaryResult.reason)}`,
+      );
     }
     if (mailResult?.status === 'rejected') {
-      this.logger.warn(`Email delivery failed for user=${userId} purpose=${purpose}`);
+      this.logger.warn(
+        `Email delivery failed for user=${userId} purpose=${purpose} -- ${describeDeliveryError(mailResult.reason)}`,
+      );
+    }
+    if (primaryResult.status === 'rejected' && mailResult?.status === 'fulfilled') {
+      // The caller gets a success response off the back of the email alone.
+      // Say so explicitly: a member who expected an SMS and never looks at
+      // their inbox reports this as "no code arrived", and the request log
+      // would otherwise show a clean 200.
+      this.logger.warn(
+        `${channelLabel} down, delivered by email only: user=${userId} purpose=${purpose}`,
+      );
     }
     if (primaryResult.status === 'rejected' && (!mailResult || mailResult.status === 'rejected')) {
       throw primaryResult.reason;
@@ -291,4 +311,22 @@ export class OtpService {
 
     return row;
   }
+}
+
+/**
+ * Unwraps the provider detail from a delivery failure.
+ *
+ * SmsFallbackChain/WhatsappService throw a bare
+ * Sms/WhatsappDeliveryException once every provider in the order has
+ * failed, having already logged each provider's own error separately. The
+ * exception itself therefore carries no cause, so `${err}` alone yields
+ * nothing actionable -- include whatever message and cause it does have so
+ * one log line names the failure rather than only its category.
+ */
+function describeDeliveryError(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const cause = (err as { cause?: unknown }).cause;
+  const causeText =
+    cause instanceof Error ? `: ${cause.message}` : cause ? `: ${String(cause)}` : '';
+  return `${err.name}: ${err.message}${causeText}`;
 }

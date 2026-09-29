@@ -46,40 +46,55 @@ describe('WithdrawalReconciliationService', () => {
     };
   }
 
-  it('does nothing for any provider when all are disabled', async () => {
-    const { service, prisma, platformSettings } = setup({
-      nowpayments: [{ id: 'w1', providerPayoutId: 'p1' }],
-      flutterwave: [{ id: 'w2', providerPayoutId: 't1' }],
-      stripe: [{ id: 'w3', providerPayoutId: 'tr1' }],
+  // Inverted deliberately. This used to assert that a disabled provider
+  // checks nothing at all, and that contract stranded four real withdrawals:
+  // when withdrawals moved to P2P and the kill switches went off, three
+  // NOWPayments payouts sat at provider status CREATING for 13 days, already
+  // debited from their owners' wallets, with nothing left to ever resolve
+  // them. A kill switch must stop NEW submissions, not abandon money already
+  // sent -- polling is read-only.
+  it('still reconciles in-flight payouts when every provider is disabled', async () => {
+    const { service, prisma, platformSettings, nowPayments, flutterwave, stripeConnect } = setup({
+      nowpayments: [{ id: 'w1', providerPayoutId: 'p1', submittedToProviderAt: new Date() }],
+      flutterwave: [{ id: 'w2', providerPayoutId: 't1', submittedToProviderAt: new Date() }],
+      stripe: [{ id: 'w3', providerPayoutId: 'tr1', submittedToProviderAt: new Date() }],
     });
     platformSettings.isNowPaymentsPayoutsEnabled.mockResolvedValue(false);
     platformSettings.isFlutterwavePayoutsEnabled.mockResolvedValue(false);
     platformSettings.isStripePayoutsEnabled.mockResolvedValue(false);
+    nowPayments.getPayoutStatus.mockResolvedValue({ payoutId: 'p1', status: 'finished', raw: {} });
+    flutterwave.getTransferStatus.mockResolvedValue({ status: 'successful', raw: {} });
+    stripeConnect.getPayoutStatus.mockResolvedValue({ status: 'transferred', raw: {} });
 
     const result = await service.run();
 
-    expect(result.nowpayments).toEqual({
-      checked: 0,
-      paid: 0,
-      failed: 0,
-      stillProcessing: 0,
-      stale: 0,
+    expect(prisma.withdrawalRequest.findMany).toHaveBeenCalled();
+    expect(result.nowpayments.checked).toBe(1);
+    expect(result.flutterwave.checked).toBe(1);
+    expect(result.stripe.checked).toBe(1);
+    // and a payout that settled while the switch was off is still recognised
+    expect(result.nowpayments.paid).toBe(1);
+  });
+
+  // The stale warning lives after the query, so the old early return made it
+  // unreachable for exactly the withdrawals that needed it most.
+  it('flags a long-stuck payout as stale even while its provider is disabled', async () => {
+    const { service, platformSettings, nowPayments } = setup({
+      nowpayments: [
+        {
+          id: 'w1',
+          providerPayoutId: 'p1',
+          submittedToProviderAt: new Date(Date.now() - 13 * 24 * 60 * 60 * 1000),
+        },
+      ],
     });
-    expect(result.flutterwave).toEqual({
-      checked: 0,
-      paid: 0,
-      failed: 0,
-      stillProcessing: 0,
-      stale: 0,
-    });
-    expect(result.stripe).toEqual({
-      checked: 0,
-      paid: 0,
-      failed: 0,
-      stillProcessing: 0,
-      stale: 0,
-    });
-    expect(prisma.withdrawalRequest.findMany).not.toHaveBeenCalled();
+    platformSettings.isNowPaymentsPayoutsEnabled.mockResolvedValue(false);
+    nowPayments.getPayoutStatus.mockResolvedValue({ payoutId: 'p1', status: 'CREATING', raw: {} });
+
+    const result = await service.run();
+
+    expect(result.nowpayments.stillProcessing).toBe(1);
+    expect(result.nowpayments.stale).toBe(1);
   });
 
   it('marks a NOWPayments withdrawal PAID when the provider reports a finished status', async () => {

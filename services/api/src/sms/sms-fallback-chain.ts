@@ -20,11 +20,12 @@ export class SmsFallbackChain {
     senderIdOverride?: string,
   ): Promise<{ provider: SmsProviderKey }> {
     const failures: string[] = [];
+    const destination = toStrictE164(toE164);
 
     for (const key of order) {
       const provider = this.providersByKey[key];
       try {
-        await provider.send(toE164, body, senderIdOverride);
+        await provider.send(destination, body, senderIdOverride);
         return { provider: key };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -36,4 +37,23 @@ export class SmsFallbackChain {
     this.logger.error(`All SMS providers failed -- ${failures.join('; ')}`);
     throw new SmsDeliveryException();
   }
+}
+
+/**
+ * Strips spaces, hyphens, brackets and dots from a destination number.
+ *
+ * `User.phoneNumber` is only ever *validated* (libphonenumber's
+ * `isValidPhoneNumber`, in AuthService) and never normalised, so whatever
+ * punctuation the member typed is stored and handed to a provider verbatim.
+ * SMSLive247 reads the spaces in "+27 82 123 4567" as a delimiter and
+ * rejects the send with "Only one phone number should be included"; the
+ * others vary in what they tolerate. Normalising in the chain rather than
+ * in each provider means one rule covers all four, and a provider still
+ * receives the leading "+" it expects (each strips that itself if needed).
+ *
+ * Digits are never added, removed or reordered -- a number that was not
+ * dialable before is not made dialable here.
+ */
+function toStrictE164(input: string): string {
+  return input.replace(/[\s()\-.]/g, '');
 }

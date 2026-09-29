@@ -117,4 +117,68 @@ describe('SmsFallbackChain', () => {
     expect(twilio.send).not.toHaveBeenCalled();
     expect(smslive247.send).not.toHaveBeenCalled();
   });
+
+  // Regression: SMSLive247 returned 400 "Only one phone number should be
+  // included" in production because User.phoneNumber is validated but never
+  // normalised, so a number typed with spaces reached the provider intact
+  // and read as a delimited list.
+  it('strips spaces and punctuation from the destination before sending', async () => {
+    const termii = fakeProvider('termii', noop);
+    const chain = new SmsFallbackChain({
+      termii,
+      twilio: fakeProvider('twilio', noop),
+      africastalking: fakeProvider('africastalking', noop),
+      smslive247: fakeProvider('smslive247', noop),
+    });
+
+    await chain.send('+27 82 123-4567', 'code 123456', ['termii']);
+
+    expect(termii.send).toHaveBeenCalledWith('+27821234567', 'code 123456', undefined);
+  });
+
+  it('keeps the leading + and every digit intact', async () => {
+    const termii = fakeProvider('termii', noop);
+    const chain = new SmsFallbackChain({
+      termii,
+      twilio: fakeProvider('twilio', noop),
+      africastalking: fakeProvider('africastalking', noop),
+      smslive247: fakeProvider('smslive247', noop),
+    });
+
+    await chain.send('+234 (801) 234.5678', 'body', ['termii']);
+
+    expect(termii.send).toHaveBeenCalledWith('+2348012345678', 'body', undefined);
+  });
+
+  it('passes an already-clean E.164 number through unchanged', async () => {
+    const termii = fakeProvider('termii', noop);
+    const chain = new SmsFallbackChain({
+      termii,
+      twilio: fakeProvider('twilio', noop),
+      africastalking: fakeProvider('africastalking', noop),
+      smslive247: fakeProvider('smslive247', noop),
+    });
+
+    await chain.send('+2348012345678', 'body', ['termii']);
+
+    expect(termii.send).toHaveBeenCalledWith('+2348012345678', 'body', undefined);
+  });
+
+  it('normalises for every provider in the order, not just the first', async () => {
+    const termii = fakeProvider('termii', async () => {
+      throw new Error('down');
+    });
+    const twilio = fakeProvider('twilio', noop);
+    const chain = new SmsFallbackChain({
+      termii,
+      twilio,
+      africastalking: fakeProvider('africastalking', noop),
+      smslive247: fakeProvider('smslive247', noop),
+    });
+
+    await chain.send('+27 82 123 4567', 'body', ['termii', 'twilio']);
+
+    expect(termii.send).toHaveBeenCalledWith('+27821234567', 'body', undefined);
+    expect(twilio.send).toHaveBeenCalledWith('+27821234567', 'body', undefined);
+  });
 });

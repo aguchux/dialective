@@ -1000,9 +1000,7 @@ export class P2PService {
     // against a new token amount would list a price that was never quoted.
     const requote =
       dto.tokenAmount !== undefined || fiatCurrency !== offer.fiatCurrency.toUpperCase();
-    const quote = requote
-      ? await this.resolveOfferQuote(userId, tokenAmount, fiatCurrency)
-      : null;
+    const quote = requote ? await this.resolveOfferQuote(userId, tokenAmount, fiatCurrency) : null;
 
     const paymentMethodIds = dto.paymentMethodIds?.length
       ? dto.paymentMethodIds
@@ -1282,6 +1280,27 @@ export class P2PService {
       trade.status !== P2PTradeStatus.CANCEL_PENDING
     ) {
       throw new UnprocessableEntityException('This trade can no longer be marked paid');
+    }
+    // A cancellation the SELLER asked for is not the buyer's to undo.
+    //
+    // Marking paid is still allowed from CANCEL_PENDING, because a buyer who
+    // really did send the money during the grace window must be able to say
+    // so -- but only when the buyer is the one who asked to cancel (they are
+    // then reversing their own request). When the seller asked, letting
+    // markPaid through cleared cancelRequestedByUserId/cancelAvailableAt and
+    // moved the trade to PAID_MARKED, where requestCancel hard-refuses and
+    // nothing sweeps: the seller's tokens stayed locked until an admin
+    // intervened, and the one action they had taken to get out had been
+    // erased by the counterparty. Sellers reported this as their account
+    // being locked. They keep the grace window now; the buyer's route is a
+    // dispute, same as the seller's.
+    if (
+      trade.status === P2PTradeStatus.CANCEL_PENDING &&
+      trade.cancelRequestedByUserId === trade.sellerId
+    ) {
+      throw new UnprocessableEntityException(
+        'The seller has asked to cancel this trade. If you have already sent the payment, raise a dispute so it can be reviewed.',
+      );
     }
     // Intentionally no paymentDeadlineAt check. The deadline is a countdown,
     // not a cutoff -- a buyer who actually sent the money just after it
@@ -1802,11 +1821,7 @@ export class P2PService {
     return trade;
   }
 
-  async requestForceResolveOtp(
-    adminId: string,
-    tradeId: string,
-    dto: RequestForceResolveOtpDto,
-  ) {
+  async requestForceResolveOtp(adminId: string, tradeId: string, dto: RequestForceResolveOtpDto) {
     const trade = await this.loadForceResolvableTrade(tradeId);
     const admin = await this.prisma.user.findUniqueOrThrow({
       where: { id: adminId },
