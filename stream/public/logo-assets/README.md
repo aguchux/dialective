@@ -1,8 +1,14 @@
-# Stream logo assets
+# Stream Dialect logo assets
 
 Every file here is generated from `stream/public/logo-mark-512.png` — the
 shipped mark, resampled and composited, never redrawn or reshaped.
 `mark-512.png` is pixel-identical to that source.
+
+**The brand name is "Stream Dialect"** — one name, set on a single line with
+the mark to its left. The cards render it two-tone ("Stream" in brand blue,
+"Dialect" in the text colour). Note the app itself still says "Dialect
+Library Voice Stream" throughout `stream/`; these assets carry the new name
+and the code does not yet, which is a rename still to be done.
 
 **Brand blue is `#334dcc`**, sampled from the mark itself. It is *not* the
 site's `--accent` (`#6a18a8` purple) — that is the UI accent for buttons and
