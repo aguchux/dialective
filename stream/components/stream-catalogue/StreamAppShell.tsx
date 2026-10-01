@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { ArrowRight, RefreshCw, X } from 'lucide-react';
@@ -30,6 +30,9 @@ import {
 } from './primitives';
 import { VerifiedVoices } from './VerifiedVoices';
 import { useAuthGate } from './useAuthGate';
+
+/** Matches StreamPlayerBar's own fixed height. */
+const PLAYER_HEIGHT = '60px';
 
 export function StreamAppShell() {
   const { status: sessionStatus } = useSession();
@@ -213,8 +216,22 @@ export function StreamAppShell() {
   const hasMoreCollections = filteredCollections.length > featuredLimit;
 
   return (
-    <div className="stream-catalogue min-h-screen w-full overflow-x-hidden bg-catalogue-bg text-catalogue-ink [--catalogue-player-height:56px] sm:[--catalogue-player-height:60px]">
-      <div className="flex min-h-screen pb-[var(--catalogue-player-height)] md:grid md:grid-cols-[260px_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)_355px]">
+    <div
+      className="stream-catalogue h-svh w-full overflow-hidden bg-catalogue-bg text-catalogue-ink"
+      style={
+        {
+          // Zero when no track is loaded: StreamPlayerBar renders nothing
+          // without a collection, so reserving its strip unconditionally
+          // left a dead band of page background below every column.
+          //
+          // Set inline rather than as a `sm:` utility because an inline
+          // custom property wins over a class at every breakpoint -- the
+          // responsive variant would have reinstated the band at >=640px.
+          '--catalogue-player-height': selectedCollection ? PLAYER_HEIGHT : '0px',
+        } as CSSProperties
+      }
+    >
+      <div className="flex h-full min-h-0 pb-[var(--catalogue-player-height)] md:grid md:grid-cols-[260px_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)_355px]">
         <StreamSidebar
           mobileOpen={mobileMenuOpen}
           onClose={() => setMobileMenuOpen(false)}
@@ -229,7 +246,7 @@ export function StreamAppShell() {
           />
         )}
 
-        <main className="stream-catalogue-scrollbar min-w-0 overflow-y-auto">
+        <main className="stream-catalogue-scrollbar min-h-0 min-w-0 overflow-y-auto">
           <StreamTopbar
             isRefreshing={isFetching && !isLoading}
             onMenu={() => setMobileMenuOpen(true)}
@@ -352,7 +369,7 @@ export function StreamAppShell() {
           </div>
         </main>
 
-        <aside className="stream-catalogue-scrollbar hidden min-h-0 overflow-y-auto border-l border-catalogue-line bg-catalogue-surface lg:block">
+        <aside className="stream-catalogue-scrollbar hidden h-full min-h-0 overflow-y-auto border-l border-catalogue-line bg-catalogue-surface lg:block">
           <CollectionInspector
             added={selectedCollection ? addedCollectionIds.has(selectedCollection.id) : false}
             collection={selectedCollection}

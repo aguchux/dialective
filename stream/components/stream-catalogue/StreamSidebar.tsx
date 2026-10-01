@@ -51,7 +51,7 @@ export function StreamSidebar({
 
   return (
     <aside
-      className={`stream-catalogue-sidebar stream-catalogue-scrollbar fixed inset-y-0 left-0 z-50 flex w-[260px] shrink-0 flex-col overflow-y-auto border-r border-catalogue-line bg-catalogue-surface px-4 pb-[var(--catalogue-player-height)] pt-5 transition-transform duration-200 md:sticky md:top-0 md:z-10 md:translate-x-0 md:transition-none ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      className={`stream-catalogue-sidebar stream-catalogue-scrollbar fixed inset-y-0 left-0 z-50 flex w-[260px] shrink-0 flex-col overflow-y-auto border-r border-catalogue-line bg-catalogue-surface px-4 pb-[var(--catalogue-player-height)] pt-5 transition-transform duration-200 md:static md:h-full md:z-10 md:translate-x-0 md:transition-none ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
     >
       <div className="flex items-center justify-between gap-3 px-2">
         <BrandLogo
