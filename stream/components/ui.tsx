@@ -20,6 +20,21 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
   );
 }
 
+/**
+ * `w-full` is the right default for a field in a stacked form, but it is
+ * wrong for one sitting in a row of buttons. It cannot simply be appended
+ * ahead of the caller's class: `w-full` and a caller's `w-36` are both
+ * width utilities in the same Tailwind layer, so which one wins is decided
+ * by their order in the generated stylesheet, not by their order in the
+ * class string -- `w-full` won, and a select in the catalogue's action
+ * column stretched until it pushed "Add to deck" off the row.
+ *
+ * So the default is applied only when the caller has not asked for a width.
+ */
+function widthClass(className: string): string {
+  return /(^|\s)(w-|min-w-|max-w-|flex-1|grow|basis-)/.test(className) ? '' : 'w-full';
+}
+
 export function PrimaryButton({
   className = '',
   ...props
@@ -47,7 +62,7 @@ export function SecondaryButton({
 export function TextInput({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className={`min-h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-sm text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-accent ${className}`}
+      className={`min-h-9 ${widthClass(className)} rounded-lg border border-line bg-surface px-2.5 text-sm text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-accent ${className}`}
       {...props}
     />
   );
@@ -75,7 +90,7 @@ export function SelectInput({
 }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
-      className={`stream-select min-h-9 w-full appearance-none rounded-lg border border-line bg-surface py-1.5 pr-7 pl-2.5 text-sm text-ink outline-none transition-colors focus:border-accent disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      className={`stream-select min-h-9 ${widthClass(className)} appearance-none rounded-lg border border-line bg-surface py-1.5 pr-7 pl-2.5 text-sm text-ink outline-none transition-colors focus:border-accent disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
       {...props}
     />
   );

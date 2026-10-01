@@ -163,7 +163,7 @@ export default function ExplorePage() {
           <div className="divide-y divide-line">
             {data.items.map((item) => (
               <div
-                className="grid gap-2 px-3 py-2 transition-colors hover:bg-surface-muted/50 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4"
+                className="grid min-w-0 gap-2 px-3 py-2 transition-colors hover:bg-surface-muted/50 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4"
                 key={item.recordingId}
               >
                 <div className="min-w-0">
@@ -194,7 +194,7 @@ export default function ExplorePage() {
                     />
                   )}
                 </div>
-                <div className="flex flex-wrap items-center gap-1.5 md:flex-nowrap">
+                <div className="flex min-w-0 flex-wrap items-center gap-1.5 md:flex-nowrap md:justify-end">
                   <SecondaryButton
                     disabled={previewLoading && playingId === item.recordingId}
                     onClick={() => void handlePreview(item.recordingId)}
@@ -219,7 +219,7 @@ export default function ExplorePage() {
                   {canManageDecks && (
                     <>
                       <SelectInput
-                        className="w-36 shrink-0"
+                        className="w-36 shrink-0 truncate"
                         onChange={(e) =>
                           setAddTarget((prev) => ({ ...prev, [item.recordingId]: e.target.value }))
                         }
