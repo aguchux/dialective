@@ -1,6 +1,7 @@
 'use client';
 
-import { Bell, Building2, ChevronDown, Loader2, Menu, Search } from 'lucide-react';
+import { Bell, Loader2, Menu, Search } from 'lucide-react';
+import { OrgSwitcher } from './OrgSwitcher';
 
 export function StreamTopbar({
   isRefreshing = false,
@@ -51,15 +52,7 @@ export function StreamTopbar({
         )}
       </label>
       <div className="hidden items-center gap-2 sm:flex">
-        <button
-          aria-label="Choose organization"
-          className="inline-flex h-10 items-center gap-2 rounded-lg border border-catalogue-line bg-catalogue-surface px-3 text-xs font-semibold text-catalogue-ink hover:bg-catalogue-surface-hover"
-          type="button"
-        >
-          <Building2 aria-hidden="true" className="size-4 text-catalogue-muted" />
-          <span className="hidden lg:inline">Dialect Labs Org</span>
-          <ChevronDown aria-hidden="true" className="size-3.5 text-catalogue-muted" />
-        </button>
+        <OrgSwitcher />
         <button
           aria-label="Notifications"
           className="relative grid size-10 place-items-center rounded-lg border border-catalogue-line bg-catalogue-surface text-catalogue-muted hover:bg-catalogue-surface-hover hover:text-catalogue-ink"

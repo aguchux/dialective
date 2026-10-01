@@ -110,7 +110,8 @@ export default function OverviewPage() {
         <div>
           <h1 className="text-2xl font-black tracking-tight text-ink">Overview</h1>
           <p className="mt-1 text-sm text-muted">
-            Welcome back, {org?.name ?? session?.user?.name ?? 'there'}
+            Welcome back, {session?.user?.firstName ?? session?.user?.name ?? 'there'}
+            {org?.name ? ` — ${org.name}` : ''}
           </p>
         </div>
         <div className="flex items-center gap-2">
