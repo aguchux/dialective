@@ -9,7 +9,7 @@ import {
   useGetProvenanceReportQuery,
   useGetAnomalyEventsQuery,
 } from '@/store/api';
-import { Card, FieldLabel, PageHeading, SecondaryButton } from '@/components/ui';
+import { Card, FieldLabel, PageHeading, SecondaryButton, SelectInput } from '@/components/ui';
 import { downloadCsvReport } from '@/lib/download-csv-report';
 
 function ExportButton({
@@ -44,7 +44,7 @@ function DatasetQualitySection() {
   const { data, isLoading } = useGetDatasetQualityReportQuery();
 
   return (
-    <Card className="mb-6 p-5">
+    <Card className="mb-4 p-4">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <p className="font-bold text-ink">Dataset Quality</p>
@@ -79,7 +79,7 @@ function ValidationContributionSection() {
   const { data, isLoading } = useGetValidationContributionReportQuery();
 
   return (
-    <Card className="mb-6 p-5">
+    <Card className="mb-4 p-4">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <p className="font-bold text-ink">Validation Contribution</p>
@@ -121,7 +121,7 @@ function ProvenanceSection() {
   );
 
   return (
-    <Card className="p-5">
+    <Card className="p-4">
       <div className="mb-4">
         <p className="font-bold text-ink">Model-Training Provenance</p>
         <p className="text-sm text-muted">
@@ -131,8 +131,7 @@ function ProvenanceSection() {
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <div>
           <FieldLabel>Deck</FieldLabel>
-          <select
-            className="min-h-10 w-full rounded-lg border border-line bg-white px-3 text-sm"
+          <SelectInput
             onChange={(e) => setDeckId(e.target.value)}
             value={deckId}
           >
@@ -142,12 +141,12 @@ function ProvenanceSection() {
                 {deck.name}
               </option>
             ))}
-          </select>
+          </SelectInput>
         </div>
         <div>
           <FieldLabel>Version</FieldLabel>
           <input
-            className="min-h-10 w-full rounded-lg border border-line bg-white px-3 text-sm"
+            className="min-h-10 w-full rounded-lg border border-line bg-surface-muted px-3 text-sm"
             min={1}
             onChange={(e) => setVersion(e.target.value)}
             type="number"
@@ -186,7 +185,7 @@ function AnomalyEventsSection() {
   const { data, isLoading } = useGetAnomalyEventsQuery();
 
   return (
-    <Card className="mb-6 p-5">
+    <Card className="mb-4 p-4">
       <div className="mb-4">
         <p className="font-bold text-ink">Anomaly Alerts</p>
         <p className="text-sm text-muted">
@@ -222,7 +221,7 @@ function AnomalyEventsSection() {
 
 function AuditExportsSection() {
   return (
-    <Card className="p-5">
+    <Card className="p-4">
       <div className="mb-4">
         <p className="font-bold text-ink">Audit Exports</p>
         <p className="text-sm text-muted">

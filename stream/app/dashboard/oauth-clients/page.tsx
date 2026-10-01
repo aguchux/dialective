@@ -11,14 +11,7 @@ import {
   useListStreamDecksQuery,
   useRevokeOAuthClientMutation,
 } from '@/store/api';
-import {
-  Card,
-  ErrorText,
-  FieldLabel,
-  PageHeading,
-  PrimaryButton,
-  SecondaryButton,
-} from '@/components/ui';
+import { Card, ErrorText, FieldLabel, PageHeading, PrimaryButton, SecondaryButton, SelectInput } from '@/components/ui';
 
 const ALL_SCOPES: { value: StreamKeyScope; label: string }[] = [
   { value: 'DECK_LIST', label: 'List decks' },
@@ -45,21 +38,21 @@ function RevealedSecretBanner({
   }
 
   return (
-    <Card className="mb-6 border-accent bg-accent-soft p-5">
+    <Card className="mb-4 border-accent bg-accent-soft p-4">
       <p className="mb-2 text-sm font-bold text-accent-dark">
         Copy this client secret now -- it will not be shown again.
       </p>
       <div className="mb-3 grid gap-2">
         <div>
           <p className="text-xs font-bold uppercase tracking-wide text-muted">Client ID</p>
-          <code className="mt-1 block break-all rounded-lg border border-line bg-white px-3 py-2 text-sm">
+          <code className="mt-1 block break-all rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm">
             {created.clientId}
           </code>
         </div>
         <div>
           <p className="text-xs font-bold uppercase tracking-wide text-muted">Client Secret</p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <code className="min-w-0 flex-1 break-all rounded-lg border border-line bg-white px-3 py-2 text-sm">
+            <code className="min-w-0 flex-1 break-all rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm">
               {created.plaintextSecret}
             </code>
             <PrimaryButton onClick={copy} type="button">
@@ -70,8 +63,8 @@ function RevealedSecretBanner({
       </div>
       <p className="mb-3 text-xs text-muted">
         Exchange these for a short-lived access token:{' '}
-        <code className="rounded bg-white px-1 py-0.5">POST /stream/v1/oauth/token</code> with{' '}
-        <code className="rounded bg-white px-1 py-0.5">grant_type=client_credentials</code>.
+        <code className="rounded bg-surface-muted px-1 py-0.5">POST /stream/v1/oauth/token</code> with{' '}
+        <code className="rounded bg-surface-muted px-1 py-0.5">grant_type=client_credentials</code>.
       </p>
       <SecondaryButton onClick={onDismiss} type="button">
         Done
@@ -115,12 +108,11 @@ function CreateClientForm({
   }
 
   return (
-    <Card className="mb-6 p-5">
+    <Card className="mb-4 p-4">
       <form className="grid gap-4" onSubmit={submit}>
         <div>
           <FieldLabel>Scope of access</FieldLabel>
-          <select
-            className="min-h-10 w-full rounded-lg border border-line bg-white px-3 text-sm text-ink outline-none focus:border-accent"
+          <SelectInput
             onChange={(e) => setDeckId(e.target.value)}
             value={deckId}
           >
@@ -130,7 +122,7 @@ function CreateClientForm({
                 {deck.name} ({deck.deckKey})
               </option>
             ))}
-          </select>
+          </SelectInput>
         </div>
 
         <div>

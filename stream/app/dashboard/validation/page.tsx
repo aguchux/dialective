@@ -25,7 +25,7 @@ const CAN_REVIEW: SubscriberOrgRole[] = ['OWNER', 'ADMIN', 'DATASET_MANAGER'];
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <Card className="p-5">
+    <Card className="p-4">
       <p className="text-xs font-bold uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-1.5 text-2xl font-black text-ink">{value}</p>
     </Card>
@@ -166,7 +166,7 @@ export default function ValidationPage() {
 
       <Card>
         {isLoading ? (
-          <p className="p-5 text-sm text-muted">Loading...</p>
+          <p className="p-4 text-sm text-muted">Loading...</p>
         ) : validations && validations.length > 0 ? (
           <div className="divide-y divide-line">
             {validations.map((v) => (
@@ -192,7 +192,7 @@ export default function ValidationPage() {
             ))}
           </div>
         ) : (
-          <p className="p-5 text-sm text-muted">
+          <p className="p-4 text-sm text-muted">
             No validations submitted yet. Validate recordings from Explore Voice Data.
           </p>
         )}

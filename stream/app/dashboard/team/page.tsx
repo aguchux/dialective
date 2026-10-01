@@ -10,15 +10,7 @@ import {
   useUpdateMemberRoleMutation,
 } from '@/store/api';
 import type { SubscriberOrgRole } from '@/lib/api-client';
-import {
-  Card,
-  ErrorText,
-  FieldLabel,
-  PageHeading,
-  PrimaryButton,
-  SecondaryButton,
-  TextInput,
-} from '@/components/ui';
+import { Card, ErrorText, FieldLabel, PageHeading, PrimaryButton, SecondaryButton, SelectInput, TextInput } from '@/components/ui';
 
 const ROLES: SubscriberOrgRole[] = [
   'OWNER',
@@ -84,7 +76,7 @@ export default function TeamPage() {
       <PageHeading subtitle="Manage who has access to your organization." title="Team" />
 
       {canManage && (
-        <Card className="mb-6 p-5">
+        <Card className="mb-4 p-4">
           <form className="flex flex-wrap items-end gap-3" onSubmit={submitInvite}>
             <div className="flex-1">
               <FieldLabel>Email</FieldLabel>
@@ -97,8 +89,7 @@ export default function TeamPage() {
             </div>
             <div>
               <FieldLabel>Role</FieldLabel>
-              <select
-                className="min-h-10 rounded-lg border border-line bg-white px-3 text-sm"
+              <SelectInput
                 onChange={(e) => setRole(e.target.value as SubscriberOrgRole)}
                 value={role}
               >
@@ -107,7 +98,7 @@ export default function TeamPage() {
                     {r}
                   </option>
                 ))}
-              </select>
+              </SelectInput>
             </div>
             <PrimaryButton disabled={inviting} type="submit">
               <UserPlus aria-hidden="true" className="size-4" />
@@ -121,7 +112,7 @@ export default function TeamPage() {
 
       <Card>
         {isLoading ? (
-          <p className="p-5 text-sm text-muted">Loading...</p>
+          <p className="p-4 text-sm text-muted">Loading...</p>
         ) : members && members.length > 0 ? (
           <div className="divide-y divide-line">
             {members.map((member) => (
@@ -134,8 +125,7 @@ export default function TeamPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   {canManage ? (
-                    <select
-                      className="min-h-9 rounded-lg border border-line bg-white px-2 text-sm"
+                    <SelectInput
                       onChange={(e) =>
                         void handleRoleChange(member.id, e.target.value as SubscriberOrgRole)
                       }
@@ -146,7 +136,7 @@ export default function TeamPage() {
                           {r}
                         </option>
                       ))}
-                    </select>
+                    </SelectInput>
                   ) : (
                     <span className="text-sm font-bold text-muted">{member.role}</span>
                   )}
@@ -160,7 +150,7 @@ export default function TeamPage() {
             ))}
           </div>
         ) : (
-          <p className="p-5 text-sm text-muted">No members yet.</p>
+          <p className="p-4 text-sm text-muted">No members yet.</p>
         )}
         {canManage && (error || success) && (
           <div className="border-t border-line p-4">

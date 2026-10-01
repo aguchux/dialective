@@ -12,15 +12,7 @@ import {
   useRevokeStreamKeyMutation,
   useRotateStreamKeyMutation,
 } from '@/store/api';
-import {
-  Card,
-  ErrorText,
-  FieldLabel,
-  PageHeading,
-  PrimaryButton,
-  SecondaryButton,
-  TextInput,
-} from '@/components/ui';
+import { Card, ErrorText, FieldLabel, PageHeading, PrimaryButton, SecondaryButton, SelectInput, TextInput } from '@/components/ui';
 
 const ALL_SCOPES: { value: StreamKeyScope; label: string }[] = [
   { value: 'DECK_LIST', label: 'List decks' },
@@ -55,12 +47,12 @@ function RevealedKeyBanner({
   }
 
   return (
-    <Card className="mb-6 border-accent bg-accent-soft p-5">
+    <Card className="mb-4 border-accent bg-accent-soft p-4">
       <p className="mb-2 text-sm font-bold text-accent-dark">
         Copy this key now -- it will not be shown again.
       </p>
       <div className="flex flex-wrap items-center gap-2">
-        <code className="min-w-0 flex-1 break-all rounded-lg border border-line bg-white px-3 py-2.5 text-sm">
+        <code className="min-w-0 flex-1 break-all rounded-lg border border-line bg-surface-muted px-3 py-2.5 text-sm">
           {created.plaintextKey}
         </code>
         <PrimaryButton onClick={copy} type="button">
@@ -121,12 +113,11 @@ function CreateKeyForm({
   }
 
   return (
-    <Card className="mb-6 p-5">
+    <Card className="mb-4 p-4">
       <form className="grid gap-4" onSubmit={submit}>
         <div>
           <FieldLabel>Scope of access</FieldLabel>
-          <select
-            className="min-h-10 w-full rounded-lg border border-line bg-white px-3 text-sm text-ink outline-none focus:border-accent"
+          <SelectInput
             onChange={(e) => setDeckId(e.target.value)}
             value={deckId}
           >
@@ -136,7 +127,7 @@ function CreateKeyForm({
                 {deck.name} ({deck.deckKey})
               </option>
             ))}
-          </select>
+          </SelectInput>
         </div>
 
         <div>

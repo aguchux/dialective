@@ -153,7 +153,7 @@ export default function OverviewPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card className="p-5 lg:col-span-1">
+        <Card className="p-4 lg:col-span-1">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-black text-ink">Dataset Search</p>
           </div>
@@ -220,7 +220,7 @@ export default function OverviewPage() {
           </Link>
         </Card>
 
-        <Card className="p-5 lg:col-span-1">
+        <Card className="p-4 lg:col-span-1">
           <div className="mb-1 flex items-center justify-between">
             <p className="text-sm font-black text-ink">API Usage</p>
             <span className="text-xs font-bold uppercase tracking-wide text-muted">Requests</span>
@@ -274,7 +274,7 @@ export default function OverviewPage() {
           </div>
         </Card>
 
-        <Card className="p-5 lg:col-span-1">
+        <Card className="p-4 lg:col-span-1">
           <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-black text-ink">Stream Decks</p>
             <Link className="text-sm font-bold text-accent no-underline" href="/dashboard/decks">

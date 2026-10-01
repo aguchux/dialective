@@ -74,7 +74,7 @@ export function CatalogueChrome({
             onSearchChange={setSearchTerm}
             searchTerm={searchTerm}
           />
-          <div className="mx-auto grid min-w-0 max-w-[1360px] gap-5 px-4 py-5 sm:px-5 lg:px-7">
+          <div className="mx-auto grid min-w-0 max-w-[1360px] gap-4 px-4 py-4 sm:px-5 lg:px-6">
             {showFilters && (
               <FilterBar
                 filters={filters}

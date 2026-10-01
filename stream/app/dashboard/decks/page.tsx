@@ -9,14 +9,7 @@ import {
   useCreateStreamDeckMutation,
   useListStreamDecksQuery,
 } from '@/store/api';
-import {
-  Card,
-  ErrorText,
-  FieldLabel,
-  PageHeading,
-  PrimaryButton,
-  TextInput,
-} from '@/components/ui';
+import { Card, ErrorText, FieldLabel, PageHeading, PrimaryButton, SelectInput, TextInput } from '@/components/ui';
 
 const CONFIDENCE_OPTIONS: IsvcConfidence[] = ['EMERGING', 'ESTABLISHED', 'HIGH', 'VERY_HIGH'];
 
@@ -86,7 +79,7 @@ export default function StreamDecksPage() {
       </div>
 
       {showForm && (
-        <Card className="mb-6 p-5">
+        <Card className="mb-4 p-4">
           <form className="grid gap-4" onSubmit={submit}>
             <div>
               <FieldLabel>Deck name</FieldLabel>
@@ -109,7 +102,7 @@ export default function StreamDecksPage() {
                   className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-bold transition-colors ${
                     type === 'MANUAL'
                       ? 'border-accent bg-accent/10 text-accent-dark'
-                      : 'border-line bg-white text-ink'
+                      : 'border-line bg-surface-muted text-ink'
                   }`}
                   onClick={() => setType('MANUAL')}
                   type="button"
@@ -120,7 +113,7 @@ export default function StreamDecksPage() {
                   className={`flex-1 rounded-lg border px-3 py-2.5 text-sm font-bold transition-colors ${
                     type === 'SMART'
                       ? 'border-accent bg-accent/10 text-accent-dark'
-                      : 'border-line bg-white text-ink'
+                      : 'border-line bg-surface-muted text-ink'
                   }`}
                   onClick={() => setType('SMART')}
                   type="button"
@@ -186,8 +179,7 @@ export default function StreamDecksPage() {
                   </div>
                   <div>
                     <FieldLabel>Min ISVC confidence</FieldLabel>
-                    <select
-                      className="min-h-10 w-full rounded-lg border border-line bg-white px-3 text-sm text-ink outline-none focus:border-accent"
+                    <SelectInput
                       onChange={(e) => setMinConfidence(e.target.value)}
                       value={minConfidence}
                     >
@@ -197,7 +189,7 @@ export default function StreamDecksPage() {
                           {c}
                         </option>
                       ))}
-                    </select>
+                    </SelectInput>
                   </div>
                   <div>
                     <FieldLabel>Min independent organizations</FieldLabel>
@@ -238,7 +230,7 @@ export default function StreamDecksPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {decks.map((deck) => (
             <Link href={`/dashboard/decks/${deck.id}`} key={deck.id}>
-              <Card className="p-5 transition-shadow hover:shadow-md">
+              <Card className="p-4 transition-shadow hover:shadow-md">
                 <div className="mb-2 flex items-center justify-between">
                   <Layers aria-hidden="true" className="size-5 text-accent" />
                   <div className="flex items-center gap-1.5">

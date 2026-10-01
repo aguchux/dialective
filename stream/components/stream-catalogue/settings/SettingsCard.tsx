@@ -41,7 +41,7 @@ export function SettingsField({
 }
 
 export const settingsInputClassName =
-  'min-h-9 w-full rounded-lg border border-catalogue-line bg-catalogue-bg px-3 text-sm text-catalogue-ink placeholder:text-catalogue-dim focus:border-catalogue-blue focus:outline-none focus:ring-2 focus:ring-catalogue-blue/25';
+  'min-h-9 w-full rounded-lg border border-catalogue-line bg-catalogue-bg px-3 text-sm text-catalogue-ink placeholder:text-catalogue-dim focus:border-catalogue-blue focus:outline-none focus:ring-2 focus:ring-catalogue-blue/25 [&>option]:bg-catalogue-surface [&>option]:text-catalogue-ink';
 
 export function SettingsPrimaryButton({
   children,

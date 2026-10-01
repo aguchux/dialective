@@ -10,14 +10,7 @@ import {
   useAddStreamDeckItemMutation,
   type IsvcConfidence,
 } from '@/store/api';
-import {
-  Card,
-  ErrorText,
-  FieldLabel,
-  PageHeading,
-  SecondaryButton,
-  TextInput,
-} from '@/components/ui';
+import { Card, ErrorText, FieldLabel, PageHeading, PrimaryButton, SecondaryButton, SelectInput, TextInput } from '@/components/ui';
 import { IsvcBadge } from '@/components/IsvcBadge';
 import { QualityTierBadge } from '@/components/QualityTierBadge';
 import { ValidationForm } from '@/components/ValidationForm';
@@ -89,8 +82,8 @@ export default function ExplorePage() {
         title="Explore Voice Data"
       />
 
-      <Card className="mb-6 p-5">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+      <Card className="mb-4 p-4">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
           <div>
             <FieldLabel>Country code</FieldLabel>
             <TextInput
@@ -129,8 +122,7 @@ export default function ExplorePage() {
           </div>
           <div>
             <FieldLabel>Minimum ISVC confidence</FieldLabel>
-            <select
-              className="min-h-10 w-full rounded-lg border border-line bg-white px-3 text-sm"
+            <SelectInput
               onChange={(e) => setMinConfidence(e.target.value as IsvcConfidence | '')}
               value={minConfidence}
             >
@@ -140,23 +132,22 @@ export default function ExplorePage() {
                   {c.replace('_', ' ')}
                 </option>
               ))}
-            </select>
+            </SelectInput>
           </div>
           <div>
             <FieldLabel>Sort by</FieldLabel>
-            <select
-              className="min-h-10 w-full rounded-lg border border-line bg-white px-3 text-sm"
+            <SelectInput
               onChange={(e) => setSortBy(e.target.value as 'newest' | 'isvs_desc')}
               value={sortBy}
             >
               <option value="newest">Newest</option>
               <option value="isvs_desc">Highest ISVC score</option>
-            </select>
+            </SelectInput>
           </div>
           <div className="flex items-end">
-            <SecondaryButton onClick={() => setPage(1)} type="button">
+            <PrimaryButton onClick={() => setPage(1)} type="button">
               Apply filters
-            </SecondaryButton>
+            </PrimaryButton>
           </div>
         </div>
       </Card>
@@ -165,27 +156,27 @@ export default function ExplorePage() {
 
       <Card>
         {isLoading ? (
-          <p className="p-5 text-sm text-muted">Loading...</p>
+          <p className="p-4 text-sm text-muted">Loading...</p>
         ) : isError ? (
-          <p className="p-5 text-sm text-danger">Could not load the catalogue.</p>
+          <p className="p-4 text-sm text-danger">Could not load the catalogue.</p>
         ) : data && data.items.length > 0 ? (
           <div className="divide-y divide-line">
             {data.items.map((item) => (
               <div
-                className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-center"
+                className="grid gap-2 px-3 py-2 transition-colors hover:bg-surface-muted/50 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-4"
                 key={item.recordingId}
               >
-                <div>
-                  <p className="font-bold text-ink">
-                    {item.dialect?.name ?? item.dialectTag}
-                    {item.subdialect ? ` — ${item.subdialect.name}` : ''}
-                  </p>
-                  <p className="text-xs text-muted">
-                    {item.country?.name ?? 'Unknown country'} ·{' '}
-                    {((item.durationMs ?? 0) / 1000).toFixed(1)}s · DL score{' '}
-                    {item.dlCanonicalScore ?? '—'}
-                  </p>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <div className="min-w-0">
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                    <p className="truncate text-sm font-bold text-ink">
+                      {item.dialect?.name ?? item.dialectTag}
+                      {item.subdialect ? ` — ${item.subdialect.name}` : ''}
+                    </p>
+                    <p className="truncate text-xs text-muted">
+                      {item.country?.name ?? 'Unknown country'} ·{' '}
+                      {((item.durationMs ?? 0) / 1000).toFixed(1)}s · DL{' '}
+                      <span className="tabular-nums">{item.dlCanonicalScore ?? '—'}</span>
+                    </p>
                     <IsvcBadge
                       confidence={item.isvcConfidence}
                       isvs={item.isvs}
@@ -203,7 +194,7 @@ export default function ExplorePage() {
                     />
                   )}
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1.5 md:flex-nowrap">
                   <SecondaryButton
                     disabled={previewLoading && playingId === item.recordingId}
                     onClick={() => void handlePreview(item.recordingId)}
@@ -227,8 +218,8 @@ export default function ExplorePage() {
                   )}
                   {canManageDecks && (
                     <>
-                      <select
-                        className="min-h-10 rounded-lg border border-line bg-white px-2 text-sm"
+                      <SelectInput
+                        className="w-36 shrink-0"
                         onChange={(e) =>
                           setAddTarget((prev) => ({ ...prev, [item.recordingId]: e.target.value }))
                         }
@@ -240,14 +231,15 @@ export default function ExplorePage() {
                             {deck.name}
                           </option>
                         ))}
-                      </select>
-                      <SecondaryButton
+                      </SelectInput>
+                      <PrimaryButton
+                        className="shrink-0"
                         disabled={!addTarget[item.recordingId]}
                         onClick={() => void handleAdd(item.recordingId)}
                         type="button"
                       >
                         Add to deck
-                      </SecondaryButton>
+                      </PrimaryButton>
                     </>
                   )}
                 </div>
@@ -255,7 +247,7 @@ export default function ExplorePage() {
             ))}
           </div>
         ) : (
-          <p className="p-5 text-sm text-muted">No recordings match these filters.</p>
+          <p className="p-4 text-sm text-muted">No recordings match these filters.</p>
         )}
       </Card>
 

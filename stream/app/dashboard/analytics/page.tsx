@@ -69,19 +69,19 @@ export default function AnalyticsPage() {
       ) : data ? (
         <>
           <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Card className="p-5">
+            <Card className="p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-muted">Total requests</p>
               <p className="mt-1 text-2xl font-black text-ink">
                 {data.totalRequests.toLocaleString()}
               </p>
             </Card>
-            <Card className="p-5">
+            <Card className="p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-muted">Audio streamed</p>
               <p className="mt-1 text-2xl font-black text-ink">
                 {formatBytes(Number(data.totalBytesStreamed))}
               </p>
             </Card>
-            <Card className="p-5">
+            <Card className="p-4">
               <p className="text-xs font-bold uppercase tracking-wide text-muted">Denial rate</p>
               <p className="mt-1 text-2xl font-black text-ink">
                 {(data.deniedRequestRate * 100).toFixed(1)}%
@@ -89,7 +89,7 @@ export default function AnalyticsPage() {
             </Card>
           </div>
 
-          <Card className="mb-6 p-5">
+          <Card className="mb-4 p-4">
             <p className="mb-4 text-xs font-bold uppercase tracking-wide text-muted">
               Audio streamed per day (MB)
             </p>
@@ -108,11 +108,11 @@ export default function AnalyticsPage() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <p className="p-5 text-center text-sm text-muted">No audio requests yet.</p>
+              <p className="p-4 text-center text-sm text-muted">No audio requests yet.</p>
             )}
           </Card>
 
-          <Card className="p-5">
+          <Card className="p-4">
             <p className="mb-3 text-xs font-bold uppercase tracking-wide text-muted">
               Top decks by requests
             </p>

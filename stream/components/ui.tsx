@@ -1,4 +1,10 @@
-import type { ButtonHTMLAttributes, ComponentType, InputHTMLAttributes, ReactNode } from 'react';
+import type {
+  ButtonHTMLAttributes,
+  ComponentType,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes,
+} from 'react';
 import Link from 'next/link';
 
 // Matches frontend/components/dashboard/shared.tsx's cardClass exactly so
@@ -20,7 +26,7 @@ export function PrimaryButton({
 }: ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
-      className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      className={`inline-flex min-h-9 items-center justify-center gap-2 rounded-lg bg-accent px-3.5 text-sm font-semibold text-white transition-colors hover:bg-accent-dark disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
       {...props}
     />
   );
@@ -32,7 +38,7 @@ export function SecondaryButton({
 }: ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
-      className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 py-2.5 text-sm font-bold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
+      className={`inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-3.5 text-sm font-semibold text-ink transition-colors hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
       {...props}
     />
   );
@@ -41,7 +47,35 @@ export function SecondaryButton({
 export function TextInput({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
-      className={`min-h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-ink outline-none transition-colors focus:border-accent ${className}`}
+      className={`min-h-9 w-full rounded-lg border border-line bg-surface px-2.5 text-sm text-ink outline-none transition-colors placeholder:text-muted/70 focus:border-accent ${className}`}
+      {...props}
+    />
+  );
+}
+
+/**
+ * The themed counterpart to TextInput.
+ *
+ * Every page used to hand-roll its own `<select className="... bg-white">`.
+ * `bg-white` is a literal, not a theme token, so it ignored the
+ * .stream-console / .stream-catalogue re-points entirely and rendered a
+ * white box with near-invisible white-on-white option text on the dark
+ * console -- the single most visible theming break in the app. Routing
+ * every select through here means the dark scopes reach it like any other
+ * control.
+ *
+ * `bg-surface` also has to be restated on `<option>` (via the caller's
+ * markup it cannot be, so it is set here): some browsers render the
+ * dropdown list from the control's own background rather than inheriting
+ * the page's color-scheme.
+ */
+export function SelectInput({
+  className = '',
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      className={`stream-select min-h-9 w-full appearance-none rounded-lg border border-line bg-surface py-1.5 pr-7 pl-2.5 text-sm text-ink outline-none transition-colors focus:border-accent disabled:cursor-not-allowed disabled:opacity-60 ${className}`}
       {...props}
     />
   );
@@ -58,7 +92,7 @@ export function FieldLabel({
 }) {
   return (
     <label
-      className={`mb-1.5 block text-xs font-bold uppercase tracking-wide text-muted ${className}`}
+      className={`mb-1 block text-[11px] font-bold uppercase tracking-wide text-muted ${className}`}
       htmlFor={htmlFor}
     >
       {children}
@@ -76,9 +110,9 @@ export function ErrorText({ children }: { children: ReactNode }) {
 
 export function PageHeading({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <div className="mb-6">
-      <h1 className="text-2xl font-black tracking-tight text-ink">{title}</h1>
-      {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
+    <div className="mb-4">
+      <h1 className="text-xl font-black tracking-tight text-ink">{title}</h1>
+      {subtitle && <p className="mt-0.5 text-sm text-muted">{subtitle}</p>}
     </div>
   );
 }
@@ -114,7 +148,7 @@ export function MetricCard({
 }) {
   const Content = href ? Link : 'div';
   return (
-    <Card className="flex min-h-32 items-start gap-3 p-4 md:p-5">
+    <Card className="flex min-h-24 items-start gap-3 p-3.5">
       <Content
         className={`flex min-w-0 flex-1 items-start gap-3 ${href ? 'transition-colors hover:opacity-80' : ''}`}
         href={href as never}
@@ -125,8 +159,8 @@ export function MetricCard({
           <Icon aria-hidden="true" className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-muted">{label}</p>
-          <p className="mt-2 wrap-break-word text-2xl font-black leading-tight text-ink">{value}</p>
+          <p className="text-xs font-bold text-muted">{label}</p>
+          <p className="mt-1 wrap-break-word text-xl font-black leading-tight text-ink">{value}</p>
           {subValue && <p className="mt-1 text-xs font-bold text-muted">{subValue}</p>}
         </div>
       </Content>

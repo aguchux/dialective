@@ -16,15 +16,7 @@ import {
   useSetStreamDeckVisibilityMutation,
   useUpdateStreamDeckRuleMutation,
 } from '@/store/api';
-import {
-  Card,
-  ErrorText,
-  FieldLabel,
-  PageHeading,
-  PrimaryButton,
-  SecondaryButton,
-  TextInput,
-} from '@/components/ui';
+import { Card, ErrorText, FieldLabel, PageHeading, PrimaryButton, SecondaryButton, SelectInput, TextInput } from '@/components/ui';
 
 const CONFIDENCE_OPTIONS: IsvcConfidence[] = ['EMERGING', 'ESTABLISHED', 'HIGH', 'VERY_HIGH'];
 
@@ -75,7 +67,7 @@ function RuleEditor({ deckId, rule }: { deckId: string; rule: StreamDeckRule | n
   }
 
   return (
-    <Card className="mb-6 p-5">
+    <Card className="mb-4 p-4">
       <div className="mb-3 flex items-center gap-2">
         <Sparkles aria-hidden="true" className="size-4 text-accent" />
         <p className="font-bold text-ink">Smart Deck rule</p>
@@ -118,8 +110,7 @@ function RuleEditor({ deckId, rule }: { deckId: string; rule: StreamDeckRule | n
           </div>
           <div>
             <FieldLabel>Min ISVC confidence</FieldLabel>
-            <select
-              className="min-h-10 w-full rounded-lg border border-line bg-white px-3 text-sm text-ink outline-none focus:border-accent"
+            <SelectInput
               onChange={(e) => setMinConfidence(e.target.value)}
               value={minConfidence}
             >
@@ -129,7 +120,7 @@ function RuleEditor({ deckId, rule }: { deckId: string; rule: StreamDeckRule | n
                   {c}
                 </option>
               ))}
-            </select>
+            </SelectInput>
           </div>
           <div>
             <FieldLabel>Min independent organizations</FieldLabel>
@@ -205,7 +196,7 @@ function SharingCard({ deck }: { deck: StreamDeck }) {
   }
 
   return (
-    <Card className="mb-6 p-5">
+    <Card className="mb-4 p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           {isPublic ? (
@@ -275,7 +266,7 @@ function SharingCard({ deck }: { deck: StreamDeck }) {
               <div>
                 <FieldLabel>Terms summary</FieldLabel>
                 <textarea
-                  className="min-h-24 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink outline-none focus:border-accent"
+                  className="min-h-24 w-full rounded-lg border border-line bg-surface-muted px-3 py-2 text-sm text-ink outline-none focus:border-accent"
                   onChange={(e) => setTermsSummary(e.target.value)}
                   required
                   value={termsSummary}
@@ -411,7 +402,7 @@ export default function StreamDeckDetailPage() {
             ))}
           </div>
         ) : (
-          <p className="p-5 text-sm text-muted">
+          <p className="p-4 text-sm text-muted">
             {isSmart
               ? 'No recordings match this rule yet.'
               : 'No recordings yet. Add some from Explore Voice Data.'}

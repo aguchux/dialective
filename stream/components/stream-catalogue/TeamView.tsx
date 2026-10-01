@@ -248,24 +248,24 @@ export function TeamView() {
             <table className="w-full min-w-[560px] border-collapse text-sm">
               <thead>
                 <tr className="border-b border-catalogue-line text-left text-[11px] font-bold uppercase tracking-wide text-catalogue-dim">
-                  <th className="px-4 py-2.5">Name</th>
-                  <th className="px-4 py-2.5">Role</th>
-                  <th className="px-4 py-2.5">Joined</th>
-                  <th className="px-4 py-2.5 text-right">Actions</th>
+                  <th className="px-3 py-2">Name</th>
+                  <th className="px-3 py-2">Role</th>
+                  <th className="px-3 py-2">Joined</th>
+                  <th className="px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {membersLoading ? (
                   Array.from({ length: 5 }, (_, index) => (
                     <tr className="border-b border-catalogue-line last:border-0" key={index}>
-                      <td className="px-4 py-3" colSpan={4}>
+                      <td className="px-3 py-2" colSpan={4}>
                         <Skeleton className="h-8 w-full" />
                       </td>
                     </tr>
                   ))
                 ) : filteredMembers.length === 0 ? (
                   <tr>
-                    <td className="px-4 py-8 text-center text-sm text-catalogue-muted" colSpan={4}>
+                    <td className="px-3 py-8 text-center text-sm text-catalogue-muted" colSpan={4}>
                       No members match your search.
                     </td>
                   </tr>
@@ -276,7 +276,7 @@ export function TeamView() {
                       key={member.id}
                       onClick={() => setSelectedMember(member)}
                     >
-                      <td className="px-4 py-2.5">
+                      <td className="px-3 py-1.5">
                         <div className="flex items-center gap-2.5">
                           <span className="grid size-8 shrink-0 place-items-center rounded-full bg-catalogue-blue/20 text-xs font-bold text-catalogue-blue-bright">
                             {initials(member.user.firstName, member.user.lastName)}
@@ -291,7 +291,7 @@ export function TeamView() {
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-2.5">
+                      <td className="px-3 py-1.5">
                         {canManage ? (
                           <select
                             className="min-h-8 rounded-md border border-catalogue-line bg-catalogue-bg px-2 text-xs font-semibold text-catalogue-ink focus:border-catalogue-blue focus:outline-none"
@@ -311,14 +311,14 @@ export function TeamView() {
                           <RoleBadge role={member.role} />
                         )}
                       </td>
-                      <td className="px-4 py-2.5 text-xs text-catalogue-muted">
+                      <td className="px-3 py-1.5 text-xs whitespace-nowrap text-catalogue-muted">
                         {new Date(member.invitedAt).toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric',
                         })}
                       </td>
-                      <td className="px-4 py-2.5 text-right">
+                      <td className="px-3 py-1.5 text-right">
                         {canManage && (
                           <button
                             aria-label={`Remove ${member.user.firstName} ${member.user.lastName}`}

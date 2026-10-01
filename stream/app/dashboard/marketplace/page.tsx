@@ -12,15 +12,7 @@ import {
   useListPublicDecksQuery,
 } from '@/store/api';
 import type { SubscriberOrgRole } from '@/lib/api-client';
-import {
-  Card,
-  ErrorText,
-  FieldLabel,
-  PageHeading,
-  PrimaryButton,
-  SecondaryButton,
-  TextInput,
-} from '@/components/ui';
+import { Card, ErrorText, FieldLabel, PageHeading, PrimaryButton, SecondaryButton, SelectInput, TextInput } from '@/components/ui';
 
 const CAN_MANAGE_DECKS: SubscriberOrgRole[] = ['OWNER', 'ADMIN', 'DATASET_MANAGER'];
 const CAN_VALIDATE: SubscriberOrgRole[] = ['OWNER', 'ADMIN', 'DATASET_MANAGER', 'VALIDATOR'];
@@ -88,7 +80,7 @@ function DeckCard({
   const tier = TIER_LABELS[deck.minQualityTier];
 
   return (
-    <Card className="p-5">
+    <Card className="p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-bold text-ink">{deck.name}</p>
@@ -194,15 +186,14 @@ export default function DataMarketplacePage() {
 
       <div className="mb-6 flex items-center gap-3">
         <FieldLabel>Minimum quality</FieldLabel>
-        <select
-          className="min-h-10 rounded-lg border border-line bg-white px-3 text-sm"
+        <SelectInput
           onChange={(e) => setMinQualityTier(e.target.value as QualityTier | '')}
           value={minQualityTier}
         >
           <option value="">Any</option>
           <option value="high">High confidence</option>
           <option value="premium_verified">Premium verified</option>
-        </select>
+        </SelectInput>
       </div>
 
       {isLoading ? (

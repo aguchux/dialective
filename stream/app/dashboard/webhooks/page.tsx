@@ -53,12 +53,12 @@ function RevealedSecretBanner({
   }
 
   return (
-    <Card className="mb-6 border-accent bg-accent-soft p-5">
+    <Card className="mb-4 border-accent bg-accent-soft p-4">
       <p className="mb-2 text-sm font-bold text-accent-dark">
         Copy this signing secret now -- it will not be shown again.
       </p>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <code className="min-w-0 flex-1 break-all rounded-lg border border-line bg-white px-3 py-2.5 text-sm">
+        <code className="min-w-0 flex-1 break-all rounded-lg border border-line bg-surface-muted px-3 py-2.5 text-sm">
           {created.plaintextSecret}
         </code>
         <PrimaryButton onClick={copy} type="button">
@@ -70,7 +70,7 @@ function RevealedSecretBanner({
       </div>
       <p className="text-xs text-muted">
         Each delivery is signed with{' '}
-        <code className="rounded bg-white px-1 py-0.5">X-Dialectiva-Signature: sha256=...</code> --
+        <code className="rounded bg-surface-muted px-1 py-0.5">X-Dialectiva-Signature: sha256=...</code> --
         an HMAC-SHA256 of the raw JSON body, keyed by this secret. Verify it before trusting a
         payload.
       </p>
@@ -114,7 +114,7 @@ function CreateWebhookForm({
   }
 
   return (
-    <Card className="mb-6 p-5">
+    <Card className="mb-4 p-4">
       <form className="grid gap-4" onSubmit={submit}>
         <div>
           <FieldLabel>Endpoint URL</FieldLabel>

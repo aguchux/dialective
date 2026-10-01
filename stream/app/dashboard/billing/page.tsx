@@ -47,7 +47,7 @@ export default function BillingPage() {
         </Card>
       )}
 
-      <Card className="mb-6 p-5">
+      <Card className="mb-4 p-4">
         <p className="text-xs font-bold uppercase tracking-wide text-muted">Current subscription</p>
         <p className="mt-1 text-lg font-black text-ink">
           {subscription
@@ -64,7 +64,7 @@ export default function BillingPage() {
       {canManageBilling ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {PLAN_KEYS.map((key) => (
-            <Card className="p-5" key={key}>
+            <Card className="p-4" key={key}>
               <p className="text-lg font-black capitalize text-ink">{key}</p>
               <p className="mt-1 text-sm text-muted">Monthly billing.</p>
               <PrimaryButton
@@ -79,7 +79,7 @@ export default function BillingPage() {
           ))}
         </div>
       ) : (
-        <Card className="p-5">
+        <Card className="p-4">
           <p className="text-sm text-muted">
             Subscription changes are available to organization owners and billing managers.
           </p>
