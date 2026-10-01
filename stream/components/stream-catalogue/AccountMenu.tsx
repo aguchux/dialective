@@ -11,9 +11,11 @@ import {
   LogOut,
   Settings,
   Sparkles,
+  UsersRound,
   UserRound,
 } from 'lucide-react';
 import { useGetSubscriptionQuery } from '@/store/api';
+import { canAccessPath } from '@/lib/route-access';
 
 /** "Ada Obi" -> "AO"; falls back to the email's first letter. */
 function initialsFor(
@@ -34,6 +36,42 @@ function displayNameFor(
   const name = [firstName, lastName].filter(Boolean).join(' ').trim();
   return name || email || 'Signed in';
 }
+
+/**
+ * Account-scoped destinations, in the order they appear.
+ *
+ * Team and Settings moved here out of the sidebar's Organization group:
+ * they are account and org administration rather than places you work with
+ * voice data, so they belong behind the member rather than in the primary
+ * nav. Usage and Reports stayed in the sidebar -- those are the product.
+ *
+ * Several of these are role-gated (Team and Organization need an org admin,
+ * Billing a billing role). They are filtered by the same canAccessPath the
+ * sidebar uses, so a member is never shown a destination that would bounce
+ * them -- it decides what renders, never what is permitted; the server's
+ * guards do that.
+ */
+const MENU_GROUPS: {
+  items: { href: string; label: string; icon: typeof UserRound; accent?: boolean }[];
+}[] = [
+  {
+    items: [
+      { href: '/settings/billing', label: 'Upgrade plan', icon: Sparkles, accent: true },
+      { href: '/settings', label: 'Profile', icon: UserRound },
+    ],
+  },
+  {
+    items: [
+      { href: '/dashboard/team', label: 'Team', icon: UsersRound },
+      { href: '/settings/organization', label: 'Organization', icon: Building2 },
+      { href: '/settings/billing', label: 'Billing', icon: CreditCard },
+      { href: '/settings', label: 'Settings', icon: Settings },
+    ],
+  },
+  {
+    items: [{ href: '/docs', label: 'Help', icon: LifeBuoy }],
+  },
+];
 
 const MENU_ITEM_CLASS =
   'flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-sm text-catalogue-muted transition-colors hover:bg-catalogue-surface-hover hover:text-catalogue-ink';
@@ -95,7 +133,7 @@ export function AccountMenu() {
     );
   }
 
-  const { firstName, lastName, email } = session.user;
+  const { firstName, lastName, email, orgRole } = session.user;
   const name = displayNameFor(firstName, lastName, email);
   const initials = initialsFor(firstName, lastName, email);
 
@@ -116,65 +154,36 @@ export function AccountMenu() {
             </span>
           </div>
 
-          <div className="my-1.5 h-px bg-catalogue-line" />
-
-          <button
-            className={MENU_ITEM_CLASS}
-            onClick={() => go('/settings/billing')}
-            role="menuitem"
-            type="button"
-          >
-            <Sparkles aria-hidden="true" className="size-4 text-catalogue-blue-bright" />
-            Upgrade plan
-          </button>
-          <button
-            className={MENU_ITEM_CLASS}
-            onClick={() => go('/settings')}
-            role="menuitem"
-            type="button"
-          >
-            <UserRound aria-hidden="true" className="size-4" />
-            Profile
-          </button>
-          <button
-            className={MENU_ITEM_CLASS}
-            onClick={() => go('/settings/organization')}
-            role="menuitem"
-            type="button"
-          >
-            <Building2 aria-hidden="true" className="size-4" />
-            Organization
-          </button>
-          <button
-            className={MENU_ITEM_CLASS}
-            onClick={() => go('/settings/billing')}
-            role="menuitem"
-            type="button"
-          >
-            <CreditCard aria-hidden="true" className="size-4" />
-            Billing
-          </button>
-          <button
-            className={MENU_ITEM_CLASS}
-            onClick={() => go('/settings')}
-            role="menuitem"
-            type="button"
-          >
-            <Settings aria-hidden="true" className="size-4" />
-            Settings
-          </button>
+          {MENU_GROUPS.map((group, index) => {
+            const visible = group.items.filter((item) => canAccessPath(orgRole, item.href));
+            if (visible.length === 0) return null;
+            return (
+              <div key={index}>
+                <div className="my-1.5 h-px bg-catalogue-line" />
+                {visible.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      className={MENU_ITEM_CLASS}
+                      key={item.label}
+                      onClick={() => go(item.href)}
+                      role="menuitem"
+                      type="button"
+                    >
+                      <Icon
+                        aria-hidden="true"
+                        className={`size-4 ${item.accent ? 'text-catalogue-blue-bright' : ''}`}
+                      />
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
 
           <div className="my-1.5 h-px bg-catalogue-line" />
 
-          <button
-            className={MENU_ITEM_CLASS}
-            onClick={() => go('/docs')}
-            role="menuitem"
-            type="button"
-          >
-            <LifeBuoy aria-hidden="true" className="size-4" />
-            Help
-          </button>
           <button
             className={`${MENU_ITEM_CLASS} font-semibold hover:text-danger`}
             onClick={() => {

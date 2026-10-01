@@ -13,10 +13,8 @@ import {
   Pin,
   Plus,
   Search,
-  Settings,
   ShieldCheck,
   Store,
-  UsersRound,
   Webhook,
   X,
 } from 'lucide-react';
@@ -83,8 +81,6 @@ const NAV_GROUPS: {
     items: [
       { href: '/dashboard/analytics', label: 'Usage', icon: BarChart3, protected: true },
       { href: '/dashboard/reports', label: 'Reports', icon: FileText, protected: true },
-      { href: '/dashboard/team', label: 'Team', icon: UsersRound, protected: true },
-      { href: '/settings', label: 'Settings', icon: Settings, protected: true },
     ],
   },
 ];
