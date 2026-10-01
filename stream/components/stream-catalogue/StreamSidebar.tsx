@@ -15,7 +15,6 @@ import {
   Search,
   Settings,
   ShieldCheck,
-  SlidersHorizontal,
   Store,
   UsersRound,
   Webhook,
@@ -23,6 +22,7 @@ import {
 } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import { AccountMenu } from './AccountMenu';
+import { UpgradeCard } from './UpgradeCard';
 import type { PinnedCollection } from './types';
 import { CoverImage } from './primitives';
 import { useAuthGate } from './useAuthGate';
@@ -228,26 +228,12 @@ export function StreamSidebar({
         </div>
       </div>
 
-      <div className="relative shrink-0 mx-4 mt-3 overflow-hidden rounded-[10px] border border-catalogue-blue/30 bg-[linear-gradient(145deg,#33244a,#1a1424)] p-4">
-        <SlidersHorizontal
-          aria-hidden="true"
-          className="absolute -bottom-2 -right-1 size-20 text-catalogue-blue/20"
-        />
-        <p className="relative text-sm font-bold text-catalogue-ink">Upgrade Plan</p>
-        <p className="relative mt-1 text-xs leading-relaxed text-catalogue-muted">
-          Unlock more hours, advanced filters, and team features.
-        </p>
-        <button
-          className="relative mt-3 inline-flex min-h-8 items-center gap-1.5 rounded-md border border-catalogue-blue/50 px-2.5 text-[11px] font-semibold text-catalogue-blue-bright transition-colors hover:bg-catalogue-blue/15"
-          onClick={() => {
-            onClose?.();
-            guard('/settings/billing', () => router.push('/settings/billing'));
-          }}
-          type="button"
-        >
-          View Plans <Plus aria-hidden="true" className="size-3" />
-        </button>
-      </div>
+      <UpgradeCard
+        onViewPlans={() => {
+          onClose?.();
+          guard('/settings/billing', () => router.push('/settings/billing'));
+        }}
+      />
 
       <AccountMenu />
     </aside>
