@@ -88,3 +88,34 @@ export interface CatalogueShowcase {
   filterOptions: Record<FilterKey, string[]>;
   validationBreakdown: ValidationBreakdown[];
 }
+
+/**
+ * Geo reference data behind the catalogue filters, straight from the
+ * Country/Dialect/DialectVariant tables via the API's GeoController.
+ *
+ * The filter dropdowns used to be built from whatever collections the
+ * showcase returned, so they listed only values already present in the
+ * loaded results -- and that showcase is still mock data, so the options
+ * were effectively fictional. Reading the real tables means a country with
+ * no recordings yet is still selectable, which is the honest answer to
+ * "what can I filter by".
+ */
+export interface GeoCountry {
+  id: string;
+  code: string;
+  name: string;
+  currencyCode: string;
+  _count?: { dialects: number };
+}
+
+export interface GeoDialect {
+  id: string;
+  tag: string;
+  name: string;
+}
+
+export interface GeoDialectVariant {
+  id: string;
+  tag: string;
+  name: string;
+}

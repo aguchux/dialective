@@ -21,6 +21,7 @@ import { StreamPlayerBar } from './StreamPlayerBar';
 import { StreamSidebar } from './StreamSidebar';
 import { StreamTopbar } from './StreamTopbar';
 import { useCatalogueSearch } from './CatalogueSearchContext';
+import { useGeoFilterOptions } from './useGeoFilterOptions';
 import {
   CarouselRow,
   CollectionCardSkeleton,
@@ -151,44 +152,19 @@ export function StreamAppShell() {
     });
   }
 
-  // Each field's option list is derived from collections matching every
-  // *upstream* filter already chosen, so picking Country narrows the
-  // Dialect list to that country's dialects, picking Dialect narrows
-  // Subdialect, and so on -- rather than one static flat list per field.
-  const cascadedFilterOptions = useMemo(() => {
-    function optionsFor(uptoKey: FilterKey): CatalogueCollection[] {
-      const cascadeOrder: FilterKey[] = ['country', 'dialect', 'subdialect', 'quality', 'license'];
-      const uptoIndex = cascadeOrder.indexOf(uptoKey);
-      return collections.filter((collection) => {
-        for (const key of cascadeOrder.slice(0, uptoIndex)) {
-          const value = filters[key];
-          if (!value) continue;
-          if (key === 'quality') {
-            if (collection.qualityScore < Number(value.replace('+', ''))) return false;
-          } else if (key === 'subdialect') {
-            if (!collection.subdialect.toLowerCase().includes(value.toLowerCase())) return false;
-          } else if (key === 'license') {
-            if (!collection.license.toLowerCase().includes(value.toLowerCase())) return false;
-          } else if (collection[key] !== value) {
-            return false;
-          }
-        }
-        return true;
-      });
-    }
-
-    const uniqueSorted = (values: string[]) => Array.from(new Set(values)).sort();
-
-    return {
-      country: uniqueSorted(optionsFor('country').map((c) => c.country)),
-      dialect: uniqueSorted(optionsFor('dialect').map((c) => c.dialect)),
-      subdialect: uniqueSorted(
-        optionsFor('subdialect').flatMap((c) => c.subdialect.split(',').map((s) => s.trim())),
-      ),
-      quality: ['9.5+', '9.0+', '8.5+'],
-      license: uniqueSorted(optionsFor('license').map((c) => c.license)),
-    } satisfies Record<FilterKey, string[]>;
-  }, [collections, filterOptions, filters]);
+  // Country/dialect/subdialect come from the database (GeoController's
+  // Country -> Dialect -> DialectVariant tables) rather than from whatever
+  // the loaded collections happen to contain. The old version derived each
+  // list by filtering collections against the upstream choices, which meant
+  // the dropdowns only ever offered values that already had data in the
+  // current result set -- and since getCatalogueShowcase is still mock
+  // data, those options were fictional. License stays collection-derived:
+  // it belongs to the licence agreement, not to geography.
+  const licenseOptions = useMemo(
+    () => Array.from(new Set(collections.map((c) => c.license).filter(Boolean))).sort(),
+    [collections],
+  );
+  const { options: cascadedFilterOptions } = useGeoFilterOptions(filters, licenseOptions);
 
   function scrollTo(id: string) {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });

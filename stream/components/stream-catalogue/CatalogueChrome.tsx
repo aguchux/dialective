@@ -6,7 +6,7 @@ import { StreamSidebar } from './StreamSidebar';
 import { StreamTopbar } from './StreamTopbar';
 import { useCatalogueSearch } from './CatalogueSearchContext';
 import { useGetCatalogueShowcaseQuery } from '@/store/api';
-import type { FilterKey } from './types';
+import { useGeoFilterOptions } from './useGeoFilterOptions';
 
 /**
  * The signed-in app's frame: sidebar, search topbar and filter row.
@@ -36,17 +36,16 @@ export function CatalogueChrome({
   // catalogue is already loaded.
   const { data, isFetching } = useGetCatalogueShowcaseQuery(undefined, { skip: !showFilters });
 
-  const filterOptions = useMemo(() => {
-    const collections = data?.collections ?? [];
-    const unique = (values: string[]) => Array.from(new Set(values.filter(Boolean))).sort();
-    return {
-      country: unique(collections.map((collection) => collection.country)),
-      dialect: unique(collections.map((collection) => collection.dialect)),
-      subdialect: unique(collections.map((collection) => collection.subdialect)),
-      quality: ['9.5+', '9.0+', '8.5+'],
-      license: unique(collections.map((collection) => collection.license)),
-    } satisfies Record<FilterKey, string[]>;
-  }, [data]);
+  // License has no geo table to read from -- it is a property of the
+  // licence agreement, so it stays derived from the collections.
+  const licenseOptions = useMemo(
+    () =>
+      Array.from(
+        new Set((data?.collections ?? []).map((collection) => collection.license).filter(Boolean)),
+      ).sort(),
+    [data],
+  );
+  const { options: filterOptions } = useGeoFilterOptions(filters, licenseOptions);
 
   return (
     <div

@@ -3,7 +3,12 @@ import { PUBLIC_API_V1_BASE_URL } from '@/lib/public-api';
 import { getCurrentSession } from '@/lib/client-session';
 import type { SubscriberOrgRole } from '@/lib/api-client';
 import { buildCatalogueShowcase } from '@/components/stream-catalogue/mock-data';
-import type { CatalogueShowcase } from '@/components/stream-catalogue/types';
+import type {
+  CatalogueShowcase,
+  GeoCountry,
+  GeoDialect,
+  GeoDialectVariant,
+} from '@/components/stream-catalogue/types';
 
 export interface SubscriberMe {
   id: string;
@@ -482,6 +487,9 @@ export const streamApi = createApi({
     'Reports',
     'OAuthClients',
     'PublicDecks',
+    'GeoCountries',
+    'GeoDialects',
+    'GeoSubdialects',
     'ValidationQueue',
     'CatalogueShowcase',
     'BillingUsage',
@@ -867,6 +875,34 @@ export const streamApi = createApi({
     // stands in for one so the page consumes RTK Query's cache/loading/
     // refetch lifecycle exactly like the real endpoints above, and can be
     // swapped for a real `query:` call later without touching call sites.
+    // Geo reference data for the catalogue filters. These live at /geo,
+    // a sibling of this slice's /voice-stream baseUrl, so each passes an
+    // absolute URL -- fetchBaseQuery uses it as-is rather than joining it
+    // to baseUrl. All three are public (no guard on GeoController's
+    // countries/dialects/variants routes), so they work signed out too.
+    //
+    // Cached for an hour: the country and dialect tables change when an
+    // admin edits them, not per session, and the filter row mounts on
+    // every page.
+    getCatalogueCountries: builder.query<GeoCountry[], void>({
+      query: () => ({ url: `${PUBLIC_API_V1_BASE_URL}/geo/countries` }),
+      providesTags: ['GeoCountries'],
+      keepUnusedDataFor: 3600,
+    }),
+    getCatalogueDialects: builder.query<GeoDialect[], string>({
+      query: (countryId) => ({
+        url: `${PUBLIC_API_V1_BASE_URL}/geo/countries/${countryId}/dialects`,
+      }),
+      providesTags: ['GeoDialects'],
+      keepUnusedDataFor: 3600,
+    }),
+    getCatalogueSubdialects: builder.query<GeoDialectVariant[], string>({
+      query: (dialectId) => ({
+        url: `${PUBLIC_API_V1_BASE_URL}/geo/dialects/${dialectId}/variants`,
+      }),
+      providesTags: ['GeoSubdialects'],
+      keepUnusedDataFor: 3600,
+    }),
     getCatalogueShowcase: builder.query<CatalogueShowcase, void>({
       queryFn: async () => {
         await new Promise((resolve) => setTimeout(resolve, 450));
@@ -940,4 +976,7 @@ export const {
   useGetProvenanceReportQuery,
   useGetAnomalyEventsQuery,
   useGetCatalogueShowcaseQuery,
+  useGetCatalogueCountriesQuery,
+  useGetCatalogueDialectsQuery,
+  useGetCatalogueSubdialectsQuery,
 } = streamApi;
