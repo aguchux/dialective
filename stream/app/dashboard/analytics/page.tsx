@@ -51,7 +51,7 @@ export default function AnalyticsPage() {
     <div>
       <div className="mb-6 flex items-start justify-between gap-4">
         <PageHeading
-          subtitle="How your organization is using Voice Stream -- requests, audio streamed, and denial rate."
+          subtitle="How your organization is using Stream Dialect -- requests, audio streamed, and denial rate."
           title="Analytics"
         />
         <SecondaryButton

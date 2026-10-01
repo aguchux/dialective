@@ -46,7 +46,7 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 /**
- * Voice Stream's request-access form (this app's /register) submits into
+ * Stream Dialect's request-access form (this app's /register) submits into
  * the same admin-reviewed lead pipeline as the trainer site's /data-access
  * page -- see leads.controller.ts. These are plain fetches, not RTK Query,
  * since /geo/* and /leads/* sit outside store/api.ts's /voice-stream-

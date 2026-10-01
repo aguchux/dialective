@@ -258,7 +258,7 @@ export function ApiKeysSection() {
 
   return (
     <SettingsCard
-      description="Credentials external and programmatic clients use to pull data from Voice Stream."
+      description="Credentials external and programmatic clients use to pull data from Stream Dialect."
       title="API Keys"
     >
       <div className="flex items-center justify-between gap-3">

@@ -134,7 +134,7 @@ function SignupForm() {
           </h1>
           <p className="mt-2 text-[15px] text-catalogue-muted">
             {step === 'details'
-              ? 'Set up your organization on Dialect Library Voice Stream'
+              ? 'Set up your organization on Stream Dialect'
               : `Enter the code we sent to ${email}`}
           </p>
         </div>

@@ -6,7 +6,7 @@ import { apiClient, ApiError, SubscriberAuthResult, SubscriberAuthTokens } from 
 /**
  * Mirrors frontend/lib/auth-options.ts's shape (proactive refresh with a
  * skew margin, transient-vs-invalid refresh-error handling, an in-flight
- * refresh cache) but simplified for Voice Stream: no magic-link provider,
+ * refresh cache) but simplified for Stream Dialect: no magic-link provider,
  * no onboarding/dialect fields -- login/register both stop at an emailed
  * OTP step (see SubscriberAuthService), and this 'otp-verify' provider is
  * the only one that ever completes a sign-in.

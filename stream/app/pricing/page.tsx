@@ -35,7 +35,7 @@ export default function PricingPage() {
       <StreamMarketingHeader />
       <section className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-3xl text-center">
-          <p className="text-sm font-extrabold uppercase text-accent">Voice Stream pricing</p>
+          <p className="text-sm font-extrabold uppercase text-accent">Stream Dialect pricing</p>
           <h1 className="mt-2 text-4xl font-black leading-tight sm:text-5xl">
             Plans built around how your team uses voice data.
           </h1>

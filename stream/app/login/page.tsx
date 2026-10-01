@@ -83,7 +83,7 @@ function LoginForm() {
           </h1>
           <p className="mt-2 text-[15px] text-catalogue-muted">
             {step === 'credentials'
-              ? 'Sign in to access Dialect Library Stream'
+              ? 'Sign in to access Stream Dialect'
               : `Enter the code we sent to ${email}`}
           </p>
         </div>
@@ -267,9 +267,7 @@ function LoginFormSkeleton() {
           <h1 className="text-[30px] font-extrabold tracking-[-0.035em] text-catalogue-ink sm:text-[32px]">
             Welcome back
           </h1>
-          <p className="mt-2 text-[15px] text-catalogue-muted">
-            Sign in to access Dialect Library Stream
-          </p>
+          <p className="mt-2 text-[15px] text-catalogue-muted">Sign in to access Stream Dialect</p>
         </div>
         <div aria-hidden="true" className="grid min-w-0 animate-pulse gap-4">
           <div className="h-[46px] rounded-[7px] bg-catalogue-surface-raised" />

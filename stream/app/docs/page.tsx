@@ -4,9 +4,9 @@ import { ArrowRight, BookOpen, KeyRound, Webhook } from 'lucide-react';
 import { StreamMarketingHeader } from '@/components/StreamMarketingHeader';
 
 export const metadata: Metadata = {
-  title: 'API Documentation | Dialect Library Stream',
+  title: 'API Documentation | Stream Dialect',
   description:
-    'Reference documentation for the Dialect Library Stream API: authentication, catalogue endpoints, and delivery webhooks.',
+    'Reference documentation for the Stream Dialect API: authentication, catalogue endpoints, and delivery webhooks.',
 };
 
 // Placeholder. The sidebar's "API Docs" entry is public (see StreamSidebar's

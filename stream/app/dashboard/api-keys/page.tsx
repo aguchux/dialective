@@ -261,7 +261,7 @@ export default function ApiKeysPage() {
     <div>
       <div className="mb-6 flex items-start justify-between gap-4">
         <PageHeading
-          subtitle="Credentials external and programmatic clients use to pull data from Voice Stream -- not for browser/dashboard sign-in."
+          subtitle="Credentials external and programmatic clients use to pull data from Stream Dialect -- not for browser/dashboard sign-in."
           title="API Keys"
         />
         {!showForm && (

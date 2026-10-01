@@ -30,7 +30,7 @@ export default function BillingPage() {
   return (
     <div>
       <PageHeading
-        subtitle="Manage your monthly Voice Stream subscription."
+        subtitle="Manage your monthly Stream Dialect subscription."
         title="Subscription & Billing"
       />
 

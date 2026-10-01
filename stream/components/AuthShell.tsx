@@ -21,7 +21,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
           <div className="relative z-10 mt-16 flex flex-1 items-center pb-16 pt-4 xl:mt-12 xl:pb-20">
             <div className="max-w-[540px]">
               <p className="mb-5 text-xs font-bold uppercase tracking-[0.28em] text-catalogue-dim">
-                Dialect Library Voice Stream
+                Stream Dialect
               </p>
               <h1 className="max-w-[560px] text-[clamp(2.75rem,3.6vw,4rem)] font-extrabold leading-[1.05] tracking-[-0.045em] text-catalogue-ink">
                 License voice and

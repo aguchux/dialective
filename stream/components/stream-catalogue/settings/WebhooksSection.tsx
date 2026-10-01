@@ -252,7 +252,7 @@ export function WebhooksSection() {
   const [created, setCreated] = useState<CreatedWebhookSubscription | null>(null);
 
   return (
-    <SettingsCard description="HTTP callbacks for Voice Stream events." title="Webhooks">
+    <SettingsCard description="HTTP callbacks for Stream Dialect events." title="Webhooks">
       <div className="flex items-center justify-end gap-3">
         {!showForm && (
           <SettingsPrimaryButton onClick={() => setShowForm(true)}>

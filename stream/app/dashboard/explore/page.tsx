@@ -85,7 +85,7 @@ export default function ExplorePage() {
   return (
     <div>
       <PageHeading
-        subtitle="Search, filter, and preview Dialect Library's voice recording catalogue."
+        subtitle="Search, filter, and preview the Stream Dialect voice recording catalogue."
         title="Explore Voice Data"
       />
 

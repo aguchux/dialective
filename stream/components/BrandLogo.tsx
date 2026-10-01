@@ -1,6 +1,12 @@
 import Image from 'next/image';
 import Link from 'next/link';
 
+/**
+ * "Stream Dialect" is one brand name, so every mode sets it on a single
+ * line -- the modes differ in size and casing, not in structure. They used
+ * to stack "Stream" under a "Dialect Library" parent, which only made
+ * sense while the product was a sub-brand.
+ */
 type BrandLogoMode = 'inline' | 'stacked' | 'catalogue';
 
 interface BrandLogoProps {
@@ -29,24 +35,18 @@ export function BrandLogo({
         width={size}
       />
       {mode === 'stacked' ? (
-        <span className={`flex flex-col leading-none ${textClassName}`}>
-          <span className="text-[1.55rem] font-extrabold tracking-[-0.04em]">Dialect</span>
-          <span className="mt-1 text-[0.58rem] font-bold uppercase tracking-[0.24em] text-auth-accent">
-            Library Stream
-          </span>
+        <span className={`text-[1.55rem] font-extrabold tracking-[-0.04em] ${textClassName}`}>
+          <span className="text-auth-accent">Stream</span> Dialect
         </span>
       ) : mode === 'catalogue' ? (
-        <span className={`flex flex-col leading-none ${textClassName}`}>
-          <span className="text-[0.95rem] font-semibold uppercase tracking-[0.12em]">
-            Dialect Library
-          </span>
-          <span className="mt-1 text-[0.75rem] font-medium uppercase tracking-[0.38em] text-catalogue-blue-bright">
-            Stream
-          </span>
+        <span
+          className={`text-[0.95rem] font-semibold uppercase tracking-[0.12em] ${textClassName}`}
+        >
+          <span className="text-catalogue-blue-bright">Stream</span> Dialect
         </span>
       ) : (
         <span className={textClassName}>
-          Dialect Library<span className="text-accent"> Stream</span>
+          <span className="text-accent">Stream</span> Dialect
         </span>
       )}
     </>
@@ -59,7 +59,7 @@ export function BrandLogo({
   }
 
   return (
-    <Link aria-label="Dialect Library Voice Stream home" className={classes} href={href}>
+    <Link aria-label="Stream Dialect home" className={classes} href={href}>
       {content}
     </Link>
   );

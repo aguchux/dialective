@@ -255,7 +255,7 @@ export default function WebhooksPage() {
     <div>
       <div className="mb-6 flex items-start justify-between gap-4">
         <PageHeading
-          subtitle="HTTP callbacks for Voice Stream events -- deck changes, billing events, key revocations, and more."
+          subtitle="HTTP callbacks for Stream Dialect events -- deck changes, billing events, key revocations, and more."
           title="Webhooks"
         />
         {!showForm && (
@@ -288,7 +288,7 @@ export default function WebhooksPage() {
         </div>
       ) : (
         <Card className="p-8 text-center text-sm text-muted">
-          No webhooks yet. Create one to have Voice Stream notify your systems in real time.
+          No webhooks yet. Create one to have Stream Dialect notify your systems in real time.
         </Card>
       )}
     </div>
