@@ -86,7 +86,7 @@ export function AccountMenu() {
   if (!isAuthenticated) {
     return (
       <button
-        className="mx-3 mb-3 inline-flex min-h-10 items-center justify-center rounded-lg bg-catalogue-blue px-3.5 text-sm font-bold text-white transition-colors hover:bg-catalogue-blue-bright"
+        className="mx-3 mb-3 mt-2 inline-flex min-h-10 items-center justify-center rounded-lg bg-catalogue-blue px-3.5 text-sm font-bold text-white transition-colors hover:bg-catalogue-blue-bright"
         onClick={() => router.push('/login')}
         type="button"
       >
@@ -100,7 +100,7 @@ export function AccountMenu() {
   const initials = initialsFor(firstName, lastName, email);
 
   return (
-    <div className="relative mx-3 mb-3 shrink-0" ref={containerRef}>
+    <div className="relative mx-3 mb-3 mt-2 shrink-0" ref={containerRef}>
       {open && (
         <div
           className="stream-catalogue-scrollbar absolute bottom-full left-0 z-50 mb-2 max-h-[min(70svh,26rem)] w-full min-w-[232px] overflow-y-auto overscroll-contain rounded-xl border border-catalogue-line-strong bg-catalogue-surface-raised p-1.5 shadow-catalogue"
