@@ -4,8 +4,10 @@ import { useRouter, usePathname } from 'next/navigation';
 import {
   BarChart3,
   BookOpen,
-  Code2,
+  FileText,
+  Fingerprint,
   Home,
+  KeyRound,
   Layers3,
   Lock,
   Pin,
@@ -14,26 +16,76 @@ import {
   Settings,
   ShieldCheck,
   SlidersHorizontal,
+  Store,
   UsersRound,
+  Webhook,
   X,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
 import type { PinnedCollection } from './types';
 import { CoverImage } from './primitives';
 import { useAuthGate } from './useAuthGate';
+import { canAccessPath } from '@/lib/route-access';
+import { useSession } from 'next-auth/react';
 
-const NAV_ITEMS = [
-  { href: '/', label: 'Home', icon: Home, protected: false },
-  { href: '/dashboard/explore', label: 'Discover', icon: Search, protected: true },
-  { href: '/dashboard/decks', label: 'Stream Decks', icon: Layers3, protected: true },
-  { href: '/dashboard/validation', label: 'Validation', icon: ShieldCheck, protected: true },
-  { href: '/dashboard/api-keys', label: 'API', icon: Code2, protected: true },
-  // Public, unlike every other entry below Home: the reference is a reason to
-  // sign up, so gating it behind the auth wall would be backwards.
-  { href: '/docs', label: 'API Docs', icon: BookOpen, protected: false },
-  { href: '/dashboard/analytics', label: 'Usage', icon: BarChart3, protected: true },
-  { href: '/dashboard/team', label: 'Team', icon: UsersRound, protected: true },
-  { href: '/settings', label: 'Settings', icon: Settings, protected: true },
+/**
+ * The one navigation for the whole signed-in app.
+ *
+ * /dashboard used to carry a second sidebar with its own labels for the
+ * same destinations -- "Discover" here was "Search" there, "API" was "API
+ * Keys", "Usage" was "API Usage" -- so moving between the catalogue and a
+ * dashboard page swapped the entire chrome and renamed the page you had
+ * just come from. Both shells now render this list.
+ *
+ * Grouped so the longer list stays scannable: the catalogue first, then
+ * the integration surfaces, then the org. `roles` mirrors the server's
+ * @SubscriberRoles() guards via canAccessPath -- it decides what renders,
+ * never what is permitted.
+ */
+const NAV_GROUPS: {
+  heading: string | null;
+  items: {
+    href: string;
+    label: string;
+    icon: typeof Home;
+    protected: boolean;
+  }[];
+}[] = [
+  {
+    heading: null,
+    items: [
+      { href: '/', label: 'Home', icon: Home, protected: false },
+      { href: '/dashboard/explore', label: 'Discover', icon: Search, protected: true },
+      { href: '/dashboard/decks', label: 'Stream Decks', icon: Layers3, protected: true },
+      { href: '/dashboard/validation', label: 'Validation', icon: ShieldCheck, protected: true },
+      { href: '/dashboard/marketplace', label: 'Marketplace', icon: Store, protected: true },
+    ],
+  },
+  {
+    heading: 'Developer',
+    items: [
+      { href: '/dashboard/api-keys', label: 'API Keys', icon: KeyRound, protected: true },
+      {
+        href: '/dashboard/oauth-clients',
+        label: 'OAuth Clients',
+        icon: Fingerprint,
+        protected: true,
+      },
+      { href: '/dashboard/webhooks', label: 'Webhooks', icon: Webhook, protected: true },
+      // Public, unlike every other protected entry: the reference is a
+      // reason to sign up, so gating it behind the auth wall is backwards.
+      { href: '/docs', label: 'API Docs', icon: BookOpen, protected: false },
+    ],
+  },
+  {
+    heading: 'Organization',
+    items: [
+      { href: '/dashboard/analytics', label: 'Usage', icon: BarChart3, protected: true },
+      { href: '/dashboard/reports', label: 'Reports', icon: FileText, protected: true },
+      { href: '/dashboard/team', label: 'Team', icon: UsersRound, protected: true },
+      { href: '/settings', label: 'Settings', icon: Settings, protected: true },
+    ],
+  },
 ];
 
 export function StreamSidebar({
@@ -48,6 +100,10 @@ export function StreamSidebar({
   const pathname = usePathname();
   const router = useRouter();
   const { guard, dialog, isAuthenticated } = useAuthGate();
+  const { data: session } = useSession();
+  // Undefined while signed out, which canAccessPath treats as no access --
+  // the protected entries then render with their padlock as before.
+  const orgRole = session?.user?.orgRole;
 
   return (
     <aside
@@ -71,38 +127,59 @@ export function StreamSidebar({
         </button>
       </div>
 
-      <nav aria-label="Stream catalogue" className="mt-7 grid gap-1">
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon;
-          const active = item.href === '/' ? pathname === '/' : pathname?.startsWith(item.href);
+      <nav aria-label="Stream Dialect" className="mt-7 grid gap-1">
+        {NAV_GROUPS.map((group) => {
+          // Role filtering applies only once we know the member's role.
+          // Signed out there is no role to check, and hiding the protected
+          // entries then would leave a near-empty menu that hides what the
+          // product does -- they render with their padlock instead, which
+          // is what the auth gate is for.
+          const visible = group.items.filter(
+            (item) => !item.protected || !orgRole || canAccessPath(orgRole, item.href),
+          );
+          if (visible.length === 0) return null;
           return (
-            <button
-              aria-current={active ? 'page' : undefined}
-              className={`flex min-h-10 items-center gap-3 rounded-lg px-3 text-left text-sm font-medium no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60 ${
-                active
-                  ? 'bg-catalogue-blue/20 text-catalogue-ink ring-1 ring-inset ring-catalogue-blue/60'
-                  : 'text-catalogue-muted hover:bg-catalogue-surface-hover hover:text-catalogue-ink'
-              }`}
-              key={item.label}
-              onClick={() => {
-                onClose?.();
-                if (item.protected) {
-                  guard(item.href, () => router.push(item.href));
-                } else {
-                  router.push(item.href);
-                }
-              }}
-              type="button"
-            >
-              <Icon
-                aria-hidden="true"
-                className={`size-[18px] ${active ? 'text-catalogue-blue-bright' : ''}`}
-              />
-              <span className="flex-1">{item.label}</span>
-              {item.protected && !isAuthenticated && (
-                <Lock aria-hidden="true" className="size-3.5 shrink-0 text-catalogue-dim" />
+            <div className="grid gap-1" key={group.heading ?? 'primary'}>
+              {group.heading && (
+                <p className="mt-4 px-3 text-[0.65rem] font-bold uppercase tracking-[0.18em] text-catalogue-dim">
+                  {group.heading}
+                </p>
               )}
-            </button>
+              {visible.map((item) => {
+                const Icon = item.icon;
+                const active =
+                  item.href === '/' ? pathname === '/' : pathname?.startsWith(item.href);
+                return (
+                  <button
+                    aria-current={active ? 'page' : undefined}
+                    className={`flex min-h-10 items-center gap-3 rounded-lg px-3 text-left text-sm font-medium no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60 ${
+                      active
+                        ? 'bg-catalogue-blue/20 text-catalogue-ink ring-1 ring-inset ring-catalogue-blue/60'
+                        : 'text-catalogue-muted hover:bg-catalogue-surface-hover hover:text-catalogue-ink'
+                    }`}
+                    key={item.label}
+                    onClick={() => {
+                      onClose?.();
+                      if (item.protected) {
+                        guard(item.href, () => router.push(item.href));
+                      } else {
+                        router.push(item.href);
+                      }
+                    }}
+                    type="button"
+                  >
+                    <Icon
+                      aria-hidden="true"
+                      className={`size-[18px] ${active ? 'text-catalogue-blue-bright' : ''}`}
+                    />
+                    <span className="flex-1">{item.label}</span>
+                    {item.protected && !isAuthenticated && (
+                      <Lock aria-hidden="true" className="size-3.5 shrink-0 text-catalogue-dim" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           );
         })}
       </nav>

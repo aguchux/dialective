@@ -3,12 +3,16 @@
 import { useEffect } from 'react';
 import { SessionProvider, signOut, useSession } from 'next-auth/react';
 import { StoreProvider } from '@/store/Providers';
+import { CatalogueSearchProvider } from '@/components/stream-catalogue/CatalogueSearchContext';
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SessionProvider refetchInterval={5 * 60} refetchOnWindowFocus>
       <InvalidSessionHandler />
-      <StoreProvider>{children}</StoreProvider>
+      <StoreProvider>
+        {/* Above the router so a search query survives navigation. */}
+        <CatalogueSearchProvider>{children}</CatalogueSearchProvider>
+      </StoreProvider>
     </SessionProvider>
   );
 }

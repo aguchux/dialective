@@ -1,52 +1,36 @@
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
-import { useSession, signOut } from 'next-auth/react';
+import { ReactNode, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import { useRouter, usePathname } from 'next/navigation';
-import Link from 'next/link';
-import {
-  LayoutDashboard,
-  Search,
-  ShieldCheck,
-  Layers,
-  KeyRound,
-  Webhook,
-  Users,
-  CreditCard,
-  LogOut,
-  BarChart3,
-  FileText,
-  Fingerprint,
-  Store,
-  Bell,
-  HelpCircle,
-  ChevronDown,
-} from 'lucide-react';
-import { BrandLogo } from '@/components/BrandLogo';
-import { useGetOrganizationQuery } from '@/store/api';
-import { canAccessPath } from '@/lib/route-access';
+import { CatalogueChrome } from '@/components/stream-catalogue/CatalogueChrome';
 
-const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
-  { href: '/dashboard/explore', label: 'Search', icon: Search },
-  { href: '/dashboard/decks', label: 'Stream Decks', icon: Layers },
-  { href: '/dashboard/validation', label: 'Validation', icon: ShieldCheck },
-  { href: '/dashboard/analytics', label: 'API Usage', icon: BarChart3 },
-  { href: '/dashboard/reports', label: 'Reports', icon: FileText },
-  { href: '/dashboard/marketplace', label: 'Data Marketplace', icon: Store },
-  { href: '/dashboard/api-keys', label: 'API Keys', icon: KeyRound },
-  { href: '/dashboard/oauth-clients', label: 'OAuth Clients', icon: Fingerprint },
-  { href: '/dashboard/webhooks', label: 'Webhooks', icon: Webhook },
-  { href: '/dashboard/team', label: 'Team', icon: Users },
-  { href: '/dashboard/billing', label: 'Settings & Billing', icon: CreditCard },
-];
+/**
+ * Pages that list recordings, and so have something for the catalogue
+ * filters to narrow. Everywhere else (API keys, webhooks, team, billing)
+ * the filter row would be decoration, so it is left off -- the search bar
+ * still renders, because it searches the catalogue from anywhere.
+ */
+const FILTERABLE_PREFIXES = ['/dashboard/explore', '/dashboard/decks', '/dashboard/marketplace'];
 
+/**
+ * /dashboard used to render its own sidebar, with its own labels for the
+ * same destinations the catalogue sidebar already had -- "Search" vs
+ * "Discover", "API Keys" vs "API", "API Usage" vs "Usage" -- so moving
+ * between the two swapped the whole chrome and renamed the page you had
+ * just left. Both now render CatalogueChrome, which owns the one sidebar,
+ * the search bar and the filter row.
+ *
+ * The role-based nav filtering that lived here moved into StreamSidebar
+ * (it reads the session itself and calls the same canAccessPath); the
+ * unauthenticated redirect stays here, because it is a property of this
+ * route subtree rather than of the chrome -- the catalogue at / renders
+ * the same chrome for signed-out visitors on purpose.
+ */
 export default function DashboardLayout({ children }: { children: ReactNode }) {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
-  const { data: org } = useGetOrganizationQuery(undefined, { skip: status !== 'authenticated' });
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -54,110 +38,15 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     }
   }, [status, router]);
 
-  useEffect(() => {
-    setAccountMenuOpen(false);
-  }, [pathname]);
-
   if (status !== 'authenticated') {
     return (
-      <div className="stream-console flex min-h-screen items-center justify-center bg-bg">
-        <p className="text-sm text-muted">Loading...</p>
+      <div className="stream-catalogue grid h-svh place-items-center bg-catalogue-bg text-catalogue-ink">
+        <p className="text-sm text-catalogue-muted">Loading...</p>
       </div>
     );
   }
 
-  const displayName = session?.user?.name || session?.user?.email || 'Account';
-  const initial = displayName.trim()[0]?.toUpperCase() ?? 'A';
+  const showFilters = FILTERABLE_PREFIXES.some((prefix) => pathname?.startsWith(prefix));
 
-  return (
-    <div className="stream-console flex min-h-screen bg-bg text-ink">
-      <aside className="flex w-64 shrink-0 flex-col border-r border-line bg-surface">
-        <div className="border-b border-line px-5 py-5">
-          <BrandLogo size={28} textClassName="text-sm font-black" />
-        </div>
-
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
-          {NAV_ITEMS.filter((item) => canAccessPath(session.user.orgRole, item.href)).map(
-            (item) => {
-              const active =
-                item.href === '/dashboard'
-                  ? pathname === item.href
-                  : pathname.startsWith(item.href);
-              const Icon = item.icon;
-              return (
-                <Link
-                  className={`mb-0.5 flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-bold no-underline transition-colors ${
-                    active
-                      ? 'bg-accent text-white'
-                      : 'text-muted hover:bg-surface-muted hover:text-ink'
-                  }`}
-                  href={item.href}
-                  key={item.href}
-                >
-                  <Icon aria-hidden="true" className="size-4 shrink-0" />
-                  <span className="truncate">{item.label}</span>
-                </Link>
-              );
-            },
-          )}
-        </nav>
-
-        <div className="border-t border-line px-3 py-3">
-          <button
-            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-surface-muted"
-            onClick={() => setAccountMenuOpen((open) => !open)}
-            type="button"
-            aria-expanded={accountMenuOpen}
-          >
-            <span className="grid size-8 shrink-0 place-items-center rounded-full bg-accent text-sm font-black text-white">
-              {initial}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-bold text-ink">
-                {org?.name ?? 'Loading...'}
-              </span>
-              <span className="block truncate text-xs font-semibold uppercase tracking-wide text-muted">
-                {org?.subscription?.plan.name ?? 'No plan'}
-              </span>
-            </span>
-            <ChevronDown aria-hidden="true" className="size-4 shrink-0 text-muted" />
-          </button>
-          {accountMenuOpen && (
-            <button
-              className="mt-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-bold text-muted transition-colors hover:bg-surface-muted hover:text-ink"
-              onClick={() => void signOut({ callbackUrl: '/login' })}
-              type="button"
-            >
-              <LogOut aria-hidden="true" className="size-4" />
-              Sign out
-            </button>
-          )}
-        </div>
-      </aside>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-end gap-2 border-b border-line bg-surface px-6 py-3">
-          <button
-            className="grid size-9 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-muted hover:text-ink"
-            type="button"
-            aria-label="Notifications"
-          >
-            <Bell aria-hidden="true" className="size-4" />
-          </button>
-          <button
-            className="grid size-9 place-items-center rounded-lg text-muted transition-colors hover:bg-surface-muted hover:text-ink"
-            type="button"
-            aria-label="Help"
-          >
-            <HelpCircle aria-hidden="true" className="size-4" />
-          </button>
-          <span className="grid size-9 place-items-center rounded-full bg-accent text-sm font-black text-white">
-            {initial}
-          </span>
-        </header>
-
-        <main className="flex-1 overflow-y-auto px-6 py-6">{children}</main>
-      </div>
-    </div>
-  );
+  return <CatalogueChrome showFilters={showFilters}>{children}</CatalogueChrome>;
 }

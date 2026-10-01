@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { ArrowRight, RefreshCw, X } from 'lucide-react';
 import { useGetCatalogueShowcaseQuery } from '@/store/api';
-import { defaultFilters } from './mock-data';
 import type {
   CatalogueCollection,
   CatalogueFilters,
@@ -21,6 +20,7 @@ import { RecentStreamDecks } from './RecentStreamDecks';
 import { StreamPlayerBar } from './StreamPlayerBar';
 import { StreamSidebar } from './StreamSidebar';
 import { StreamTopbar } from './StreamTopbar';
+import { useCatalogueSearch } from './CatalogueSearchContext';
 import {
   CarouselRow,
   CollectionCardSkeleton,
@@ -53,8 +53,9 @@ export function StreamAppShell() {
   const filterOptions = showcase?.filterOptions;
   const validationBreakdown = showcase?.validationBreakdown ?? [];
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState<CatalogueFilters>(defaultFilters);
+  // Shared with every /dashboard page through CatalogueSearchProvider, so a
+  // query survives navigating away and back.
+  const { searchTerm, setSearchTerm, filters, updateFilter, clearFilters } = useCatalogueSearch();
   // Nothing is selected until the member picks something. The inspector
   // used to auto-select collections[0] on mount, which opened a dataset
   // panel and loaded its preview into the player before anyone had asked
@@ -147,22 +148,6 @@ export function StreamAppShell() {
   function togglePreview(forcePlay = false) {
     guard('/dashboard/explore', () => {
       setIsPlaying((current) => (forcePlay ? true : !current));
-    });
-  }
-
-  function updateFilter(key: FilterKey, value: string | null) {
-    setFilters((current) => {
-      const next = { ...current, [key]: value };
-      // Cascading filters: changing an upstream field clears anything
-      // downstream of it (country -> dialect -> subdialect -> quality ->
-      // license) since a previously-picked value may no longer apply to
-      // the narrowed-down option list.
-      const cascadeOrder: FilterKey[] = ['country', 'dialect', 'subdialect', 'quality', 'license'];
-      const changedIndex = cascadeOrder.indexOf(key);
-      if (changedIndex !== -1) {
-        for (const laterKey of cascadeOrder.slice(changedIndex + 1)) next[laterKey] = null;
-      }
-      return next;
     });
   }
 
@@ -275,7 +260,7 @@ export function StreamAppShell() {
                 <FilterBar
                   filters={filters}
                   onChange={updateFilter}
-                  onClear={() => setFilters(defaultFilters)}
+                  onClear={clearFilters}
                   options={cascadedFilterOptions}
                 />
                 {sessionStatus === 'unauthenticated' && (
