@@ -1,7 +1,6 @@
 'use client';
 
 import { Bell, Building2, ChevronDown, Loader2, Menu, Search } from 'lucide-react';
-import { AccountMenu } from './AccountMenu';
 
 export function StreamTopbar({
   isRefreshing = false,
@@ -69,7 +68,6 @@ export function StreamTopbar({
           <Bell aria-hidden="true" className="size-[18px]" />
           <span className="absolute right-2.5 top-2 size-1.5 rounded-full bg-catalogue-blue-bright" />
         </button>
-        <AccountMenu />
       </div>
     </header>
   );

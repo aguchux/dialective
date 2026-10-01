@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { BrandLogo } from '@/components/BrandLogo';
+import { AccountMenu } from './AccountMenu';
 import type { PinnedCollection } from './types';
 import { CoverImage } from './primitives';
 import { useAuthGate } from './useAuthGate';
@@ -107,7 +108,7 @@ export function StreamSidebar({
 
   return (
     <aside
-      className={`stream-catalogue-sidebar fixed inset-y-0 left-0 z-50 flex w-[260px] shrink-0 flex-col overflow-hidden border-r border-catalogue-line bg-catalogue-surface pt-5 pb-[calc(var(--catalogue-player-height)+1rem)] transition-transform duration-200 md:static md:z-10 md:h-full md:translate-x-0 md:transition-none ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      className={`stream-catalogue-sidebar fixed inset-y-0 left-0 z-50 flex w-[260px] shrink-0 flex-col overflow-hidden border-r border-catalogue-line bg-catalogue-surface pt-5 pb-[var(--catalogue-player-height)] transition-transform duration-200 md:static md:z-10 md:h-full md:translate-x-0 md:transition-none ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
     >
       <div className="flex shrink-0 items-center justify-between gap-3 px-6">
         <BrandLogo
@@ -238,11 +239,17 @@ export function StreamSidebar({
         </p>
         <button
           className="relative mt-3 inline-flex min-h-8 items-center gap-1.5 rounded-md border border-catalogue-blue/50 px-2.5 text-[11px] font-semibold text-catalogue-blue-bright transition-colors hover:bg-catalogue-blue/15"
+          onClick={() => {
+            onClose?.();
+            guard('/settings/billing', () => router.push('/settings/billing'));
+          }}
           type="button"
         >
           View Plans <Plus aria-hidden="true" className="size-3" />
         </button>
       </div>
+
+      <AccountMenu />
     </aside>
   );
 }
