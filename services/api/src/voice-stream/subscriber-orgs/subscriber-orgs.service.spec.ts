@@ -5,6 +5,7 @@ import { SubscriberOrgsService } from './subscriber-orgs.service';
 function setup() {
   const prisma = {
     subscriberMembership: {
+      findMany: jest.fn().mockResolvedValue([]),
       findUnique: jest.fn(),
       findFirst: jest.fn().mockResolvedValue({ role: SubscriberOrgRole.OWNER }),
       update: jest.fn(),
@@ -15,7 +16,11 @@ function setup() {
     subscriberOrganization: { findUniqueOrThrow: jest.fn() },
     subscriberInvite: { findMany: jest.fn().mockResolvedValue([]) },
     orgActivityEvent: { findMany: jest.fn().mockResolvedValue([]) },
-    subscriberUser: { findMany: jest.fn().mockResolvedValue([]) },
+    subscriberUser: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'user-1', email: 'a@b.co' }),
+      update: jest.fn().mockResolvedValue({}),
+    },
     $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
   };
   const orgActivity = { record: jest.fn().mockResolvedValue(undefined) };
@@ -300,5 +305,46 @@ describe('SubscriberOrgsService.listActivity', () => {
     );
     expect(result[0].actor).toMatchObject({ firstName: 'Ada' });
     expect(result[1].actor).toBeNull();
+  });
+});
+
+describe('SubscriberOrgsService.updateProfile', () => {
+  it('trims the names and writes only the fields that were supplied', async () => {
+    const { service, prisma } = setup();
+
+    await service.updateProfile('user-1', { firstName: '  Ada  ' });
+
+    expect(prisma.subscriberUser.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      // lastName absent, not set to undefined -- an omitted field must
+      // leave the stored value alone rather than blank it.
+      data: { firstName: 'Ada' },
+    });
+  });
+
+  it('scopes the write to the caller, so a member cannot edit another user', async () => {
+    const { service, prisma } = setup();
+
+    await service.updateProfile('user-1', { firstName: 'Ada', lastName: 'Obi' });
+
+    expect(prisma.subscriberUser.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'user-1' } }),
+    );
+  });
+
+  it('returns the refreshed profile so the client need not refetch', async () => {
+    const { service, prisma } = setup();
+    prisma.subscriberUser.findUniqueOrThrow.mockResolvedValue({
+      id: 'user-1',
+      email: 'ada@example.com',
+      firstName: 'Ada',
+      lastName: 'Obi',
+    });
+
+    const result = await service.updateProfile('user-1', { firstName: 'Ada' });
+
+    expect(result).toEqual(
+      expect.objectContaining({ id: 'user-1', firstName: 'Ada', memberships: [] }),
+    );
   });
 });

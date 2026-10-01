@@ -65,7 +65,7 @@ const MENU_GROUPS: {
       { href: '/dashboard/team', label: 'Team', icon: UsersRound },
       { href: '/settings/organization', label: 'Organization', icon: Building2 },
       { href: '/settings/billing', label: 'Billing', icon: CreditCard },
-      { href: '/settings', label: 'Settings', icon: Settings },
+      { href: '/settings/security', label: 'Security', icon: Settings },
     ],
   },
   {

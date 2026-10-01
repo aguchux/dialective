@@ -506,6 +506,11 @@ export const streamApi = createApi({
       providesTags: ['Organization'],
     }),
 
+    updateProfile: builder.mutation<SubscriberMe, { firstName?: string; lastName?: string }>({
+      query: (body) => ({ url: '/me', method: 'PATCH', body }),
+      invalidatesTags: ['Me'],
+    }),
+
     updateOrganization: builder.mutation<SubscriberOrganization, UpdateOrganizationInput>({
       query: (body) => ({ url: '/organization', method: 'PATCH', body }),
       invalidatesTags: ['Organization'],
@@ -916,6 +921,7 @@ export const streamApi = createApi({
 
 export const {
   useGetMeQuery,
+  useUpdateProfileMutation,
   useGetOrganizationQuery,
   useUpdateOrganizationMutation,
   useListMembersQuery,

@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { canAccessPath } from '@/lib/route-access';
 
 const TABS = [
-  { href: '/settings', label: 'General' },
+  { href: '/settings', label: 'Profile' },
   { href: '/settings/organization', label: 'Organization' },
   { href: '/settings/billing', label: 'Billing' },
   { href: '/settings/security', label: 'Security' },

@@ -8,6 +8,7 @@ import { SubscriberAccessTokenClaims } from '../subscriber-auth/subscriber-jwt.u
 import { SubscriberOrgsService } from './subscriber-orgs.service';
 import { UpdateSubscriberOrganizationDto } from './dto/update-subscriber-organization.dto';
 import { UpdateSubscriberMemberRoleDto } from './dto/update-subscriber-member-role.dto';
+import { UpdateSubscriberProfileDto } from './dto/update-subscriber-profile.dto';
 
 @Controller('voice-stream')
 @UseGuards(SubscriberAuthGuard)
@@ -17,6 +18,16 @@ export class SubscriberOrgsController {
   @Get('me')
   me(@CurrentSubscriber() subscriber: SubscriberAccessTokenClaims) {
     return this.orgs.getMe(subscriber.sub);
+  }
+
+  // No role guard: this edits the caller's own personal details, not the
+  // organization, so every member may do it regardless of org role.
+  @Patch('me')
+  updateProfile(
+    @CurrentSubscriber() subscriber: SubscriberAccessTokenClaims,
+    @Body() dto: UpdateSubscriberProfileDto,
+  ) {
+    return this.orgs.updateProfile(subscriber.sub, dto);
   }
 
   @Get('organization')

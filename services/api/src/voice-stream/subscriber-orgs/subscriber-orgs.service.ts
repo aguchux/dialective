@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { ActivityEventType, SubscriberOrgRole } from '@dialectiva/db';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrgActivityService } from '../org-activity/org-activity.service';
+import { UpdateSubscriberProfileDto } from './dto/update-subscriber-profile.dto';
 
 @Injectable()
 export class SubscriberOrgsService {
@@ -20,6 +21,23 @@ export class SubscriberOrgsService {
       include: { organization: { select: { id: true, name: true, slug: true } } },
     });
     return { ...user, memberships };
+  }
+
+  /**
+   * A subscriber editing their own name.
+   *
+   * Returns the same shape as getMe so the client can replace its cached
+   * /me entry from the response rather than refetching.
+   */
+  async updateProfile(userId: string, dto: UpdateSubscriberProfileDto) {
+    await this.prisma.subscriberUser.update({
+      where: { id: userId },
+      data: {
+        ...(dto.firstName !== undefined ? { firstName: dto.firstName.trim() } : {}),
+        ...(dto.lastName !== undefined ? { lastName: dto.lastName.trim() } : {}),
+      },
+    });
+    return this.getMe(userId);
   }
 
   async getOrganization(organizationId: string) {
