@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { ArrowRight, RefreshCw, X } from 'lucide-react';
@@ -52,6 +52,11 @@ export function StreamAppShell() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState<CatalogueFilters>(defaultFilters);
+  // Nothing is selected until the member picks something. The inspector
+  // used to auto-select collections[0] on mount, which opened a dataset
+  // panel and loaded its preview into the player before anyone had asked
+  // for it -- and made the inspector's own "Select a collection" empty
+  // state unreachable, as well as quietly undoing its close button.
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -59,12 +64,6 @@ export function StreamAppShell() {
   const [addedCollectionIds, setAddedCollectionIds] = useState<Set<string>>(new Set());
   const [addedDeckIds, setAddedDeckIds] = useState<Set<string>>(new Set());
   const [showAllCollections, setShowAllCollections] = useState(false);
-
-  useEffect(() => {
-    if (!selectedCollectionId && collections.length > 0) {
-      setSelectedCollectionId(collections[0].id);
-    }
-  }, [collections, selectedCollectionId]);
 
   const selectedCollection =
     collections.find((collection) => collection.id === selectedCollectionId) ?? null;
