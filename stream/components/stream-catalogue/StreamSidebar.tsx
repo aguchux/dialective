@@ -107,9 +107,9 @@ export function StreamSidebar({
 
   return (
     <aside
-      className={`stream-catalogue-sidebar stream-catalogue-scrollbar fixed inset-y-0 left-0 z-50 flex w-[260px] shrink-0 flex-col overflow-y-auto border-r border-catalogue-line bg-catalogue-surface px-4 pb-[var(--catalogue-player-height)] pt-5 transition-transform duration-200 md:static md:h-full md:z-10 md:translate-x-0 md:transition-none ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      className={`stream-catalogue-sidebar fixed inset-y-0 left-0 z-50 flex w-[260px] shrink-0 flex-col overflow-hidden border-r border-catalogue-line bg-catalogue-surface pt-5 pb-[calc(var(--catalogue-player-height)+1rem)] transition-transform duration-200 md:static md:z-10 md:h-full md:translate-x-0 md:transition-none ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
     >
-      <div className="flex items-center justify-between gap-3 px-2">
+      <div className="flex shrink-0 items-center justify-between gap-3 px-6">
         <BrandLogo
           className="text-catalogue-ink"
           href=""
@@ -127,105 +127,107 @@ export function StreamSidebar({
         </button>
       </div>
 
-      <nav aria-label="Stream Dialect" className="mt-7 grid gap-1">
-        {NAV_GROUPS.map((group) => {
-          // Role filtering applies only once we know the member's role.
-          // Signed out there is no role to check, and hiding the protected
-          // entries then would leave a near-empty menu that hides what the
-          // product does -- they render with their padlock instead, which
-          // is what the auth gate is for.
-          const visible = group.items.filter(
-            (item) => !item.protected || !orgRole || canAccessPath(orgRole, item.href),
-          );
-          if (visible.length === 0) return null;
-          return (
-            <div className="grid gap-1" key={group.heading ?? 'primary'}>
-              {group.heading && (
-                <p className="mt-4 px-3 text-[0.65rem] font-bold uppercase tracking-[0.18em] text-catalogue-dim">
-                  {group.heading}
-                </p>
-              )}
-              {visible.map((item) => {
-                const Icon = item.icon;
-                const active =
-                  item.href === '/' ? pathname === '/' : pathname?.startsWith(item.href);
-                return (
-                  <button
-                    aria-current={active ? 'page' : undefined}
-                    className={`flex min-h-10 items-center gap-3 rounded-lg px-3 text-left text-sm font-medium no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60 ${
-                      active
-                        ? 'bg-catalogue-blue/20 text-catalogue-ink ring-1 ring-inset ring-catalogue-blue/60'
-                        : 'text-catalogue-muted hover:bg-catalogue-surface-hover hover:text-catalogue-ink'
-                    }`}
-                    key={item.label}
-                    onClick={() => {
-                      onClose?.();
-                      if (item.protected) {
-                        guard(item.href, () => router.push(item.href));
-                      } else {
-                        router.push(item.href);
-                      }
-                    }}
-                    type="button"
-                  >
-                    <Icon
-                      aria-hidden="true"
-                      className={`size-[18px] ${active ? 'text-catalogue-blue-bright' : ''}`}
-                    />
-                    <span className="flex-1">{item.label}</span>
-                    {item.protected && !isAuthenticated && (
-                      <Lock aria-hidden="true" className="size-3.5 shrink-0 text-catalogue-dim" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          );
-        })}
-      </nav>
-      {dialog}
+      <div className="stream-catalogue-scrollbar min-h-0 flex-1 overflow-y-auto px-4">
+        <nav aria-label="Stream Dialect" className="mt-7 grid gap-1">
+          {NAV_GROUPS.map((group) => {
+            // Role filtering applies only once we know the member's role.
+            // Signed out there is no role to check, and hiding the protected
+            // entries then would leave a near-empty menu that hides what the
+            // product does -- they render with their padlock instead, which
+            // is what the auth gate is for.
+            const visible = group.items.filter(
+              (item) => !item.protected || !orgRole || canAccessPath(orgRole, item.href),
+            );
+            if (visible.length === 0) return null;
+            return (
+              <div className="grid gap-1" key={group.heading ?? 'primary'}>
+                {group.heading && (
+                  <p className="mt-4 px-3 text-[0.65rem] font-bold uppercase tracking-[0.18em] text-catalogue-dim">
+                    {group.heading}
+                  </p>
+                )}
+                {visible.map((item) => {
+                  const Icon = item.icon;
+                  const active =
+                    item.href === '/' ? pathname === '/' : pathname?.startsWith(item.href);
+                  return (
+                    <button
+                      aria-current={active ? 'page' : undefined}
+                      className={`flex min-h-10 items-center gap-3 rounded-lg px-3 text-left text-sm font-medium no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60 ${
+                        active
+                          ? 'bg-catalogue-blue/20 text-catalogue-ink ring-1 ring-inset ring-catalogue-blue/60'
+                          : 'text-catalogue-muted hover:bg-catalogue-surface-hover hover:text-catalogue-ink'
+                      }`}
+                      key={item.label}
+                      onClick={() => {
+                        onClose?.();
+                        if (item.protected) {
+                          guard(item.href, () => router.push(item.href));
+                        } else {
+                          router.push(item.href);
+                        }
+                      }}
+                      type="button"
+                    >
+                      <Icon
+                        aria-hidden="true"
+                        className={`size-[18px] ${active ? 'text-catalogue-blue-bright' : ''}`}
+                      />
+                      <span className="flex-1">{item.label}</span>
+                      {item.protected && !isAuthenticated && (
+                        <Lock aria-hidden="true" className="size-3.5 shrink-0 text-catalogue-dim" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </nav>
+        {dialog}
 
-      <div className="my-5 h-px bg-catalogue-line" />
-      <div className="flex items-center justify-between px-2">
-        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-catalogue-dim">
-          Pinned collections
-        </p>
-        <button
-          aria-label="Add pinned collection"
-          className="grid size-7 place-items-center rounded-md text-catalogue-muted hover:bg-catalogue-surface-hover hover:text-catalogue-ink"
-          type="button"
-        >
-          <Plus aria-hidden="true" className="size-4" />
-        </button>
-      </div>
-      <div className="mt-3 grid gap-1">
-        {pinnedCollections.map((collection) => (
+        <div className="my-5 h-px bg-catalogue-line" />
+        <div className="flex items-center justify-between px-2">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-catalogue-dim">
+            Pinned collections
+          </p>
           <button
-            className="flex min-w-0 items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-catalogue-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60"
-            key={collection.id}
+            aria-label="Add pinned collection"
+            className="grid size-7 place-items-center rounded-md text-catalogue-muted hover:bg-catalogue-surface-hover hover:text-catalogue-ink"
             type="button"
           >
-            <CoverImage
-              alt={collection.coverAlt}
-              className="size-9 shrink-0 rounded-md object-cover"
-              height={36}
-              src={collection.coverUrl}
-              width={36}
-            />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-xs font-semibold text-catalogue-ink">
-                {collection.title}
-              </span>
-              <span className="mt-0.5 block truncate text-[10px] text-catalogue-dim">
-                {collection.meta}
-              </span>
-            </span>
-            <Pin aria-hidden="true" className="size-3 shrink-0 text-catalogue-blue-bright" />
+            <Plus aria-hidden="true" className="size-4" />
           </button>
-        ))}
+        </div>
+        <div className="mt-3 grid gap-1">
+          {pinnedCollections.map((collection) => (
+            <button
+              className="flex min-w-0 items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors hover:bg-catalogue-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-catalogue-blue/60"
+              key={collection.id}
+              type="button"
+            >
+              <CoverImage
+                alt={collection.coverAlt}
+                className="size-9 shrink-0 rounded-md object-cover"
+                height={36}
+                src={collection.coverUrl}
+                width={36}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold text-catalogue-ink">
+                  {collection.title}
+                </span>
+                <span className="mt-0.5 block truncate text-[10px] text-catalogue-dim">
+                  {collection.meta}
+                </span>
+              </span>
+              <Pin aria-hidden="true" className="size-3 shrink-0 text-catalogue-blue-bright" />
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="relative mt-auto overflow-hidden rounded-[10px] border border-catalogue-blue/30 bg-[linear-gradient(145deg,#33244a,#1a1424)] p-4">
+      <div className="relative shrink-0 mx-4 mt-3 overflow-hidden rounded-[10px] border border-catalogue-blue/30 bg-[linear-gradient(145deg,#33244a,#1a1424)] p-4">
         <SlidersHorizontal
           aria-hidden="true"
           className="absolute -bottom-2 -right-1 size-20 text-catalogue-blue/20"
