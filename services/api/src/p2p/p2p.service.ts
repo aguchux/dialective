@@ -92,6 +92,18 @@ const OPEN_TRADE_STATUSES = [
   P2PTradeStatus.CANCEL_PENDING,
 ];
 
+/**
+ * Trade states in which the escrow has already left the trade -- the same
+ * set refundTradeToSeller and releaseTradeToBuyer refuse to act on.
+ */
+function isSettledTradeStatus(status: P2PTradeStatus): boolean {
+  return (
+    status === P2PTradeStatus.CANCELLED ||
+    status === P2PTradeStatus.RELEASED ||
+    status === P2PTradeStatus.EXPIRED
+  );
+}
+
 @Injectable()
 export class P2PService {
   private readonly logger = new Logger(P2PService.name);
@@ -1479,15 +1491,69 @@ export class P2PService {
     });
     if (!dispute || dispute.status !== P2PDisputeStatus.OPEN)
       throw new NotFoundException('Open dispute not found');
-    if (dto.winner === 'buyer') {
+
+    // Both escrow helpers return silently when the trade has already
+    // settled, and they are what close the dispute row -- so against an
+    // already-settled trade the resolution did nothing at all and still
+    // answered 200. An admin pressing "Refund seller" got a success and a
+    // dispute that was still open, with no way to ever clear it.
+    //
+    // This is reachable: a cancel and a dispute can race. Trade
+    // eddb3594 was CANCELLED and refunded at 12:51:24.587, and its dispute
+    // row was created at 12:51:24.597 -- ten milliseconds later, against a
+    // trade whose escrow had already gone home.
+    //
+    // When the escrow is already where this resolution would send it, the
+    // dispute is closed to match and the note records why. The escrow is
+    // never moved a second time: the helpers' guards stay exactly as they
+    // are, and this only reconciles the dispute row to the trade.
+    if (isSettledTradeStatus(dispute.trade.status)) {
+      const settledToSeller = dispute.trade.status !== P2PTradeStatus.RELEASED;
+      const wantsSeller = dto.winner !== 'buyer';
+      if (settledToSeller !== wantsSeller) {
+        throw new UnprocessableEntityException(
+          settledToSeller
+            ? "This trade was already cancelled and its tokens returned to the seller, so it cannot now be released to the buyer. Resolve in the seller's favour to close the dispute."
+            : "This trade was already released to the buyer, so its tokens cannot now be returned to the seller. Resolve in the buyer's favour to close the dispute.",
+        );
+      }
+      await this.prisma.p2PDispute.updateMany({
+        // Status in the filter so two admins resolving at once cannot both
+        // write, same claim-before-mutate discipline as the escrow paths.
+        where: { id: disputeId, status: P2PDisputeStatus.OPEN },
+        data: {
+          status: settledToSeller
+            ? P2PDisputeStatus.RESOLVED_SELLER
+            : P2PDisputeStatus.RESOLVED_BUYER,
+          resolvedAt: new Date(),
+          resolvedByAdminId: adminId,
+          resolutionNote: [
+            dto.resolutionNote,
+            `Closed against an already-settled trade (${dispute.trade.status}); no tokens moved.`,
+          ]
+            .filter(Boolean)
+            .join(' — '),
+        },
+      });
+    } else if (dto.winner === 'buyer') {
       await this.releaseTradeToBuyer(dispute.tradeId, disputeId, adminId, dto.resolutionNote);
     } else {
       await this.refundTradeToSeller(dispute.tradeId, disputeId, adminId, dto.resolutionNote);
     }
-    return this.prisma.p2PDispute.findUnique({
+
+    const resolved = await this.prisma.p2PDispute.findUnique({
       where: { id: disputeId },
       include: { trade: { include: tradeInclude } },
     });
+    // A resolution that leaves the dispute open has not resolved anything.
+    // Answering 200 with an unchanged row is what made this look like the
+    // button did nothing, so it fails loudly instead.
+    if (resolved?.status === P2PDisputeStatus.OPEN) {
+      throw new UnprocessableEntityException(
+        'Could not resolve this dispute. Nothing was changed -- please retry.',
+      );
+    }
+    return resolved;
   }
 
   /**
