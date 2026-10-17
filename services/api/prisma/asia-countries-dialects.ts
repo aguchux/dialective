@@ -4,6 +4,19 @@ import type { CountrySeed } from './africa-countries-dialects';
  * Asian coverage for onboarding and the public coverage directory.
  * Dialect.tag is globally unique, so every tag is country-scoped even when
  * the same language is spoken in several countries.
+ *
+ * Sanctioned jurisdictions are deliberately absent: Iran (IR), North Korea
+ * (KP) and Syria (SY) were removed on 2026-10-17, along with Cuba and the
+ * Crimea/Donetsk/Luhansk regions which this catalogue never listed. Stripe's
+ * Restricted Businesses list prohibits using their services for dealings
+ * linked directly or indirectly to those jurisdictions, and listing them as
+ * selectable countries was read as offering services there -- it paused
+ * payouts on the account pending review.
+ *
+ * Do not re-add them. A country here becomes a selectable option at
+ * onboarding and a row in the public coverage directory, which is the
+ * signal the payment processor objects to -- independent of whether any
+ * trainer has ever registered from one (none had).
  */
 export const ASIA_COUNTRIES: CountrySeed[] = [
   { code: 'AF', name: 'Afghanistan', dialects: [{ tag: 'prs-af', name: 'Dari' }, { tag: 'ps-af', name: 'Pashto' }, { tag: 'uz-af', name: 'Uzbek' }, { tag: 'tk-af', name: 'Turkmen' }] },
@@ -20,7 +33,6 @@ export const ASIA_COUNTRIES: CountrySeed[] = [
   { code: 'HK', name: 'Hong Kong', dialects: [{ tag: 'yue-hk', name: 'Cantonese' }, { tag: 'en-hk', name: 'English' }, { tag: 'cmn-hk', name: 'Mandarin Chinese' }] },
   { code: 'IN', name: 'India', dialects: [{ tag: 'hi-in', name: 'Hindi' }, { tag: 'bn-in', name: 'Bengali' }, { tag: 'te-in', name: 'Telugu' }, { tag: 'mr-in', name: 'Marathi' }, { tag: 'ta-in', name: 'Tamil' }, { tag: 'ur-in', name: 'Urdu' }, { tag: 'gu-in', name: 'Gujarati' }, { tag: 'kn-in', name: 'Kannada' }, { tag: 'ml-in', name: 'Malayalam' }, { tag: 'or-in', name: 'Odia' }, { tag: 'pa-in', name: 'Punjabi' }, { tag: 'as-in', name: 'Assamese' }] },
   { code: 'ID', name: 'Indonesia', dialects: [{ tag: 'id-id', name: 'Indonesian' }, { tag: 'jv-id', name: 'Javanese' }, { tag: 'su-id', name: 'Sundanese' }, { tag: 'min-id', name: 'Minangkabau' }, { tag: 'mad-id', name: 'Madurese' }] },
-  { code: 'IR', name: 'Iran', dialects: [{ tag: 'fa-ir', name: 'Persian' }, { tag: 'az-ir', name: 'Azerbaijani' }, { tag: 'ku-ir', name: 'Kurdish' }, { tag: 'glk-ir', name: 'Gilaki' }, { tag: 'lrc-ir', name: 'Luri' }] },
   { code: 'IQ', name: 'Iraq', dialects: [{ tag: 'ar-iq', name: 'Arabic (Iraqi)' }, { tag: 'ku-iq', name: 'Kurdish' }, { tag: 'syr-iq', name: 'Assyrian Neo-Aramaic' }, { tag: 'tk-iq', name: 'Turkmen' }] },
   { code: 'IL', name: 'Israel', dialects: [{ tag: 'he-il', name: 'Hebrew' }, { tag: 'ar-il', name: 'Arabic' }, { tag: 'yi-il', name: 'Yiddish' }] },
   { code: 'JP', name: 'Japan', dialects: [{ tag: 'ja-jp', name: 'Japanese' }, { tag: 'ryu-jp', name: 'Okinawan' }, { tag: 'ain-jp', name: 'Ainu' }] },
@@ -36,7 +48,6 @@ export const ASIA_COUNTRIES: CountrySeed[] = [
   { code: 'MN', name: 'Mongolia', dialects: [{ tag: 'mn-mn', name: 'Mongolian' }, { tag: 'kk-mn', name: 'Kazakh' }, { tag: 'bua-mn', name: 'Buryat' }] },
   { code: 'MM', name: 'Myanmar', dialects: [{ tag: 'my-mm', name: 'Burmese' }, { tag: 'shn-mm', name: 'Shan' }, { tag: 'ksw-mm', name: "S'gaw Karen" }, { tag: 'kac-mm', name: 'Jingpho' }] },
   { code: 'NP', name: 'Nepal', dialects: [{ tag: 'ne-np', name: 'Nepali' }, { tag: 'mai-np', name: 'Maithili' }, { tag: 'bho-np', name: 'Bhojpuri' }, { tag: 'new-np', name: 'Newar' }, { tag: 'thl-np', name: 'Tharu' }] },
-  { code: 'KP', name: 'North Korea', dialects: [{ tag: 'ko-kp', name: 'Korean (North)' }] },
   { code: 'OM', name: 'Oman', dialects: [{ tag: 'ar-om', name: 'Arabic (Omani)' }, { tag: 'bal-om', name: 'Balochi' }, { tag: 'shv-om', name: 'Shehri' }] },
   { code: 'PK', name: 'Pakistan', dialects: [{ tag: 'ur-pk', name: 'Urdu' }, { tag: 'pa-pk', name: 'Punjabi' }, { tag: 'sd-pk', name: 'Sindhi' }, { tag: 'ps-pk', name: 'Pashto' }, { tag: 'bal-pk', name: 'Balochi' }] },
   { code: 'PS', name: 'Palestine', dialects: [{ tag: 'ar-ps', name: 'Arabic (Palestinian)' }, { tag: 'he-ps', name: 'Hebrew' }] },
@@ -46,7 +57,6 @@ export const ASIA_COUNTRIES: CountrySeed[] = [
   { code: 'SG', name: 'Singapore', dialects: [{ tag: 'en-sg', name: 'English (Singapore)' }, { tag: 'zh-sg', name: 'Chinese' }, { tag: 'ms-sg', name: 'Malay' }, { tag: 'ta-sg', name: 'Tamil' }] },
   { code: 'KR', name: 'South Korea', dialects: [{ tag: 'ko-kr', name: 'Korean' }, { tag: 'jje-kr', name: 'Jeju' }] },
   { code: 'LK', name: 'Sri Lanka', dialects: [{ tag: 'si-lk', name: 'Sinhala' }, { tag: 'ta-lk', name: 'Tamil (Sri Lanka)' }] },
-  { code: 'SY', name: 'Syria', dialects: [{ tag: 'ar-sy', name: 'Arabic (Syrian)' }, { tag: 'ku-sy', name: 'Kurdish' }, { tag: 'syr-sy', name: 'Syriac' }] },
   { code: 'TW', name: 'Taiwan', dialects: [{ tag: 'cmn-tw', name: 'Mandarin Chinese' }, { tag: 'nan-tw', name: 'Taiwanese Hokkien' }, { tag: 'hak-tw', name: 'Hakka Chinese' }] },
   { code: 'TJ', name: 'Tajikistan', dialects: [{ tag: 'tg-tj', name: 'Tajik' }, { tag: 'uz-tj', name: 'Uzbek' }, { tag: 'ru-tj', name: 'Russian' }] },
   { code: 'TH', name: 'Thailand', dialects: [{ tag: 'th-th', name: 'Thai' }, { tag: 'nod-th', name: 'Northern Thai' }, { tag: 'tts-th', name: 'Isan' }, { tag: 'ms-th', name: 'Malay (Southern Thailand)' }] },
