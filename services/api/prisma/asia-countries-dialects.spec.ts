@@ -1,11 +1,6 @@
 import { AFRICA_COUNTRIES } from './africa-countries-dialects';
 import { ASIA_COUNTRIES } from './asia-countries-dialects';
 
-/**
- * Jurisdictions Stripe's Restricted Businesses list prohibits dealings
- * with. Listing one as a selectable country reads as offering services
- * there, which paused payouts on the account in October 2026.
- */
 const SANCTIONED_COUNTRY_CODES = ['CU', 'IR', 'KP', 'SY'];
 
 describe('ASIA_COUNTRIES seed catalogue', () => {

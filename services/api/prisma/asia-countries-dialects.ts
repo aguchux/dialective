@@ -4,19 +4,6 @@ import type { CountrySeed } from './africa-countries-dialects';
  * Asian coverage for onboarding and the public coverage directory.
  * Dialect.tag is globally unique, so every tag is country-scoped even when
  * the same language is spoken in several countries.
- *
- * Sanctioned jurisdictions are deliberately absent: Iran (IR), North Korea
- * (KP) and Syria (SY) were removed on 2026-10-17, along with Cuba and the
- * Crimea/Donetsk/Luhansk regions which this catalogue never listed. Stripe's
- * Restricted Businesses list prohibits using their services for dealings
- * linked directly or indirectly to those jurisdictions, and listing them as
- * selectable countries was read as offering services there -- it paused
- * payouts on the account pending review.
- *
- * Do not re-add them. A country here becomes a selectable option at
- * onboarding and a row in the public coverage directory, which is the
- * signal the payment processor objects to -- independent of whether any
- * trainer has ever registered from one (none had).
  */
 export const ASIA_COUNTRIES: CountrySeed[] = [
   { code: 'AF', name: 'Afghanistan', dialects: [{ tag: 'prs-af', name: 'Dari' }, { tag: 'ps-af', name: 'Pashto' }, { tag: 'uz-af', name: 'Uzbek' }, { tag: 'tk-af', name: 'Turkmen' }] },
