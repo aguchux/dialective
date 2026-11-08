@@ -1,0 +1,23 @@
+# Offline fine-tuning tool -- not merged into any service's requirements.
+#
+# Install torch FIRST, separately, from PyTorch's CUDA index (see README.md):
+#   pip install torch==2.4.1 --index-url https://download.pytorch.org/whl/cu121
+#
+# torch 2.4.1, not the workers' 2.4.0: 2.4.0's torch.isin crashes Whisper's
+# token-suppression step on Windows ("index N is out of bounds"), which kills
+# every evaluation. 2.4.1 is a patch release with the same API.
+#
+# transformers is pinned to whisper-worker's version so a checkpoint saved
+# here loads in production exactly as it loaded here.
+transformers==4.44.2
+peft==0.12.0
+accelerate==0.34.2
+numpy==1.26.4
+soundfile==0.12.1
+PyYAML==6.0.2
+jiwer==3.0.4
+# export_manifest.py / fetch_audio.py only
+psycopg2-binary==2.9.9
+boto3==1.35.0
+# tests
+pytest==8.3.3

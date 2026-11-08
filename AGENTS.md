@@ -59,19 +59,21 @@ TCP has no HTTP-01 path and DNS-01 support wasn't confirmed on the
 cluster's ClusterIssuer), password-required. Every Redis client across the
 whole fleet (not just the GCP one) reads `REDIS_PASSWORD`/`REDIS_TLS` env
 vars — see `services/api/src/common/redis-connection.util.ts` and each
-Python worker's `worker.py` — backward-compatible when unset. **Only
-`vosk-worker` runs on GCP** — no CronJob (`settlement-job`, `fx-rate-job`,
-etc. stay DO-only: they write directly to the one shared Postgres and are
-designed to run exactly once per schedule; running them on GCP too would
-double-execute financial/settlement logic) and no other queue-driven
-worker (this was scoped to vosk-worker specifically, not a general
-multi-cloud migration). See `k8s/gcp-cloud/README.md` for the full staged
-rollout runbook.
+Python worker's `worker.py` — backward-compatible when unset. **GCP runs
+`vosk-worker`, `whisper-worker`, `quality-gate-worker`, and an `api`
+replica** (`k8s/gcp-cloud/base/kustomization.yaml` is authoritative — this
+began as vosk-only and grew; GCP consumers carry a `gcp-` `CONSUMER_PREFIX`
+in the shared consumer groups). **No CronJob runs on GCP** (`settlement-job`,
+`fx-rate-job`, etc. stay DO-only: they write directly to the one shared
+Postgres and are designed to run exactly once per schedule; running them on
+GCP too would double-execute financial/settlement logic). See
+`k8s/gcp-cloud/README.md` for the full staged rollout runbook.
 
 ### Lessons worth keeping (from incidents, not speculation)
 
 - **A CI green check is not proof of a production deploy.** `prisma-migrate.yml` only validates schema/migrations against a disposable CI Postgres — it never touches production. A schema change once merged to `main`, passed that check, and was never actually applied to the live database, silently breaking `/settings/public` and `settlement-job` until caught manually. `prisma-deploy.yml` now runs automatically after every push to `main` specifically to close this gap — see "CI/CD" below. Don't treat `prisma-migrate.yml` passing as "the migration shipped."
 - **`pendingEntriesCount` cannot trigger a KEDA scale-from-zero.** It only counts messages a consumer has already `XREADGROUP`'d but not yet acked — with 0 replicas, nothing ever reads a message, so it can never become "pending," no matter how much backlog piles up. Use `lagCount`/`activationLagCount: "0"` for scale-from-zero ScaledObjects (`"1"` never fires for a single-job backlog, since KEDA's redis-streams scaler activates on strict `lag > activationLagCount`). This was live-broken until the first real end-to-end submission never produced a transcript.
+- **A consumer group's `lag` can be wrong, and KEDA scales on it.** On 2026-11-08 `asr-jobs-whisper` reported `lag 9864` and `quality-gate-jobs` `lag 16386` while each group's `last-delivered-id` was already the stream's newest entry — real backlog zero. `lag` is `entries-added − entries-read`, and `entries-read` had drifted; with `lagCount: "1"` that pinned whisper-worker at 5/5 and quality-gate-worker at 15/15 around the clock. Check real backlog by comparing `last-delivered-id` to `XREVRANGE <stream> + - COUNT 1`, not by trusting `lag`. Repair is `XGROUP SETID <stream> <group> <last-delivered-id> ENTRIESREAD <n>` — run it atomically (a Lua script reading both values) so a job added mid-repair is not skipped.
 - **NOWPayments' IPN signature is HMAC-SHA512 over the re-sorted parsed JSON body, not raw bytes** — a materially different scheme from Coinbase Commerce's raw-byte HMAC-SHA256 (which this repo briefly used and worked around with path-scoped raw-body middleware). Don't reintroduce raw-body middleware for a webhook route without checking the provider's actual signature scheme first; it was the source of a real production bug the one time it was added for the wrong reason.
 
 ---
@@ -151,6 +153,7 @@ rollout runbook.
 ├── models/                            # Vosk/Whisper/MMS-TTS model registries (weights NOT committed)
 ├── datasets/waxal/                    # offline WAXAL dataset scripts -- no runtime dependency from api/workers
 ├── tools/asr-benchmark/               # offline WER/CER benchmark tool
+├── tools/asr-finetune/                # offline Whisper fine-tuning (LoRA) for the dedicated GPU box -- see its README
 ├── reports/waxal/                     # generated benchmark JSON + summary.md (committed)
 ├── chatdialect/                       # self-contained sibling monorepo -- own AGENTS.md, own Vercel project
 ├── community/                         # community.dialectlibrary.com -- own Next.js app, own Vercel project (see "Community" below)
@@ -621,7 +624,7 @@ npm run format:check
 ## Non-Goals
 
 - GPU-based ASR (Whisper-large, XLSR-53, Triton serving) — out of scope until an explicit, separately-scoped decision to add GPU infrastructure.
-- Fine-tuning pipelines (ASR or TTS) — MMS-TTS and the NCAIR1 Whisper checkpoints are pretrained-inference only.
+- In-cluster fine-tuning (ASR or TTS), and any TTS fine-tuning. **ASR fine-tuning is in scope, offline only**: `tools/asr-finetune/` trains Whisper LoRA adapters on a dedicated off-cluster GPU box (a 2 GB Quadro P600, added 2026-11), and the only thing that reaches production is a merged checkpoint registered in `models/asr-registry.yaml` and served on the existing CPU workers. This is not a precedent for GPU nodes, CUDA images, or GPU requests in any manifest.
 - Real-time/low-latency scoring for the core ASR/quality-gate/ISVC pipelines — these remain asynchronous batch workflows, not sub-second request/response (LiveKit/ChatDialect's real-time voice path is a separate, narrowly-scoped exception, not a precedent).
 - Public blockchain/token contracts — the Dial token ledger and the tokenomics reserve system are permissioned database ledgers, not on-chain systems, unless a future task explicitly says otherwise.
 - Rewriting `vosk-worker`, `whisper-worker`, `quality-gate-worker`, or `prompt-audio-service` in Node/NestJS — they stay Python.
